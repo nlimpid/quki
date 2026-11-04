@@ -99,6 +99,7 @@ pnpm test
 pnpm typecheck
 pnpm lint
 pnpm format
+pnpm test:integration   # skips with a notice until TIDB_CI_DATABASE_URL is set
 ```
 
 Lint and format are oxlint and oxfmt. The web bundler is `rolldown-vite`. Libraries build with tsdown (`pnpm --filter "./packages/*" build`).
@@ -107,10 +108,11 @@ Lint and format are oxlint and oxfmt. The web bundler is `rolldown-vite`. Librar
 
 Never commit values. Names:
 
-| Name                     | Where                                                                                                                                           |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TIDB_QUKI_DATABASE_URL` | Worker secret and local env. TiDB Serverless MySQL URL, for example `mysql://USER:PASSWORD@gateway01.<region>.prod.aws.tidbcloud.com:4000/quki` |
-| `INGEST_TOKEN`           | Crawler Worker secret. `Authorization: Bearer …` or `x-ingest-token` on `POST /admin/migrate` and `POST /admin/ingest`                          |
+| Name                     | Where                                                                                                                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TIDB_QUKI_DATABASE_URL` | Worker secret and local env. TiDB Serverless MySQL URL, for example `mysql://USER:PASSWORD@gateway01.<region>.prod.aws.tidbcloud.com:4000/quki`                         |
+| `TIDB_CI_DATABASE_URL`   | GitHub Actions secret only. A separate database on that cluster, for example `quki_ci`. Never production `quki`. See [Continuous integration](#continuous-integration). |
+| `INGEST_TOKEN`           | Crawler Worker secret. `Authorization: Bearer …` or `x-ingest-token` on `POST /admin/migrate` and `POST /admin/ingest`                                                  |
 
 ```bash
 # from workers/site and workers/crawler respectively
@@ -156,3 +158,39 @@ Create two Workers Builds projects on this repo. Leave the root directory empty 
 Account `a0eb1f96a32491ca1f70971c118831fd`, zone `quki.cc`. Custom domains `quki.cc` and `www.quki.cc` stay in the site config.
 
 First-time order: create the TiDB database, `pnpm migrate`, `pnpm backfill`, set `TIDB_QUKI_DATABASE_URL` on both Workers and `INGEST_TOKEN` on the crawler. `POST /admin/ingest` returns after the bar upsert; rotation rows are refreshed in `waitUntil` for the recent tail only. `pnpm backfill` still writes the full rotation history. Local `pnpm dev` does not need any of that.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on pull requests and on pushes to `master`. pnpm comes from the root `packageManager` field (`pnpm@10.33.4`).
+
+| Check            | Job name         | What it runs                                                                                                                                                                                                                                                                                                                                              |
+| ---------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci`             | `ci`             | `pnpm install --frozen-lockfile`, `oxfmt --check`, `oxlint`, `tsc --noEmit` for every package, unit tests, `pnpm build:site`, `pnpm build:crawler`, and `npx wrangler deploy --dry-run` for both workers                                                                                                                                                  |
+| `db-integration` | `db-integration` | Real TiDB Serverless via `@tidbcloud/serverless`. Applies `db/migrations`, inserts two instruments and 120 weekly sessions, then reads them back through `listInstrumentIds`, the overview and rotation queries, the crawler `ON DUPLICATE KEY UPDATE` upsert, and the site worker's `/api/health`, `/api/instruments`, and `/api/indices/:code/overview` |
+
+On GitHub the checks are `ci` and `db-integration`. The branch-protection picker sometimes shows them as `ci / ci` and `ci / db-integration`. Require both on `master` before merging.
+
+`db-integration` needs the repository secret `TIDB_CI_DATABASE_URL`. Create a second database on the same TiDB Serverless cluster (do not reuse production `quki` — the job drops every table):
+
+```sql
+CREATE DATABASE quki_ci;
+```
+
+Copy the production connection string and change the database path from `/quki` to `/quki_ci`. In GitHub: Settings → Secrets and variables → Actions → New repository secret, name `TIDB_CI_DATABASE_URL`. The same cluster user is fine. The test refuses a URL whose database is `quki`.
+
+Fork pull requests do not receive the secret. The job then prints a notice and succeeds, so it does not prove the database path on those runs.
+
+Locally:
+
+```bash
+export TIDB_CI_DATABASE_URL='mysql://USER:PASSWORD@gateway01.<region>.prod.aws.tidbcloud.com:4000/quki_ci'
+pnpm test:integration
+```
+
+Without that variable the same command prints a notice, skips the live suite, and exits 0.
+
+## Production smoke
+
+`.github/workflows/smoke.yml` runs on every push to `master`, every 30 minutes, and from the Actions tab (`workflow_dispatch`). It curls `https://quki.cc/api/health` (`ok` true and `instruments` > 0), `/api/instruments` (non-empty), `/api/indices/H30269/overview` (HTTP 200 with `lastClose`), and `https://quki.cc/` (HTTP 200). A push retries for about five minutes so Workers Builds can finish. A failure fails the workflow, which is the alert GitHub emails to the repository owner.
+
+A push can still pass against the previous deploy if the site is already healthy. The half-hour schedule is what catches a bad deploy that finishes after that first probe. This check is not a merge requirement.

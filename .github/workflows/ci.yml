@@ -1,0 +1,76 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Reads packageManager from package.json (pnpm@10.33.4).
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: oxfmt
+        run: pnpm exec oxfmt --check
+      - name: oxlint
+        run: pnpm exec oxlint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Unit tests
+        run: pnpm test
+      - name: Build site
+        run: pnpm build:site
+      - name: Build crawler
+        run: pnpm build:crawler
+      - name: Wrangler dry-run (site)
+        run: npx wrangler deploy --dry-run -c workers/site/wrangler.jsonc
+      - name: Wrangler dry-run (crawler)
+        run: npx wrangler deploy --dry-run -c workers/crawler/wrangler.jsonc
+
+  db-integration:
+    name: db-integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip unless TIDB_CI_DATABASE_URL is configured
+        id: gate
+        env:
+          TIDB_CI_DATABASE_URL: ${{ secrets.TIDB_CI_DATABASE_URL }}
+        run: |
+          if [ -z "${TIDB_CI_DATABASE_URL}" ]; then
+            echo "::notice title=TiDB integration skipped::TIDB_CI_DATABASE_URL is not set. Fork pull requests do not receive this secret. Create a separate database such as quki_ci and add the repository secret to run this check."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: pnpm/action-setup@v4
+        if: steps.gate.outputs.run == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        if: steps.gate.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: TiDB integration
+        if: steps.gate.outputs.run == 'true'
+        env:
+          TIDB_CI_DATABASE_URL: ${{ secrets.TIDB_CI_DATABASE_URL }}
+        run: pnpm test:integration
