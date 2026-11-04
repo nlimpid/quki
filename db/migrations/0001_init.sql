@@ -14,8 +14,10 @@
 --   * Prices/amounts: DECIMAL for money-like OHLCV that must round cleanly;
 --     DOUBLE OK for derived ratios (deviation, percentile) where IEEE float
 --     is fine and slightly cheaper.
---   * Upserts: INSERT ... ON DUPLICATE KEY UPDATE (TiDB supports both
---     VALUES(col) legacy and row-alias AS new forms).
+--   * Upserts use INSERT ... ON DUPLICATE KEY UPDATE ... VALUES(col).
+--     Row-alias form (AS new) parses on recent TiDB builds but resolving
+--     the alias in ON DUPLICATE KEY UPDATE is not implemented on TiDB
+--     Serverless (still rejected through 8.5).
 -- =============================================================================
 
 SET NAMES utf8mb4;
