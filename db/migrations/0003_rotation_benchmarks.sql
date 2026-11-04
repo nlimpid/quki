@@ -12,14 +12,13 @@ VALUES
    JSON_OBJECT('publisher', 'CSI', 'base_date', '2004-12-31', 'base_value', 1000, 'twin_symbol', 'H00985'), 'active'),
   ('H00985', '中证全指全收益', 'CSI All Share Total Return Index', 'index', 'CSI', 'CNY', 1, 'csindex', 'H00985',
    JSON_OBJECT('publisher', 'CSI', 'twin_symbol', '000985'), 'active')
-AS new
 ON DUPLICATE KEY UPDATE
-  name = new.name,
-  name_en = new.name_en,
-  is_total_return = new.is_total_return,
-  source_code = new.source_code,
-  meta = new.meta,
-  status = new.status,
+  name = VALUES(name),
+  name_en = VALUES(name_en),
+  is_total_return = VALUES(is_total_return),
+  source_code = VALUES(source_code),
+  meta = VALUES(meta),
+  status = VALUES(status),
   updated_at = CURRENT_TIMESTAMP(3);
 
 UPDATE instruments i

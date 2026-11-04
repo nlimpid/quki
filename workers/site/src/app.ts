@@ -13,14 +13,20 @@ export type MarketSource = {
   mode: "fixture" | "tidb";
   listInstruments: () => Promise<InstrumentInfo[]>;
   getDailyBars: (symbol: string) => Promise<DailyBar[] | null>;
+  /** TiDB path must run SELECT COUNT(*) FROM instruments. */
+  countInstruments: () => Promise<number>;
 };
 
 export function createApp(source: MarketSource) {
   const app = new Hono();
 
-  app.get("/api/health", (c) => {
-    const body: { ok: true; storage: "fixture" | "tidb" } = { ok: true, storage: source.mode };
-    return c.json(body);
+  app.get("/api/health", async (c) => {
+    try {
+      const instruments = await source.countInstruments();
+      return c.json({ ok: true, storage: source.mode, instruments });
+    } catch {
+      return c.json({ ok: false, storage: source.mode, instruments: null }, 503);
+    }
   });
 
   app.get("/api/instruments", async (c) => {

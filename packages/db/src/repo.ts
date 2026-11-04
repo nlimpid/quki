@@ -49,17 +49,16 @@ export async function upsertBars(
       INSERT INTO bars (
         instrument_id, freq, trade_date, open, high, low, close, volume, amount, pre_close, change_pct, source
       ) VALUES ${placeholders(slice.length, 12)}
-      AS new
       ON DUPLICATE KEY UPDATE
-        open = new.open,
-        high = new.high,
-        low = new.low,
-        close = new.close,
-        volume = new.volume,
-        amount = new.amount,
-        pre_close = new.pre_close,
-        change_pct = new.change_pct,
-        source = new.source,
+        open = VALUES(open),
+        high = VALUES(high),
+        low = VALUES(low),
+        close = VALUES(close),
+        volume = VALUES(volume),
+        amount = VALUES(amount),
+        pre_close = VALUES(pre_close),
+        change_pct = VALUES(change_pct),
+        source = VALUES(source),
         crawled_at = CURRENT_TIMESTAMP(3),
         updated_at = CURRENT_TIMESTAMP(3)
     `;
@@ -199,11 +198,10 @@ export async function recomputeAnalytics(
       INSERT INTO analytics_series (
         instrument_id, freq, trade_date, metric, params_hash, params, metric_value, extra
       ) VALUES ${Array.from({ length: slice.length }, () => tuple).join(",")}
-      AS new
       ON DUPLICATE KEY UPDATE
-        params = new.params,
-        metric_value = new.metric_value,
-        extra = new.extra,
+        params = VALUES(params),
+        metric_value = VALUES(metric_value),
+        extra = VALUES(extra),
         computed_at = CURRENT_TIMESTAMP(3),
         updated_at = CURRENT_TIMESTAMP(3)
     `;
@@ -222,14 +220,13 @@ export async function recomputeAnalytics(
       INSERT INTO significant_lows (
         instrument_id, freq, trade_date, params_hash, params, low_price, close_price, deviation, score, extra
       ) VALUES ${Array.from({ length: slice.length }, () => tuple).join(",")}
-      AS new
       ON DUPLICATE KEY UPDATE
-        params = new.params,
-        low_price = new.low_price,
-        close_price = new.close_price,
-        deviation = new.deviation,
-        score = new.score,
-        extra = new.extra,
+        params = VALUES(params),
+        low_price = VALUES(low_price),
+        close_price = VALUES(close_price),
+        deviation = VALUES(deviation),
+        score = VALUES(score),
+        extra = VALUES(extra),
         computed_at = CURRENT_TIMESTAMP(3),
         updated_at = CURRENT_TIMESTAMP(3)
     `;

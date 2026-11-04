@@ -12,12 +12,17 @@ export function connectTiDb(url = process.env[DATABASE_URL_ENV]): SqlConn {
       `Missing ${DATABASE_URL_ENV}. Set it in the environment or .dev.vars (see .dev.vars.example).`,
     );
   }
-  return connect({ url }) as SqlConn;
+  // Without fullResult the driver returns a bare row array. Callers that only
+  // look at `{ rows }` then see every query as empty.
+  return connect({ url, fullResult: true }) as SqlConn;
 }
 
 export function rowsOf(result: unknown): Record<string, unknown>[] {
-  if (!result || typeof result !== "object" || !("rows" in result)) return [];
-  const rows = (result as { rows?: unknown }).rows;
+  const rows = Array.isArray(result)
+    ? result
+    : result && typeof result === "object" && "rows" in result
+      ? (result as { rows?: unknown }).rows
+      : undefined;
   if (!Array.isArray(rows)) return [];
   return rows.filter(
     (row): row is Record<string, unknown> =>

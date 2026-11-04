@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { SqlConn } from "./client.js";
+import { rowsOf, type SqlConn } from "./client.js";
 import { splitSql } from "./sql.js";
 
 const BOOKKEEPING = `
@@ -33,16 +33,8 @@ export async function applyMigrations(
   await conn.execute(BOOKKEEPING);
   const applied = new Set<string>();
   const existing = await conn.execute("SELECT filename FROM schema_migrations");
-  const rows =
-    existing && typeof existing === "object" && "rows" in existing
-      ? (existing.rows as unknown[])
-      : [];
-  if (Array.isArray(rows)) {
-    for (const row of rows) {
-      if (row && typeof row === "object" && "filename" in row) {
-        applied.add(String((row as { filename: unknown }).filename));
-      }
-    }
+  for (const row of rowsOf(existing)) {
+    if ("filename" in row) applied.add(String(row.filename));
   }
   const ran: string[] = [];
   for (const file of files) {
