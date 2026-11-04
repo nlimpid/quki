@@ -11,7 +11,9 @@ import {
   findSignificantLows,
   percentRankInc,
   simpleMovingAverage,
+  tierRows,
 } from "./metrics.js";
+import type { WeekMetric } from "./metrics.js";
 import { buildOverview } from "./overview.js";
 import { paramsHash } from "./params.js";
 import { isoWeekKey, toWeeklyBars, weekFriday } from "./weekly.js";
@@ -184,6 +186,57 @@ describe("H30269 reference snapshot through 2026-06-29", () => {
       .map((row) => row.closeRatio);
     const rank = percentRankInc(since2015, latest.closeRatio) * 100;
     expect(Number(rank.toFixed(1))).toBe(8.2);
+  });
+});
+
+describe("tier history", () => {
+  const metrics: WeekMetric[] = [
+    ["2020-01-03", 0.8],
+    ["2020-01-10", 0.82],
+    ["2020-01-17", 0.9],
+    ["2020-01-24", 0.7],
+    ["2020-01-31", 1.08],
+    ["2020-02-07", 1.12],
+    ["2020-02-14", 1.0],
+  ].map(([date, closeRatio]) => ({
+    date: date as string,
+    close: 100,
+    effectiveLow: 100,
+    ma: 100,
+    closeRatio: closeRatio as number,
+    lowRatio: closeRatio as number,
+    percentile: 0,
+    possiblyOpen: false,
+  }));
+
+  it("merges consecutive weeks and percentiles the tier against full history", () => {
+    const rows = tierRows(metrics, 100, 100);
+    const epic = rows.find((row) => row.tier === 85);
+    const hot = rows.find((row) => row.tier === 110);
+    const mid = rows.find((row) => row.tier === 100);
+    expect(epic).toMatchObject({
+      label: "史诗底",
+      derived: false,
+      episodeCount: 2,
+      episodeWeeks: 3,
+      latestEpisode: "2020-01-24",
+    });
+    expect(epic?.ratioPercentile).toBeCloseTo((3 / 7) * 100);
+    expect(hot).toMatchObject({
+      label: "过热",
+      derived: true,
+      episodeCount: 1,
+      episodeWeeks: 1,
+      latestEpisode: "2020-02-07",
+    });
+    expect(mid).toMatchObject({
+      label: "MA55",
+      derived: false,
+      episodeCount: 1,
+      episodeWeeks: 4,
+      latestEpisode: "2020-01-24",
+    });
+    expect(rows.find((row) => row.tier === 115)?.label).toBe("顶部区域");
   });
 });
 

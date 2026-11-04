@@ -96,6 +96,7 @@ export async function ingestAll(
   conn: SqlConn,
   mode: "incremental" | "backfill",
   symbols?: string[],
+  options?: { rotation?: "full" | "incremental" | "skip" },
 ): Promise<void> {
   const known = symbols ?? (await listInstrumentIds(conn)).map((row) => row.symbol);
   for (const symbol of known) {
@@ -120,8 +121,10 @@ export async function ingestAll(
     }
     await sleep(1000);
   }
+  const rotation = options?.rotation ?? "full";
+  if (rotation === "skip") return;
   try {
-    await recomputeStoredPairs(conn);
+    await recomputeStoredPairs(conn, { mode: rotation === "incremental" ? "incremental" : "full" });
   } catch (error) {
     console.error(
       `rotation recompute failed: ${error instanceof Error ? error.message : String(error)}`,

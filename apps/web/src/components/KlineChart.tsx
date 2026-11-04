@@ -32,7 +32,8 @@ const TIER_RATIOS: { tier: TierLevel; ratio: number; name: string }[] = [
   { tier: 95, ratio: 0.95, name: "95%" },
   { tier: 100, ratio: 1, name: "MA55" },
   { tier: 105, ratio: 1.05, name: "105%" },
-  { tier: 110, ratio: 1.1, name: "110%" },
+  { tier: 110, ratio: 1.1, name: "110% 过热" },
+  { tier: 115, ratio: 1.15, name: "115% 顶部区域" },
 ];
 
 function cssVar(name: string): string {
@@ -53,7 +54,7 @@ function priceExtent(candles: Candle[], ma: readonly (number | null)[]): [number
   for (const candle of candles)
     values.push(candle.high ?? candle.close, candle.low ?? candle.close);
   for (const value of ma) {
-    if (value != null) values.push(value * 0.85, value * 1.1);
+    if (value != null) values.push(value * 0.85, value * 1.15);
   }
   const lo = Math.min(...values);
   const hi = Math.max(...values);
@@ -401,6 +402,10 @@ export function KlineChart({
             <span>
               <i className="sw" style={{ background: "var(--qk-tier-110-fill)" }} />
               110%
+            </span>
+            <span>
+              <i className="sw" style={{ background: "var(--qk-tier-115-fill)" }} />
+              115%
             </span>
             <span>▼ 已确认低点</span>
             <span>◆ 未确认低点</span>

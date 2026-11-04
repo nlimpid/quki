@@ -64,6 +64,10 @@
   --qk-tier-110-stroke: #0EA5E9;
   --qk-tier-110-label: #0284C7;
   --qk-tier-110-solid: #0EA5E9;
+  --qk-tier-115-fill: rgba(99, 102, 241, 0.06);
+  --qk-tier-115-stroke: #6366F1;
+  --qk-tier-115-label: #4338CA;
+  --qk-tier-115-solid: #6366F1;
 
   /* Chart */
   --qk-candle-up: #DC2626;
@@ -166,6 +170,10 @@
   --qk-tier-110-stroke: #38BDF8;
   --qk-tier-110-label: #7DD3FC;
   --qk-tier-110-solid: #38BDF8;
+  --qk-tier-115-fill: rgba(165, 180, 252, 0.10);
+  --qk-tier-115-stroke: #A5B4FC;
+  --qk-tier-115-label: #C7D2FE;
+  --qk-tier-115-solid: #A5B4FC;
 
   --qk-candle-up: #F87171;
   --qk-candle-down: #4ADE80;

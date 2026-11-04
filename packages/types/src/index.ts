@@ -1,16 +1,20 @@
 /** Shared contracts. UI, workers, and the analytics package all import these. */
 
-export const TIER_LEVELS = [85, 90, 95, 100, 105, 110] as const;
+export const TIER_LEVELS = [85, 90, 95, 100, 105, 110, 115] as const;
 export type TierLevel = (typeof TIER_LEVELS)[number];
 
 export const TIER_LABELS: Record<TierLevel, string> = {
   85: "史诗底",
   90: "重要底",
-  95: "—",
+  95: "偏低",
   100: "MA55",
-  105: "—",
-  110: "—",
+  105: "偏热",
+  110: "过热",
+  115: "顶部区域",
 };
+
+/** Labels that are not part of the owner's 85/90 rule. */
+export const DERIVED_TIER_LEVELS: readonly TierLevel[] = [95, 105, 110, 115];
 
 export type Period = "D" | "W";
 export type RangeKey = "1Y" | "3Y" | "5Y" | "10Y" | "MAX";
@@ -198,9 +202,19 @@ export type MaPoint = {
 export type TierRow = {
   tier: TierLevel;
   label: string;
+  /** 偏低 / 偏热 / 过热 / 顶部区域 are derived names, not the owner's rule. */
+  derived: boolean;
   level: number;
   /** (level - lastClose) / lastClose * 100. Positive means the tier is above the close. */
   distancePct: number;
+  /** Share of weekly close/MA55 readings strictly below this tier ratio, 0–100. */
+  ratioPercentile: number;
+  /** Consecutive weeks on the active side of the tier count as one episode. */
+  episodeCount: number;
+  /** Weeks inside those episodes. */
+  episodeWeeks: number;
+  /** Week-ending date of the latest episode, if any. */
+  latestEpisode: string | null;
 };
 
 export type LowTag = "史诗底" | "重要底" | "其他";

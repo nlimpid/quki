@@ -129,7 +129,7 @@ pnpm ingest     # incremental CSIndex pull (add --backfill for a full API histor
 
 `0001_init.sql` is the nine-table schema (instruments, bars, analytics_series, significant_lows, backtest_runs, backtest_trades, backtest_equity, crawl_runs, crawl_watermarks) plus the four seeds. `0002_bars_nullable_ohlc.sql` allows null open/high/low. The runner also creates `schema_migrations`.
 
-The crawler cron is `15 8 * * 1-5` UTC (16:15 Asia/Shanghai), weekdays, after the cash close. It refetches from the last stored session through today, upserts, and recomputes. One request per index; it waits a second between symbols.
+The crawler cron is `15 8 * * 1-5` UTC (16:15 Asia/Shanghai), weekdays, after the cash close. It refetches from the last stored session through today and upserts. One request per index; it waits a second between symbols. Rotation recompute on the Worker only upserts a recent tail (or a short bootstrap if nothing is stored yet) so it stays inside the Worker time limit.
 
 After the crawler is deployed, the same jobs can be triggered without a laptop copy of the database URL:
 
@@ -141,19 +141,18 @@ curl -X POST https://<quki-crawler>/admin/ingest -H "Authorization: Bearer $INGE
 
 The CSV backfill stays a Node script: the seed files are not on the edge.
 
-## Deploy quki.cc
+## Deploy with Workers Builds
 
-No API token is stored in this repo. Account `a0eb1f96a32491ca1f70971c118831fd`, zone `quki.cc` (already active). Wrangler config is standard; deploy from a machine that has `CLOUDFLARE_API_TOKEN`.
+Create two Workers Builds projects on this repo. Leave the root directory empty so both use the repository root. Production branch is `master`. Cloudflare installs dependencies itself: the root `pnpm-lock.yaml` and `"packageManager": "pnpm@10.33.4"` select pnpm. Do not set `SKIP_DEPENDENCY_INSTALL`.
 
-```bash
-pnpm install
-pnpm --filter @quki/web build          # static assets → apps/web/dist
-cd workers/site && pnpm exec wrangler deploy
-cd workers/crawler && pnpm exec wrangler deploy
-```
+| Setting        | Site `quki`                                          | Crawler `quki-crawler`                                  |
+| -------------- | ---------------------------------------------------- | ------------------------------------------------------- |
+| Root directory | (repo root)                                          | (repo root)                                             |
+| Build command  | `pnpm build:site`                                    | `pnpm build:crawler`                                    |
+| Deploy command | `npx wrangler deploy -c workers/site/wrangler.jsonc` | `npx wrangler deploy -c workers/crawler/wrangler.jsonc` |
 
-`workers/site/wrangler.jsonc` serves `apps/web/dist` as Workers assets and attaches custom domains `quki.cc` and `www.quki.cc`. The Worker runs first for `/api/*`. `workers/crawler` is the cron Worker (`quki-crawler`) and is not on the public site hostname.
+`build:site` compiles `apps/web`. `build:crawler` is a no-op; Wrangler bundles the crawler during deploy. Paths in each `wrangler.jsonc` are relative to that config file, so deploy from the repo root still finds `workers/site/src/index.ts` and the assets directory `apps/web/dist`. Assets stay a binding. They are not inlined into the script. `npx wrangler` uses the Wrangler version pinned in the root `devDependencies`.
 
-`wrangler deploy --dry-run --outdir dist` (the package `build` script) writes the upload bundle under `workers/site/dist` and `workers/crawler/dist` when you want to inspect it before upload. Wrangler posts that bundle to the Cloudflare Workers API for the account above.
+Account `a0eb1f96a32491ca1f70971c118831fd`, zone `quki.cc`. Custom domains `quki.cc` and `www.quki.cc` stay in the site config.
 
-First-time order: create the TiDB Serverless database, `pnpm migrate`, `pnpm backfill`, set both Worker secrets, deploy site and crawler. Until bars exist, `/api/indices/:code/overview` returns 404 with a backfill hint. Local `pnpm dev` does not need any of that.
+First-time order: create the TiDB database, `pnpm migrate`, `pnpm backfill`, set `TIDB_QUKI_DATABASE_URL` on both Workers and `INGEST_TOKEN` on the crawler. `POST /admin/ingest` returns after the bar upsert; rotation rows are refreshed in `waitUntil` for the recent tail only. `pnpm backfill` still writes the full rotation history. Local `pnpm dev` does not need any of that.

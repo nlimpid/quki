@@ -1,4 +1,5 @@
 import {
+  DERIVED_TIER_LEVELS,
   TIER_LABELS,
   TIER_LEVELS,
   type LowRow,
@@ -94,14 +95,45 @@ export function computeWeekMetrics(
   return metrics;
 }
 
-export function tierRows(ma: number, lastClose: number): TierRow[] {
+/**
+ * Full-history tier stats from weekly close/MA55.
+ * Tiers under 100 count consecutive weeks below the tier.
+ * Tiers over 100 count consecutive weeks above it.
+ * 100% counts consecutive weeks below the moving average.
+ */
+export function tierRows(metrics: readonly WeekMetric[], ma: number, lastClose: number): TierRow[] {
+  const ratios = metrics.map((row) => row.closeRatio);
+  const sample = ratios.length;
   return TIER_LEVELS.map((tier) => {
-    const level = (ma * tier) / 100;
+    const threshold = tier / 100;
+    const below = ratios.reduce((count, ratio) => count + (ratio < threshold ? 1 : 0), 0);
+    const active = (ratio: number) => (tier > 100 ? ratio > threshold : ratio < threshold);
+    let episodeCount = 0;
+    let episodeWeeks = 0;
+    let latestEpisode: string | null = null;
+    let open = false;
+    for (const row of metrics) {
+      if (!active(row.closeRatio)) {
+        open = false;
+        continue;
+      }
+      episodeWeeks += 1;
+      latestEpisode = row.date;
+      if (!open) {
+        open = true;
+        episodeCount += 1;
+      }
+    }
     return {
       tier,
       label: TIER_LABELS[tier],
-      level,
-      distancePct: ((level - lastClose) / lastClose) * 100,
+      derived: DERIVED_TIER_LEVELS.includes(tier),
+      level: (ma * tier) / 100,
+      distancePct: (((ma * tier) / 100 - lastClose) / lastClose) * 100,
+      ratioPercentile: sample === 0 ? 0 : (below / sample) * 100,
+      episodeCount,
+      episodeWeeks,
+      latestEpisode,
     };
   });
 }
