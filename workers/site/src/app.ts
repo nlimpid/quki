@@ -18,7 +18,10 @@ export type MarketSource = {
 export function createApp(source: MarketSource) {
   const app = new Hono();
 
-  app.get("/api/health", (c) => c.json({ ok: true, storage: source.mode }));
+  app.get("/api/health", (c) => {
+    const body: { ok: true; storage: "fixture" | "tidb" } = { ok: true, storage: source.mode };
+    return c.json(body);
+  });
 
   app.get("/api/instruments", async (c) => {
     const instruments = await source.listInstruments();

@@ -55,7 +55,7 @@ export function buildOverview(
     ratioPct: (lastDaily.close / latest.ma) * 100,
     percentile: latest.percentile,
     percentileSample: metrics.length,
-    tiers: tierRows(latest.ma, lastDaily.close),
+    tiers: tierRows(metrics, latest.ma, lastDaily.close),
     lows,
     daily: ordered.map(candleFromDaily),
     weekly: weeks.map(candleFromWeek),

@@ -227,6 +227,29 @@ a {
 .card-title {
   font-size: 14px;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.hint-btn {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--qk-radius-full);
+  border: 1px solid var(--qk-border-strong);
+  background: var(--qk-bg-surface);
+  color: var(--qk-text-tertiary);
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+}
+.derived {
+  margin-left: 6px;
+  font-size: 10px;
+  color: var(--qk-text-tertiary);
+  border: 1px solid var(--qk-border-default);
+  border-radius: var(--qk-radius-full);
+  padding: 0 5px;
+  font-family: var(--qk-font-sans);
 }
 .legend {
   display: flex;

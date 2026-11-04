@@ -1,4 +1,10 @@
-import { DATABASE_URL_ENV, applyMigrations, connectTiDb, ingestAll } from "@quki/db";
+import {
+  DATABASE_URL_ENV,
+  applyMigrations,
+  connectTiDb,
+  ingestAll,
+  recomputeStoredPairs,
+} from "@quki/db";
 import { Hono } from "hono";
 
 import alterSql from "../../../db/migrations/0002_bars_nullable_ohlc.sql";
@@ -44,10 +50,20 @@ crawler.post("/admin/migrate", async (c) => {
 
 crawler.post("/admin/ingest", async (c) => {
   if (!authorized(c.req.raw, c.env)) return c.json({ error: "unauthorized" }, 401);
-  if (!c.env.TIDB_QUKI_DATABASE_URL) return c.json({ error: `missing ${DATABASE_URL_ENV}` }, 503);
+  const databaseUrl = c.env.TIDB_QUKI_DATABASE_URL;
+  if (!databaseUrl) return c.json({ error: `missing ${DATABASE_URL_ENV}` }, 503);
   const body = await c.req.json().catch(() => ({}) as { mode?: string; symbols?: string[] });
   const mode = body.mode === "backfill" ? "backfill" : "incremental";
-  await ingestAll(connectTiDb(c.env.TIDB_QUKI_DATABASE_URL), mode, body.symbols);
+  await ingestAll(connectTiDb(databaseUrl), mode, body.symbols, { rotation: "skip" });
+  c.executionCtx.waitUntil(
+    recomputeStoredPairs(connectTiDb(databaseUrl), { mode: "incremental" }).catch(
+      (error: unknown) => {
+        console.error(
+          `rotation recompute failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      },
+    ),
+  );
   return c.json({ ok: true, mode });
 });
 
@@ -56,7 +72,9 @@ async function runCron(env: Env): Promise<void> {
     console.error(`cron skipped: missing ${DATABASE_URL_ENV}`);
     return;
   }
-  await ingestAll(connectTiDb(env.TIDB_QUKI_DATABASE_URL), "incremental");
+  await ingestAll(connectTiDb(env.TIDB_QUKI_DATABASE_URL), "incremental", undefined, {
+    rotation: "incremental",
+  });
 }
 
 export default {

@@ -11,7 +11,9 @@ import { ROTATION_PAIRS, resolveRotationPair } from "@quki/types";
 import type { SqlConn } from "./client.js";
 import { instrumentId, loadDailyBars } from "./repo.js";
 
-const CHUNK = 120;
+const CHUNK = 200;
+const TAIL_SESSIONS = 60;
+const BOOTSTRAP_SESSIONS = 400;
 
 export function rotationStudyParams(pairId: string, a: string, b: string) {
   return {
@@ -23,6 +25,29 @@ export function rotationStudyParams(pairId: string, a: string, b: string) {
   };
 }
 
+async function latestRotationDate(
+  conn: SqlConn,
+  instrumentIdValue: string,
+  hash: string,
+): Promise<string | null> {
+  const result = await conn.execute(
+    `SELECT trade_date FROM analytics_series
+     WHERE instrument_id = ? AND params_hash = ? AND metric = 'rot_r'
+     ORDER BY trade_date DESC LIMIT 1`,
+    [instrumentIdValue, hash],
+  );
+  const rows =
+    result && typeof result === "object" && "rows" in result
+      ? (result as { rows?: unknown }).rows
+      : [];
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const row = rows[0];
+  if (!row || typeof row !== "object" || !("trade_date" in row)) return null;
+  const value = (row as { trade_date: unknown }).trade_date;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
+}
+
 export async function persistRotation(
   conn: SqlConn,
   instrumentIdValue: string,
@@ -31,17 +56,33 @@ export async function persistRotation(
   symbolB: string,
   barsA: readonly DailyBar[],
   barsB: readonly DailyBar[],
+  mode: "full" | "incremental" = "full",
 ): Promise<number> {
   const points = computeRotation(alignCloses(barsA, barsB));
   const params = canonicalParams(rotationStudyParams(pairId, symbolA, symbolB));
   const hash = await paramsHash(rotationStudyParams(pairId, symbolA, symbolB));
-  await conn.execute("DELETE FROM analytics_series WHERE instrument_id = ? AND params_hash = ?", [
-    instrumentIdValue,
-    hash,
-  ]);
+  let writing = points;
+  if (mode === "incremental") {
+    const latest = await latestRotationDate(conn, instrumentIdValue, hash);
+    if (latest) {
+      const index = points.findIndex((point) => point.date >= latest);
+      const from = Math.max(0, (index === -1 ? points.length : index) - TAIL_SESSIONS);
+      writing = points.slice(from);
+    } else {
+      writing = points.slice(-BOOTSTRAP_SESSIONS);
+      console.log(
+        `rotation ${pairId}: no stored series, writing last ${writing.length} sessions (full history via pnpm backfill)`,
+      );
+    }
+  } else {
+    await conn.execute("DELETE FROM analytics_series WHERE instrument_id = ? AND params_hash = ?", [
+      instrumentIdValue,
+      hash,
+    ]);
+  }
   type Row = { date: string; metric: string; value: number; extra: string };
   const rows: Row[] = [];
-  for (const point of points) {
+  for (const point of writing) {
     const common = {
       bandCross: point.bandCross,
       spreadCross: point.spreadCross,
@@ -86,11 +127,15 @@ export async function persistRotation(
     }
     await conn.execute(sql, args);
   }
-  return points.length;
+  return writing.length;
 }
 
 /** Recompute every configured pair whose two legs are already in `bars`. */
-export async function recomputeStoredPairs(conn: SqlConn): Promise<void> {
+export async function recomputeStoredPairs(
+  conn: SqlConn,
+  options?: { mode?: "full" | "incremental" },
+): Promise<void> {
+  const mode = options?.mode ?? "full";
   for (const definition of ROTATION_PAIRS) {
     const pair = resolveRotationPair(definition);
     const idA = await instrumentId(conn, pair.a);
@@ -99,7 +144,7 @@ export async function recomputeStoredPairs(conn: SqlConn): Promise<void> {
     const barsA = await loadDailyBars(conn, idA);
     const barsB = await loadDailyBars(conn, idB);
     if (barsA.length === 0 || barsB.length === 0) continue;
-    const days = await persistRotation(conn, idA, pair.id, pair.a, pair.b, barsA, barsB);
-    console.log(`rotation ${pair.id}: ${days} aligned sessions`);
+    const days = await persistRotation(conn, idA, pair.id, pair.a, pair.b, barsA, barsB, mode);
+    console.log(`rotation ${pair.id} ${mode}: ${days} sessions written`);
   }
 }
