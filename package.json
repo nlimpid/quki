@@ -16,7 +16,8 @@
     "format:check": "oxfmt --check",
     "migrate": "tsx scripts/migrate.ts",
     "backfill": "tsx scripts/backfill.ts",
-    "ingest": "tsx scripts/ingest.ts"
+    "ingest": "tsx scripts/ingest.ts",
+    "temperature:backtest": "tsx scripts/temperature-backtest.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.6",

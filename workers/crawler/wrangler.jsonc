@@ -7,7 +7,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "triggers": {
-    "crons": ["15 8 * * 1-5"],
+    "crons": ["30 8 * * 1-5", "0 10 * * 1-5"],
   },
   "rules": [{ "type": "Text", "globs": ["**/*.sql"], "fallthrough": true }],
 }

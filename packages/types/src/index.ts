@@ -261,6 +261,62 @@ export type Overview = {
   daily: Candle[];
   weekly: Candle[];
   ma55Weekly: MaPoint[];
+  /**
+   * Compact dividend-temperature reading for this symbol, when it is a
+   * temperature leg and a series has been stored. High means expensive.
+   * Omitted by `buildOverview`; the site route fills it.
+   */
+  temperature?: OverviewTemperature | null;
 };
 
 export type PositionZone = "史诗底" | "重要底" | "偏低" | "中性" | "偏高";
+
+/** Narrative bands for the 1–100 temperature. Display copy is provisional. */
+export type TemperatureBand = "extreme_cold" | "cold" | "neutral" | "hot" | "extreme_hot";
+
+export type TemperatureMethod = "quantile_blend" | "zscore_logistic" | "rule_tree";
+
+export type TemperatureFamilyId = "dividend" | "lowvol";
+
+export type OverviewTemperature = {
+  value: number;
+  tradeDate: string;
+  asOf: string;
+  method: TemperatureMethod;
+  version: number;
+  pa: number;
+  pb: number;
+  spread40: number;
+  band: TemperatureBand;
+};
+
+export type TemperatureHistoryPoint = {
+  date: string;
+  temperature: number;
+  pa: number;
+  pb: number;
+  spread40: number;
+};
+
+export type TemperatureResponse = {
+  asOf: string;
+  tradeDate: string;
+  temperature: number;
+  band: TemperatureBand;
+  /** Provisional Chinese band name. The scale wording is not final. */
+  label: string;
+  extreme: "cold" | "hot" | null;
+  semantics: "high_means_expensive";
+  method: TemperatureMethod;
+  version: number;
+  pa: number;
+  pb: number;
+  spread40: number;
+  ratio: number;
+  weightOwn: number;
+  coldMax: number;
+  hotMin: number;
+  dividend: { symbol: string; name: string; priceSymbol: string; priceName: string };
+  broad: { symbol: string; name: string };
+  history: TemperatureHistoryPoint[];
+};

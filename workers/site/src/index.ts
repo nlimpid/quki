@@ -1,9 +1,16 @@
 import {
+  buildTemperatureReading,
+  paramsHash,
+  productionStudyParams,
+  temperatureLegs,
+} from "@quki/analytics";
+import {
   DATABASE_URL_ENV,
   connectTiDb,
   instrumentId,
   listInstrumentIds,
   loadDailyBars,
+  loadTemperatureSeries,
   numOrNull,
   rowsOf,
 } from "@quki/db";
@@ -40,6 +47,14 @@ function tidbSource(url: string): MarketSource {
       const count = numOrNull(row?.instrument_count);
       if (count == null) throw new Error("instrument count query returned no row");
       return count;
+    },
+    async getTemperature(query) {
+      const legs = temperatureLegs(query.family, query.broad);
+      const id = await instrumentId(conn, legs.totalReturnSymbol);
+      if (!id) return null;
+      const hash = await paramsHash(productionStudyParams(legs));
+      const points = await loadTemperatureSeries(conn, id, hash);
+      return buildTemperatureReading(points, legs);
     },
   };
 }

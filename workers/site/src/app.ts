@@ -1,4 +1,12 @@
-import { alignCloses, buildOverview, buildRotationView, computeRotation } from "@quki/analytics";
+import {
+  alignCloses,
+  buildOverview,
+  buildRotationView,
+  compactTemperature,
+  computeRotation,
+  parseTemperatureQuery,
+  temperatureFamilyForSymbol,
+} from "@quki/analytics";
 import {
   findInstrument,
   findRotationPair,
@@ -6,6 +14,9 @@ import {
   ROTATION_PAIRS,
   type DailyBar,
   type InstrumentInfo,
+  type OverviewTemperature,
+  type TemperatureFamilyId,
+  type TemperatureResponse,
 } from "@quki/types";
 import { Hono } from "hono";
 
@@ -15,7 +26,29 @@ export type MarketSource = {
   getDailyBars: (symbol: string) => Promise<DailyBar[] | null>;
   /** TiDB path must run SELECT COUNT(*) FROM instruments. */
   countInstruments: () => Promise<number>;
+  /** Stored dividend temperature. Fixture mode may compute it from bars. */
+  getTemperature?: (query: {
+    family: TemperatureFamilyId;
+    broad: "H20903" | "H00985";
+  }) => Promise<TemperatureResponse | null>;
 };
+
+async function readOverviewTemperature(
+  source: MarketSource,
+  symbol: string,
+): Promise<OverviewTemperature | null> {
+  const family = temperatureFamilyForSymbol(symbol);
+  if (!family || !source.getTemperature) return null;
+  try {
+    const reading = await source.getTemperature({ family, broad: "H20903" });
+    return reading ? compactTemperature(reading) : null;
+  } catch (error) {
+    console.error(
+      `temperature lookup failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  }
+}
 
 export function createApp(source: MarketSource) {
   const app = new Hono();
@@ -56,7 +89,33 @@ export function createApp(source: MarketSource) {
     }
     const overview = buildOverview(bars, instrument);
     if (!overview) return c.json({ error: "no_bars" }, 404);
-    return c.json(overview);
+    const temperature = await readOverviewTemperature(source, code);
+    return c.json({ ...overview, temperature });
+  });
+
+  app.get("/api/temperature", async (c) => {
+    const parsed = parseTemperatureQuery(c.req.query("family"), c.req.query("broad"));
+    if (!parsed) return c.json({ error: "bad_query" }, 400);
+    if (!source.getTemperature) {
+      return c.json({ error: "no_temperature", message: "温度序列尚未接入。" }, 404);
+    }
+    let reading: TemperatureResponse | null;
+    try {
+      reading = await source.getTemperature(parsed);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "storage_error";
+      return c.json({ error: "storage_error", message }, 503);
+    }
+    if (!reading) {
+      return c.json(
+        {
+          error: "no_temperature",
+          message: "尚无温度序列。爬虫会在行情更新后写入，或运行 pnpm backfill。",
+        },
+        404,
+      );
+    }
+    return c.json(reading);
   });
 
   app.get("/api/rotation/pairs", (c) =>

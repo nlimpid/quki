@@ -8,6 +8,7 @@ import {
   loadDailyBars,
   recomputeAnalytics,
   recomputeStoredPairs,
+  recomputeTemperature,
   upsertBars,
 } from "@quki/db";
 import { dedupeBars, dropClonedBaseRows, parseSeedCsv, seedToDaily } from "@quki/ingest";
@@ -49,3 +50,4 @@ for (const instrument of SEEDED_INSTRUMENTS) {
   if (june) console.log(`  H30269 2026-06-29 close ${june.close}`);
 }
 await recomputeStoredPairs(conn);
+await recomputeTemperature(conn, { mode: "full" });

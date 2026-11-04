@@ -82,6 +82,12 @@ The crawler fetches these codes from the same CSIndex endpoint. `pnpm backfill` 
 
 Backtests are not on the page yet. `packages/analytics/src/backtest.ts` registers `ma55_band` (buy when weekly close/MA55 &lt; 90%, sell back at 100%). Results belong in `backtest_runs` / `backtest_trades` / `backtest_equity`. Use the total-return codes for a dividend backtest.
 
+## 红利温度
+
+`GET /api/temperature` is the daily 1–100 reading. High means expensive. The default is an equal-weight blend of two expanding percentiles: weekly close/MA55 on the price index (`000922` or `H30269`) and the 40-day total-return spread versus `H20903` (`H00985` is the robustness leg). The locked weights, the logistic and rule-tree alternatives, and the walk-forward tables are in `docs/temperature-v1-backtest.md`. Regenerate them with `pnpm temperature:backtest`. That command reads `data/seed` and does not write a database unless `--persist` is passed, and it refuses a URL whose database name is `quki`.
+
+The overview payload for `000922`, `H00922`, `H30269`, and `H20269` includes a compact `temperature` object when a series is stored. `/index/:code` and `/rotation` are unchanged. The Worker reads stored `analytics_series` rows (`metric = temp_v1`); it does not recompute the history on the request. Local `pnpm dev` computes the same function from the seed CSVs.
+
 ## Local development
 
 ```bash
@@ -129,7 +135,7 @@ pnpm ingest     # incremental CSIndex pull (add --backfill for a full API histor
 
 `0001_init.sql` is the nine-table schema (instruments, bars, analytics_series, significant_lows, backtest_runs, backtest_trades, backtest_equity, crawl_runs, crawl_watermarks) plus the four seeds. `0002_bars_nullable_ohlc.sql` allows null open/high/low. The runner also creates `schema_migrations`.
 
-The crawler cron is `15 8 * * 1-5` UTC (16:15 Asia/Shanghai), weekdays, after the cash close. It refetches from the last stored session through today and upserts. One request per index; it waits a second between symbols. Rotation recompute on the Worker only upserts a recent tail (or a short bootstrap if nothing is stored yet) so it stays inside the Worker time limit.
+The crawler cron is `30 8 * * 1-5` UTC (16:30 Asia/Shanghai) with a retry at `0 10 * * 1-5` UTC (18:00). It refetches from the last stored session through today and upserts. One request per index; it waits a second between symbols. Rotation recompute on the Worker only upserts a recent tail (or a short bootstrap if nothing is stored yet) so it stays inside the Worker time limit. The temperature step is the same: a full history is written by `pnpm backfill`, and the Worker cron only appends sessions newer than the stored temperature date. If the price leg or the total-return pair has not moved past that date, the retry does not upsert temperature rows.
 
 After the crawler is deployed, the same jobs can be triggered without a laptop copy of the database URL:
 
@@ -155,4 +161,4 @@ Create two Workers Builds projects on this repo. Leave the root directory empty 
 
 Account `a0eb1f96a32491ca1f70971c118831fd`, zone `quki.cc`. Custom domains `quki.cc` and `www.quki.cc` stay in the site config.
 
-First-time order: create the TiDB database, `pnpm migrate`, `pnpm backfill`, set `TIDB_QUKI_DATABASE_URL` on both Workers and `INGEST_TOKEN` on the crawler. `POST /admin/ingest` returns after the bar upsert; rotation rows are refreshed in `waitUntil` for the recent tail only. `pnpm backfill` still writes the full rotation history. Local `pnpm dev` does not need any of that.
+First-time order: create the TiDB database, `pnpm migrate`, `pnpm backfill`, set `TIDB_QUKI_DATABASE_URL` on both Workers and `INGEST_TOKEN` on the crawler. `POST /admin/ingest` returns after the bar upsert and the temperature update; rotation rows are refreshed in `waitUntil` for the recent tail only. `pnpm backfill` still writes the full rotation history and the full temperature history. Local `pnpm dev` does not need any of that.

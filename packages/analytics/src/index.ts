@@ -28,5 +28,67 @@ export type {
   ZeroCross,
 } from "./rotation.js";
 export { MA55_PARAMS, canonicalParams, paramsHash } from "./params.js";
+export {
+  TEMPERATURE_BROADS,
+  TEMPERATURE_FAMILIES,
+  MAPPING_SCORE_EPSILON,
+  TEMPERATURE_MIN_SPREADS,
+  TEMPERATURE_MIN_WEEKS,
+  TEMPERATURE_PRICE_STALE_DAYS,
+  TEMPERATURE_V1,
+  TEMPERATURE_Z_MIN_SPREADS,
+  buildSignalRows,
+  buildTemperatureReading,
+  calendarDaysBetween,
+  clampTemperature,
+  compactTemperature,
+  decideTemperatureWrite,
+  isComparable,
+  lastBarDate,
+  latestAlignedSession,
+  methodOf,
+  parseTemperatureQuery,
+  productionCandidate,
+  productionStudyParams,
+  quantileTemperature,
+  ruleTemperature,
+  selectNewTemperatureRows,
+  temperatureAt,
+  temperatureBand,
+  temperatureCandidates,
+  temperatureExtreme,
+  temperatureFamilyForSymbol,
+  temperatureLegs,
+  temperaturePoints,
+  zTemperature,
+} from "./temperature.js";
+export type {
+  SignalRow,
+  TemperatureCandidate,
+  TemperatureMapping,
+  TemperaturePoint,
+  TemperatureStudyLegs,
+  TemperatureWriteDecision,
+} from "./temperature.js";
+export {
+  HORIZONS,
+  HOLDOUT_CUT,
+  bestCandidateId,
+  chooseMapping,
+  evaluateFrozen,
+  modalId,
+  prepareSignals,
+  runTemperatureStudy,
+  selectExtremeThresholds,
+  spearman,
+  summarizeDist,
+  walkForwardMasks,
+} from "./temperatureBacktest.js";
+export type {
+  HorizonKey,
+  PreparedRow,
+  UniverseStudy,
+  WindowReport,
+} from "./temperatureBacktest.js";
 export { isoWeekKey, toWeeklyBars, weekFriday } from "./weekly.js";
 export type { WeeklyBar } from "./weekly.js";
