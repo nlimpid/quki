@@ -99,7 +99,7 @@ pnpm test
 pnpm typecheck
 pnpm lint
 pnpm format
-pnpm test:integration   # skips with a notice until TIDB_CI_DATABASE_URL is set
+pnpm test:integration   # skips with a notice until TIDB_CI_DATABASE_URL is exported
 ```
 
 Lint and format are oxlint and oxfmt. The web bundler is `rolldown-vite`. Libraries build with tsdown (`pnpm --filter "./packages/*" build`).
@@ -108,11 +108,13 @@ Lint and format are oxlint and oxfmt. The web bundler is `rolldown-vite`. Librar
 
 Never commit values. Names:
 
-| Name                     | Where                                                                                                                                                                   |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TIDB_QUKI_DATABASE_URL` | Worker secret and local env. TiDB Serverless MySQL URL, for example `mysql://USER:PASSWORD@gateway01.<region>.prod.aws.tidbcloud.com:4000/quki`                         |
-| `TIDB_CI_DATABASE_URL`   | GitHub Actions secret only. A separate database on that cluster, for example `quki_ci`. Never production `quki`. See [Continuous integration](#continuous-integration). |
-| `INGEST_TOKEN`           | Crawler Worker secret. `Authorization: Bearer …` or `x-ingest-token` on `POST /admin/migrate` and `POST /admin/ingest`                                                  |
+| Name                       | Where                                                                                                                                                                |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TIDB_QUKI_DATABASE_URL`   | Worker secret and local env. TiDB Serverless MySQL URL, for example `mysql://USER:PASSWORD@gateway01.<region>.prod.aws.tidbcloud.com:4000/quki`                      |
+| `OP_SERVICE_ACCOUNT_TOKEN` | The only GitHub Actions secret. 1Password service account token with read-only access to the `quki-ci` vault. See [Continuous integration](#continuous-integration). |
+| `OP_TIDB_CI_URL_REF`       | Optional GitHub Actions variable (not a secret). 1Password secret reference. Defaults to `op://quki-ci/tidb-quki-ci/database_url`.                                   |
+| `TIDB_CI_DATABASE_URL`     | Local shell env, or the value CI loads from that 1Password field. MySQL URL whose database is exactly `quki_ci`.                                                     |
+| `INGEST_TOKEN`             | Crawler Worker secret. `Authorization: Bearer …` or `x-ingest-token` on `POST /admin/migrate` and `POST /admin/ingest`                                               |
 
 ```bash
 # from workers/site and workers/crawler respectively
@@ -170,24 +172,38 @@ First-time order: create the TiDB database, `pnpm migrate`, `pnpm backfill`, set
 
 On GitHub the checks are `ci` and `db-integration`. The branch-protection picker sometimes shows them as `ci / ci` and `ci / db-integration`. Require both on `master` before merging.
 
-`db-integration` needs the repository secret `TIDB_CI_DATABASE_URL`. Create a second database on the same TiDB Serverless cluster (do not reuse production `quki` — the job drops every table):
+`db-integration` loads the database URL from 1Password with `1password/load-secrets-action@v5`. The only GitHub Actions secret is `OP_SERVICE_ACCOUNT_TOKEN`. The connection string is not stored in GitHub.
+
+1Password layout:
+
+|       |                                                                                                                                      |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Vault | `quki-ci` — a dedicated CI vault. The service account has read-only access to this vault only, never the production vault.           |
+| Item  | `tidb-quki-ci`                                                                                                                       |
+| Field | `database_url` — MySQL connection string whose database name is exactly `quki_ci`. Any other database, including `quki`, is refused. |
+
+Create that database on the same TiDB Serverless cluster. The job drops every table in the database it is given:
 
 ```sql
 CREATE DATABASE quki_ci;
 ```
 
-Copy the production connection string and change the database path from `/quki` to `/quki_ci`. In GitHub: Settings → Secrets and variables → Actions → New repository secret, name `TIDB_CI_DATABASE_URL`. The same cluster user is fine. The test refuses a URL whose database is `quki`.
+Copy the production connection string, change the database path to `/quki_ci`, and save it in the `database_url` field. Create a service account that can read `quki-ci` and nothing else. GitHub → Settings → Secrets and variables → Actions → New repository secret, name `OP_SERVICE_ACCOUNT_TOKEN`, value the service account token. Do not store the connection string as a GitHub secret.
 
-Fork pull requests do not receive the secret. The job then prints a notice and succeeds, so it does not prove the database path on those runs.
+To point CI at a different vault, item, or field, add an Actions **variable** (not a secret) named `OP_TIDB_CI_URL_REF`. When it is unset, the workflow uses `op://quki-ci/tidb-quki-ci/database_url`.
 
-Locally:
+`db-integration` shares one database, so the job uses concurrency group `db-integration-quki_ci` and waits instead of cancelling a reset that is already running.
+
+Fork pull requests do not receive `OP_SERVICE_ACCOUNT_TOKEN`. Only those runs print a notice and succeed. A pull request from this repository, or a push to `master`, fails the check when the token is missing.
+
+Locally, with the 1Password CLI signed in:
 
 ```bash
-export TIDB_CI_DATABASE_URL='mysql://USER:PASSWORD@gateway01.<region>.prod.aws.tidbcloud.com:4000/quki_ci'
+export TIDB_CI_DATABASE_URL="$(op read 'op://quki-ci/tidb-quki-ci/database_url')"
 pnpm test:integration
 ```
 
-Without that variable the same command prints a notice, skips the live suite, and exits 0.
+Without `TIDB_CI_DATABASE_URL` the same command prints a notice, skips the live suite, and exits 0. The URL it loads must use database `quki_ci`.
 
 ## Production smoke
 

@@ -27,7 +27,7 @@ const REPLACED_CLOSE = 4242.5;
 
 if (!CI_URL) {
   console.error(
-    "NOTICE: TIDB_CI_DATABASE_URL is not set. Skipping live TiDB integration tests. Create a separate database such as quki_ci and export its connection string to run them.",
+    "NOTICE: TIDB_CI_DATABASE_URL is not set. Skipping live TiDB integration tests. CI loads op://quki-ci/tidb-quki-ci/database_url. Locally, export the URL from 1Password.",
   );
 }
 
@@ -43,23 +43,15 @@ function databaseNameFromUrl(raw: string): string {
   return name;
 }
 
-/** Refuse to reset production or a system schema. Returns the database name. */
+const CI_DATABASE_NAME = "quki_ci";
+
+/** Reset is allowed only for the dedicated CI database. */
 function assertSeparateCiDatabase(raw: string): string {
   const name = databaseNameFromUrl(raw);
-  const folded = name.toLowerCase();
-  if (folded === "quki") {
+  if (name !== CI_DATABASE_NAME) {
     throw new Error(
-      'Refusing to reset database "quki". TIDB_CI_DATABASE_URL must point at a separate database such as quki_ci.',
+      `Refusing to reset database "${name || "(missing)"}". TIDB_CI_DATABASE_URL must use database ${CI_DATABASE_NAME}.`,
     );
-  }
-  if (
-    name.length === 0 ||
-    folded === "mysql" ||
-    folded === "information_schema" ||
-    folded === "performance_schema" ||
-    folded === "sys"
-  ) {
-    throw new Error(`Refusing to reset database "${name || "(missing)"}".`);
   }
   return name;
 }
@@ -131,17 +123,14 @@ describe("CI database guard", () => {
       databaseNameFromUrl("mysql://user:p%40ss@gateway.example:4000/quki_ci?sslaccept=strict"),
     ).toBe("quki_ci");
     expect(assertSeparateCiDatabase("mysql://user:secret@gateway.example:4000/quki_ci")).toBe(
-      "quki_ci",
+      CI_DATABASE_NAME,
     );
-    expect(() => assertSeparateCiDatabase("mysql://user:secret@gateway.example:4000/quki")).toThrow(
-      /quki_ci/,
-    );
-    expect(() => assertSeparateCiDatabase("mysql://user:secret@gateway.example:4000/QUKI")).toThrow(
-      /quki_ci/,
-    );
-    expect(() => assertSeparateCiDatabase("mysql://user:secret@gateway.example:4000/")).toThrow(
-      /missing/,
-    );
+    for (const name of ["quki", "QUKI_CI", "quki_ci_backup", "mysql", ""]) {
+      const path = name.length > 0 ? `/${name}` : "/";
+      expect(() =>
+        assertSeparateCiDatabase(`mysql://user:secret@gateway.example:4000${path}`),
+      ).toThrow(/quki_ci/);
+    }
   });
 
   it("builds 120 distinct Friday sessions", () => {

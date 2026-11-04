@@ -46,19 +46,29 @@ jobs:
   db-integration:
     name: db-integration
     runs-on: ubuntu-latest
+    # One shared quki_ci database. Queue other runs; do not cancel a reset in progress.
+    concurrency:
+      group: db-integration-quki_ci
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
-      - name: Skip unless TIDB_CI_DATABASE_URL is configured
+      - name: Require 1Password except on fork pull requests
         id: gate
         env:
-          TIDB_CI_DATABASE_URL: ${{ secrets.TIDB_CI_DATABASE_URL }}
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
         run: |
-          if [ -z "${TIDB_CI_DATABASE_URL}" ]; then
-            echo "::notice title=TiDB integration skipped::TIDB_CI_DATABASE_URL is not set. Fork pull requests do not receive this secret. Create a separate database such as quki_ci and add the repository secret to run this check."
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          else
+          if [ -n "${OP_SERVICE_ACCOUNT_TOKEN}" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          if [ "${PR_FROM_FORK}" = "true" ]; then
+            echo "::notice title=TiDB integration skipped::Fork pull requests do not receive OP_SERVICE_ACCOUNT_TOKEN, so the live TiDB check is skipped."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::error title=Missing OP_SERVICE_ACCOUNT_TOKEN::Same-repository pull requests and pushes to master must set the 1Password service account token. This required check does not pass without it."
+          exit 1
       - uses: pnpm/action-setup@v4
         if: steps.gate.outputs.run == 'true'
       - uses: actions/setup-node@v4
@@ -69,8 +79,15 @@ jobs:
       - name: Install
         if: steps.gate.outputs.run == 'true'
         run: pnpm install --frozen-lockfile
+      - name: Load secrets from 1Password
+        if: steps.gate.outputs.run == 'true'
+        uses: 1password/load-secrets-action@v5
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          # Repository variable, not a secret. Rename the vault or item without editing this file.
+          TIDB_CI_DATABASE_URL: "${{ vars.OP_TIDB_CI_URL_REF || 'op://quki-ci/tidb-quki-ci/database_url' }}"
       - name: TiDB integration
         if: steps.gate.outputs.run == 'true'
-        env:
-          TIDB_CI_DATABASE_URL: ${{ secrets.TIDB_CI_DATABASE_URL }}
         run: pnpm test:integration
