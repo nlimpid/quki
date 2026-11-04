@@ -1,0 +1,42 @@
+{
+  "name": "quki",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c green,cyan \"tsx scripts/dev-api.ts\" \"pnpm --filter @quki/web dev\"",
+    "dev:worker": "pnpm --filter @quki/web build && pnpm --filter @quki/site exec wrangler dev",
+    "build": "pnpm -r --filter \"./packages/*\" build && pnpm --filter @quki/web build && pnpm --filter @quki/site build && pnpm --filter @quki/crawler build",
+    "test": "vitest run",
+    "typecheck": "pnpm --filter \"./packages/*\" --filter \"./apps/*\" --filter \"./workers/*\" typecheck && tsc -p tsconfig.scripts.json --noEmit",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "migrate": "tsx scripts/migrate.ts",
+    "backfill": "tsx scripts/backfill.ts",
+    "ingest": "tsx scripts/ingest.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.6",
+    "@quki/analytics": "workspace:*",
+    "@quki/db": "workspace:*",
+    "@quki/ingest": "workspace:*",
+    "@quki/types": "workspace:*",
+    "hono": "^4.13.16"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "concurrently": "^9.2.1",
+    "oxfmt": "^0.76.0",
+    "oxlint": "^1.91.0",
+    "tsx": "^4.20.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  },
+  "packageManager": "pnpm@10.33.4",
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:rolldown-vite@7.3.1"
+    }
+  }
+}

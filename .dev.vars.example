@@ -1,0 +1,10 @@
+# Copy to .dev.vars (repo root, gitignored) and to workers/site/.dev.vars
+# and workers/crawler/.dev.vars when running wrangler dev.
+# Never commit real values.
+
+# TiDB Serverless connection string. Worker secret name: TIDB_QUKI_DATABASE_URL
+# mysql://<USER>:<PASSWORD>@<HOST>:4000/<DATABASE>
+TIDB_QUKI_DATABASE_URL=
+
+# Shared secret for POST /admin/ingest and POST /admin/backfill on the crawler worker.
+INGEST_TOKEN=replace-with-a-long-random-string

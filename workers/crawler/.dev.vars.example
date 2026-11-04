@@ -1,0 +1,2 @@
+TIDB_QUKI_DATABASE_URL=mysql://user:password@gateway01.region.prod.aws.tidbcloud.com:4000/quki
+INGEST_TOKEN=replace-with-a-long-random-string

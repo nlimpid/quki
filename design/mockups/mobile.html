@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=390, initial-scale=1" />
+<title>quki — 概览 · 移动端 · 示例数据</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--qk-font-sans);
+    background: #E2E8F0;
+    color: var(--qk-text-primary);
+    -webkit-font-smoothing: antialiased;
+  }
+  .device {
+    width: 390px; margin: 0 auto; background: var(--qk-bg-canvas);
+    min-height: 100vh; box-shadow: 0 0 0 1px #CBD5E1;
+  }
+  .sample-banner {
+    background: #FEF3C7; color: #92400E; text-align: center;
+    font-size: 11px; font-weight: 600; padding: 6px 8px;
+    border-bottom: 1px solid #FDE68A;
+  }
+  header.app {
+    height: 52px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; background: var(--qk-bg-surface); border-bottom: 1px solid var(--qk-border-default);
+    position: sticky; top: 0; z-index: 110;
+  }
+  .brand-name { font-size: 16px; font-weight: 700; color: var(--qk-brand-primary); }
+  nav.main { display: flex; gap: 16px; }
+  nav.main a {
+    font-size: 13px; font-weight: 500; color: var(--qk-text-secondary); text-decoration: none;
+    padding: 14px 0; border-bottom: 2px solid transparent;
+  }
+  nav.main a.active { color: var(--qk-text-primary); border-bottom-color: var(--qk-brand-accent); }
+  .icon-btn {
+    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--qk-border-default);
+    display: grid; place-items: center; font-size: 14px; color: var(--qk-text-secondary); background: var(--qk-bg-surface);
+  }
+  .sticky-switch {
+    position: sticky; top: 52px; z-index: 100;
+    background: var(--qk-bg-surface); border-bottom: 1px solid var(--qk-border-muted);
+    padding: 8px 16px; display: flex; gap: 8px; overflow-x: auto;
+  }
+  .pill {
+    height: 32px; padding: 0 12px; border-radius: 9999px; border: 1px solid transparent;
+    font-size: 12px; font-weight: 500; color: var(--qk-text-secondary); white-space: nowrap;
+    display: inline-flex; align-items: center; background: transparent;
+  }
+  .pill.active {
+    background: var(--qk-brand-accent-muted); color: var(--qk-brand-accent); border-color: #93C5FD;
+  }
+  .controls { padding: 10px 16px 0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .seg {
+    display: inline-flex; background: var(--qk-bg-surface-muted); border-radius: 8px; padding: 2px;
+    border: 1px solid var(--qk-border-muted);
+  }
+  .seg button {
+    height: 28px; padding: 0 10px; border: none; background: transparent; border-radius: 6px;
+    font-size: 12px; font-weight: 500; color: var(--qk-text-secondary); font-family: inherit;
+  }
+  .seg button.active { background: var(--qk-bg-surface); color: var(--qk-text-primary); box-shadow: var(--qk-shadow-sm); }
+  .asof { padding: 8px 16px 12px; font-size: 11px; color: var(--qk-text-tertiary); }
+  .asof strong { font-family: var(--qk-font-tabular); font-variant-numeric: tabular-nums; font-weight: 500; color: var(--qk-text-secondary); }
+
+  main { padding: 0 16px 24px; display: flex; flex-direction: column; gap: 16px; }
+  .card {
+    background: var(--qk-bg-surface); border: 1px solid var(--qk-border-default);
+    border-radius: 12px; box-shadow: var(--qk-shadow-sm); overflow: hidden;
+  }
+  .card-hd {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; border-bottom: 1px solid var(--qk-border-muted);
+  }
+  .card-title { font-size: 13px; font-weight: 600; }
+  .pos { padding: 16px 14px; }
+  .pos-label { font-size: 11px; color: var(--qk-text-tertiary); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .badge {
+    display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 9999px;
+    font-size: 10px; font-weight: 600; border: 1px solid;
+  }
+  .badge-important { background: var(--qk-badge-important-bg); color: var(--qk-badge-important-fg); border-color: var(--qk-badge-important-border); }
+  .badge-epic { background: var(--qk-badge-epic-bg); color: var(--qk-badge-epic-fg); border-color: var(--qk-badge-epic-border); }
+  .badge-unconfirmed { background: var(--qk-badge-unconfirmed-bg); color: var(--qk-badge-unconfirmed-fg); border-color: var(--qk-badge-unconfirmed-border); }
+  .badge-neutral { background: var(--qk-badge-neutral-bg); color: var(--qk-badge-neutral-fg); border-color: var(--qk-badge-neutral-border); }
+  .hero {
+    font-size: 28px; font-weight: 700; letter-spacing: -0.02em;
+    font-family: var(--qk-font-tabular); font-variant-numeric: tabular-nums; line-height: 1.1;
+  }
+  .hero-sub { font-size: 11px; color: var(--qk-text-tertiary); margin: 4px 0 12px; }
+  .meta-row { display: flex; gap: 14px; font-size: 12px; color: var(--qk-text-secondary); margin-bottom: 12px; }
+  .meta-row b { color: var(--qk-text-primary); font-family: var(--qk-font-tabular); font-variant-numeric: tabular-nums; }
+  .pct-label { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 6px; }
+  .pct-label span:last-child { font-family: var(--qk-font-tabular); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .meter { height: 8px; background: var(--qk-bg-surface-muted); border-radius: 9999px; overflow: hidden; }
+  .meter > i { display: block; height: 100%; width: 22%; background: linear-gradient(90deg, #B91C1C, #EA580C 40%, #64748B); border-radius: 9999px; }
+  .hint { font-size: 11px; color: var(--qk-text-tertiary); margin-top: 8px; }
+
+  .chart-body { padding: 4px 4px 8px; }
+  .chart-svg { width: 100%; height: 280px; display: block; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 10px; color: var(--qk-text-secondary);
+    padding: 0 14px 10px;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .sw { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+  table.qk { width: 100%; border-collapse: collapse; font-size: 11px; }
+  table.qk th {
+    text-align: left; font-weight: 500; color: var(--qk-text-tertiary); padding: 8px 10px;
+    border-bottom: 1px solid var(--qk-border-muted); background: var(--qk-bg-surface-muted);
+  }
+  table.qk td {
+    padding: 8px 10px; border-bottom: 1px solid var(--qk-border-muted);
+    font-family: var(--qk-font-tabular); font-variant-numeric: tabular-nums;
+  }
+  table.qk td.name { font-family: var(--qk-font-sans); }
+  table.qk tr.hl td { background: #FFF7ED; }
+  table.qk tr:last-child td { border-bottom: none; }
+  .tier-dot { width: 7px; height: 7px; border-radius: 2px; display: inline-block; margin-right: 4px; }
+  .scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  .low-card { padding: 12px 14px; border-bottom: 1px solid var(--qk-border-muted); }
+  .low-card:last-child { border-bottom: none; }
+  .low-card.unconfirmed { box-shadow: inset 3px 0 0 #F59E0B; }
+  .low-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .low-date { font-size: 12px; font-family: var(--qk-font-tabular); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .low-ratio { font-size: 18px; font-weight: 700; font-family: var(--qk-font-tabular); font-variant-numeric: tabular-nums; }
+  .low-meta { font-size: 11px; color: var(--qk-text-secondary); display: flex; gap: 12px; margin-top: 6px; }
+  .low-meta b { color: var(--qk-text-primary); font-family: var(--qk-font-tabular); font-variant-numeric: tabular-nums; }
+  .low-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+  footer.disc {
+    margin: 0 16px 24px; padding-top: 16px; border-top: 1px solid var(--qk-border-default);
+    font-size: 11px; color: var(--qk-text-tertiary); line-height: 1.7;
+  }
+  footer.disc strong { color: var(--qk-text-secondary); }
+</style>
+</head>
+<body>
+<div class="device">
+  <div class="sample-banner">示例数据 · 非真实行情</div>
+  <header class="app">
+    <span class="brand-name">quki</span>
+    <nav class="main">
+      <a class="active" href="#">概览</a>
+      <a href="#">回测</a>
+    </nav>
+    <div class="icon-btn">☾</div>
+  </header>
+
+  <div class="sticky-switch">
+    <div class="pill active">红利低波 H30269</div>
+    <div class="pill">中证红利 000922</div>
+  </div>
+
+  <div class="controls">
+    <div class="seg">
+      <button>日</button>
+      <button class="active">周</button>
+    </div>
+    <div class="seg">
+      <button>1年</button>
+      <button>3年</button>
+      <button class="active">5年</button>
+      <button>10年</button>
+      <button>全部</button>
+    </div>
+  </div>
+  <div class="asof">数据截至 <strong>2026-10-31 15:00</strong> 北京时间</div>
+
+  <main>
+    <!-- Position FIRST on mobile -->
+    <section class="card pos">
+      <div class="pos-label">当前位置 <span class="badge badge-important">偏低 · 近重要底</span></div>
+      <div class="hero">94.8%</div>
+      <div class="hero-sub">收盘 / MA55</div>
+      <div class="meta-row">
+        <span>收盘 <b>4856.32</b></span>
+        <span>MA55 <b>5120.00</b></span>
+      </div>
+      <div class="pct-label"><span>历史分位</span><span>22%</span></div>
+      <div class="meter"><i></i></div>
+      <div class="hint">分位越低表示相对越便宜（示例数据）</div>
+    </section>
+
+    <section class="card">
+      <div class="card-hd">
+        <div class="card-title">K 线 · MA55</div>
+        <span style="font-size:11px;color:var(--qk-text-tertiary)">周线 · 5年</span>
+      </div>
+      <div class="legend">
+        <span><i class="sw" style="background:#DC2626"></i>涨</span>
+        <span><i class="sw" style="background:#16A34A"></i>跌</span>
+        <span><i class="sw" style="background:#7C3AED"></i>MA55</span>
+        <span><i class="sw" style="background:rgba(127,29,29,.4)"></i>85%</span>
+        <span><i class="sw" style="background:rgba(185,28,28,.35)"></i>90%</span>
+        <span>▼确认 ◆未确认</span>
+      </div>
+      <div class="chart-body">
+        <svg class="chart-svg" viewBox="0 0 360 280" xmlns="http://www.w3.org/2000/svg" aria-label="示例K线图">
+          <rect x="8" y="8" width="320" height="240" fill="#fff" stroke="#E2E8F0"/>
+          <g stroke="#E2E8F0"><line x1="8" y1="56" x2="328" y2="56"/><line x1="8" y1="104" x2="328" y2="104"/><line x1="8" y1="152" x2="328" y2="152"/><line x1="8" y1="200" x2="328" y2="200"/></g>
+          <path d="M8,140 C60,132 120,120 180,116 S280,112 328,110 L328,200 L8,210 Z" fill="rgba(14,165,233,0.05)"/>
+          <path d="M8,140 C60,132 120,120 180,116 S280,112 328,110 L328,130 L8,158 Z" fill="rgba(37,99,235,0.07)"/>
+          <path d="M8,158 C60,150 120,138 180,134 S280,130 328,128 L328,110 C280,112 220,116 180,116 S60,132 8,140 Z" fill="rgba(234,88,12,0.10)"/>
+          <path d="M8,176 C60,168 120,156 180,152 S280,148 328,146 L328,128 C280,130 220,134 180,134 S60,150 8,158 Z" fill="rgba(185,28,28,0.12)"/>
+          <path d="M8,194 C60,186 120,174 180,170 S280,166 328,164 L328,146 C280,148 220,152 180,152 S60,168 8,176 Z" fill="rgba(127,29,29,0.15)"/>
+          <path d="M8,140 C60,132 120,120 180,116 S280,112 328,110" fill="none" stroke="#7C3AED" stroke-width="1.5"/>
+          <g stroke-width="1">
+            <g stroke="#16A34A" fill="#16A34A">
+              <line x1="40" y1="150" x2="40" y2="175"/><rect x="36" y="155" width="8" height="14"/>
+              <line x1="100" y1="168" x2="100" y2="198"/><rect x="96" y="175" width="8" height="16"/>
+              <line x1="200" y1="128" x2="200" y2="152"/><rect x="196" y="134" width="8" height="12"/>
+            </g>
+            <g stroke="#DC2626" fill="#DC2626">
+              <line x1="70" y1="132" x2="70" y2="158"/><rect x="66" y="132" width="8" height="16"/>
+              <line x1="130" y1="148" x2="130" y2="172"/><rect x="126" y="148" width="8" height="16"/>
+              <line x1="160" y1="120" x2="160" y2="148"/><rect x="156" y="120" width="8" height="18"/>
+              <line x1="230" y1="118" x2="230" y2="142"/><rect x="226" y="118" width="8" height="14"/>
+              <line x1="260" y1="122" x2="260" y2="148"/><rect x="256" y="126" width="8" height="12"/>
+              <line x1="290" y1="112" x2="290" y2="138"/><rect x="286" y="112" width="8" height="16"/>
+              <line x1="310" y1="118" x2="310" y2="140"/><rect x="306" y="120" width="8" height="12"/>
+            </g>
+          </g>
+          <polygon points="100,210 95,200 105,200" fill="#7F1D1D" stroke="#fff" stroke-width="1"/>
+          <polygon points="260,160 255,153 260,146 265,153" fill="#F59E0B" stroke="#fff" stroke-width="1"/>
+          <text x="168" y="22" text-anchor="middle" font-size="10" fill="#D97706" font-family="Noto Sans SC,sans-serif" font-weight="600">示例数据</text>
+          <g font-size="9" fill="#94A3B8" font-family="JetBrains Mono,monospace" text-anchor="middle">
+            <text x="40" y="264">2022</text>
+            <text x="130" y="264">2023</text>
+            <text x="220" y="264">2024</text>
+            <text x="300" y="264">2026</text>
+          </g>
+          <g font-size="8" font-family="JetBrains Mono,Noto Sans SC,monospace" text-anchor="start">
+            <text x="332" y="114" fill="#475569">MA55</text>
+            <text x="332" y="150" fill="#C2410C">95%</text>
+            <text x="332" y="168" fill="#B91C1C">90%</text>
+            <text x="332" y="186" fill="#7F1D1D">85%</text>
+          </g>
+        </svg>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-hd"><div class="card-title">分档点位</div></div>
+      <div class="scroll-x">
+        <table class="qk" style="min-width:340px">
+          <thead>
+            <tr><th>档位</th><th>含义</th><th>点位</th><th>距现价</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="name"><i class="tier-dot" style="background:#7F1D1D"></i>85%</td><td class="name">史诗底</td><td>4352.00</td><td>−10.4%</td></tr>
+            <tr><td class="name"><i class="tier-dot" style="background:#B91C1C"></i>90%</td><td class="name">重要底</td><td>4608.00</td><td>−5.1%</td></tr>
+            <tr class="hl"><td class="name"><i class="tier-dot" style="background:#EA580C"></i>95%</td><td class="name">—</td><td>4864.00</td><td>+0.2%</td></tr>
+            <tr><td class="name"><i class="tier-dot" style="background:#64748B"></i>100%</td><td class="name">MA55</td><td>5120.00</td><td>+5.4%</td></tr>
+            <tr><td class="name"><i class="tier-dot" style="background:#3B82F6"></i>105%</td><td class="name">—</td><td>5376.00</td><td>+10.7%</td></tr>
+            <tr><td class="name"><i class="tier-dot" style="background:#0EA5E9"></i>110%</td><td class="name">—</td><td>5632.00</td><td>+16.0%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-hd">
+        <div class="card-title">显著低点</div>
+      </div>
+      <div class="low-card unconfirmed">
+        <div class="low-top">
+          <span class="low-date">2026-08-15</span>
+          <span class="low-ratio">89.8%</span>
+        </div>
+        <div class="low-meta"><span>周低点 <b>4580.00</b></span><span>MA55 <b>5100.00</b></span></div>
+        <div class="low-badges">
+          <span class="badge badge-important">重要底</span>
+          <span class="badge badge-unconfirmed">未确认</span>
+        </div>
+      </div>
+      <div class="low-card">
+        <div class="low-top">
+          <span class="low-date">2024-02-02</span>
+          <span class="low-ratio">83.2%</span>
+        </div>
+        <div class="low-meta"><span>周低点 <b>4201.00</b></span><span>MA55 <b>5050.00</b></span></div>
+        <div class="low-badges">
+          <span class="badge badge-epic">史诗底</span>
+          <span class="badge badge-neutral">已确认</span>
+        </div>
+      </div>
+      <div class="low-card">
+        <div class="low-top">
+          <span class="low-date">2022-10-28</span>
+          <span class="low-ratio">86.5%</span>
+        </div>
+        <div class="low-meta"><span>周低点 <b>4310.00</b></span><span>MA55 <b>4980.00</b></span></div>
+        <div class="low-badges">
+          <span class="badge badge-important">重要底</span>
+          <span class="badge badge-neutral">已确认</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="disc">
+    <strong>免责声明：</strong>本站数据仅供学习与研究参考，<strong>不构成投资建议</strong>。市场有风险，决策需独立判断。
+  </footer>
+</div>
+</body>
+</html>
