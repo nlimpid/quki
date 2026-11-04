@@ -1,0 +1,93 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Reads packageManager from package.json (pnpm@10.33.4).
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: oxfmt
+        run: pnpm exec oxfmt --check
+      - name: oxlint
+        run: pnpm exec oxlint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Unit tests
+        run: pnpm test
+      - name: Build site
+        run: pnpm build:site
+      - name: Build crawler
+        run: pnpm build:crawler
+      - name: Wrangler dry-run (site)
+        run: npx wrangler deploy --dry-run -c workers/site/wrangler.jsonc
+      - name: Wrangler dry-run (crawler)
+        run: npx wrangler deploy --dry-run -c workers/crawler/wrangler.jsonc
+
+  db-integration:
+    name: db-integration
+    runs-on: ubuntu-latest
+    # One shared quki_ci database. Queue other runs; do not cancel a reset in progress.
+    concurrency:
+      group: db-integration-quki_ci
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require 1Password except on fork pull requests
+        id: gate
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+        run: |
+          if [ -n "${OP_SERVICE_ACCOUNT_TOKEN}" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "${PR_FROM_FORK}" = "true" ]; then
+            echo "::notice title=TiDB integration skipped::Fork pull requests do not receive OP_SERVICE_ACCOUNT_TOKEN, so the live TiDB check is skipped."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::error title=Missing OP_SERVICE_ACCOUNT_TOKEN::Same-repository pull requests and pushes to master must set the 1Password service account token. This required check does not pass without it."
+          exit 1
+      - uses: pnpm/action-setup@v4
+        if: steps.gate.outputs.run == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        if: steps.gate.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Load secrets from 1Password
+        if: steps.gate.outputs.run == 'true'
+        uses: 1password/load-secrets-action@v5
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          # Repository variable, not a secret. Rename the vault or item without editing this file.
+          TIDB_CI_DATABASE_URL: "${{ vars.OP_TIDB_CI_URL_REF || 'op://quki-ci/tidb-quki-ci/database_url' }}"
+      - name: TiDB integration
+        if: steps.gate.outputs.run == 'true'
+        run: pnpm test:integration

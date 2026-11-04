@@ -9,6 +9,7 @@
     "build:site": "pnpm --filter @quki/web build",
     "build:crawler": "echo ok",
     "test": "vitest run",
+    "test:integration": "bash scripts/test-integration.sh",
     "typecheck": "pnpm --filter \"./packages/*\" --filter \"./apps/*\" --filter \"./workers/*\" typecheck && tsc -p tsconfig.scripts.json --noEmit",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
