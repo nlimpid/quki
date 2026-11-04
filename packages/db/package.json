@@ -1,0 +1,22 @@
+{
+  "name": "@quki/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@quki/analytics": "workspace:*",
+    "@quki/ingest": "workspace:*",
+    "@quki/types": "workspace:*",
+    "@tidbcloud/serverless": "^0.3.0"
+  },
+  "devDependencies": {
+    "tsdown": "^0.23.5"
+  }
+}

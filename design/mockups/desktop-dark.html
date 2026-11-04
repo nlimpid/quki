@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>quki — 概览 · 桌面深色 · 示例数据</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--qk-font-sans);
+    background: var(--qk-bg-canvas);
+    color: var(--qk-text-primary);
+    font-size: var(--qk-fs-md);
+    line-height: var(--qk-lh-md);
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { min-height: 100vh; width: 1440px; margin: 0 auto; background: var(--qk-bg-canvas); }
+  .sample-banner {
+    background: rgba(146,64,14,0.45); color: #FDE68A; text-align: center;
+    font-size: 12px; font-weight: 600; padding: 6px 12px;
+    border-bottom: 1px solid rgba(251,191,36,0.35); letter-spacing: 0.02em;
+  }
+  header.app {
+    height: 56px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 32px; background: var(--qk-bg-surface); border-bottom: 1px solid var(--qk-border-default);
+  }
+  .brand { display: flex; align-items: baseline; gap: 8px; }
+  .brand-name { font-size: 18px; font-weight: 700; color: var(--qk-brand-primary); letter-spacing: -0.02em; }
+  .brand-sub { font-size: 11px; color: var(--qk-text-tertiary); }
+  nav.main { display: flex; gap: 24px; margin-left: 40px; flex: 1; }
+  nav.main a {
+    font-size: 14px; font-weight: 500; color: var(--qk-text-secondary); text-decoration: none;
+    padding: 18px 0 16px; border-bottom: 2px solid transparent;
+  }
+  nav.main a.active { color: var(--qk-text-primary); border-bottom-color: var(--qk-brand-accent); }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--qk-border-default);
+    background: var(--qk-bg-surface); display: grid; place-items: center; color: var(--qk-text-secondary);
+  }
+  .toolbar {
+    height: 48px; display: flex; align-items: center; gap: 20px;
+    padding: 0 32px; background: var(--qk-bg-surface); border-bottom: 1px solid var(--qk-border-muted);
+  }
+  .pills { display: flex; gap: 8px; }
+  .pill {
+    height: 36px; padding: 0 14px; border-radius: 9999px; border: 1px solid transparent;
+    background: transparent; font-size: 13px; font-weight: 500; color: var(--qk-text-secondary);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .pill.active {
+    background: var(--qk-brand-accent-muted); color: var(--qk-brand-accent);
+    border-color: #93C5FD;
+  }
+  .pill .code { font-family: var(--qk-font-tabular); font-size: 11px; opacity: 0.75; }
+  .seg {
+    display: inline-flex; background: var(--qk-bg-surface-muted); border-radius: 8px; padding: 2px;
+    border: 1px solid var(--qk-border-muted);
+  }
+  .seg button {
+    height: 28px; padding: 0 12px; border: none; background: transparent; border-radius: 6px;
+    font-size: 12px; font-weight: 500; color: var(--qk-text-secondary); font-family: inherit; cursor: default;
+  }
+  .seg button.active { background: var(--qk-bg-surface); color: var(--qk-text-primary); box-shadow: var(--qk-shadow-sm); }
+  .asof { margin-left: auto; font-size: 12px; color: var(--qk-text-tertiary); }
+  .asof strong { font-weight: 500; color: var(--qk-text-secondary); font-family: var(--qk-font-tabular); font-variant-numeric: tabular-nums; }
+
+  main { padding: 24px 32px; max-width: 1440px; }
+  .grid {
+    display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start;
+  }
+  .card {
+    background: var(--qk-bg-surface); border: 1px solid var(--qk-border-default);
+    border-radius: 12px; box-shadow: var(--qk-shadow-sm);
+  }
+  .card-hd {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px; border-bottom: 1px solid var(--qk-border-muted);
+  }
+  .card-title { font-size: 14px; font-weight: 600; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 14px; font-size: 11px; color: var(--qk-text-secondary); }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .sw-line { width: 14px; height: 0; border-top: 2px solid #C4B5FD; display: inline-block; }
+  .chart-body { padding: 8px 12px 12px; }
+  .chart-svg { width: 100%; height: 480px; display: block; }
+  .full { grid-column: 1 / -1; }
+  .rail { display: flex; flex-direction: column; gap: 16px; }
+
+  .pos { padding: 20px; }
+  .pos-label { font-size: 12px; color: var(--qk-text-tertiary); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .badge {
+    display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 9999px;
+    font-size: 11px; font-weight: 600; border: 1px solid;
+  }
+  .badge-important { background: var(--qk-badge-important-bg); color: var(--qk-badge-important-fg); border-color: var(--qk-badge-important-border); }
+  .badge-epic { background: var(--qk-badge-epic-bg); color: var(--qk-badge-epic-fg); border-color: var(--qk-badge-epic-border); }
+  .badge-unconfirmed { background: var(--qk-badge-unconfirmed-bg); color: var(--qk-badge-unconfirmed-fg); border-color: var(--qk-badge-unconfirmed-border); }
+  .badge-neutral { background: var(--qk-badge-neutral-bg); color: var(--qk-badge-neutral-fg); border-color: var(--qk-badge-neutral-border); }
+  .hero {
+    font-size: 32px; font-weight: 700; letter-spacing: -0.025em;
+    font-family: var(--qk-font-tabular); font-variant-numeric: tabular-nums; line-height: 1.1;
+  }
+  .hero-sub { font-size: 12px; color: var(--qk-text-tertiary); margin-top: 4px; margin-bottom: 16px; }
+  .meta-row { display: flex; gap: 16px; font-size: 13px; color: var(--qk-text-secondary); margin-bottom: 16px; }
+  .meta-row b { color: var(--qk-text-primary); font-family: var(--qk-font-tabular); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .pct-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+  .pct-label span:last-child { font-family: var(--qk-font-tabular); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .meter { height: 8px; background: var(--qk-bg-surface-muted); border-radius: 9999px; overflow: hidden; }
+  .meter > i { display: block; height: 100%; width: 22%; background: linear-gradient(90deg, #B91C1C, #EA580C 40%, #64748B); border-radius: 9999px; }
+  .hint { font-size: 11px; color: var(--qk-text-tertiary); margin-top: 8px; }
+
+  table.qk { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.qk th {
+    text-align: left; font-weight: 500; color: var(--qk-text-tertiary); padding: 10px 12px;
+    border-bottom: 1px solid var(--qk-border-muted); background: var(--qk-bg-surface-muted);
+  }
+  table.qk td {
+    padding: 10px 12px; border-bottom: 1px solid var(--qk-border-muted);
+    font-family: var(--qk-font-tabular); font-variant-numeric: tabular-nums;
+  }
+  table.qk td.name { font-family: var(--qk-font-sans); }
+  table.qk tr.hl td { background: rgba(154,52,18,0.25); }
+  table.qk tr:last-child td { border-bottom: none; }
+  .tier-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 6px; }
+
+  .lows-wrap { padding: 0; overflow: hidden; }
+  .lows-wrap .card-hd { border-bottom: 1px solid var(--qk-border-muted); }
+  tr.unconfirmed td:first-child { box-shadow: inset 3px 0 0 #F59E0B; }
+
+  footer.disc {
+    margin: 8px 32px 32px; padding: 20px 0 0; border-top: 1px solid var(--qk-border-default);
+    font-size: 12px; color: var(--qk-text-tertiary); line-height: 1.7; max-width: 960px;
+  }
+  footer.disc strong { color: var(--qk-text-secondary); font-weight: 600; }
+  .chk { font-size: 12px; color: var(--qk-text-secondary); display: inline-flex; align-items: center; gap: 6px; }
+  .chk i { width: 14px; height: 14px; border: 1px solid var(--qk-border-strong); border-radius: 3px; display: inline-block; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="sample-banner">示例数据 · 非真实行情 · FOR DESIGN MOCKUP ONLY</div>
+  <header class="app">
+    <div style="display:flex;align-items:center;">
+      <div class="brand">
+        <span class="brand-name">quki</span>
+        <span class="brand-sub">指数估值</span>
+      </div>
+      <nav class="main">
+        <a class="active" href="#">概览</a>
+        <a href="#">回测</a>
+      </nav>
+    </div>
+    <div class="header-right">
+      <div class="icon-btn" title="浅色模式">☀</div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="pills">
+      <div class="pill active">红利低波 <span class="code">H30269</span></div>
+      <div class="pill">中证红利 <span class="code">000922</span></div>
+    </div>
+    <div class="seg" aria-label="周期">
+      <button>日</button>
+      <button class="active">周</button>
+    </div>
+    <div class="seg" aria-label="区间">
+      <button>1年</button>
+      <button>3年</button>
+      <button class="active">5年</button>
+      <button>10年</button>
+      <button>全部</button>
+    </div>
+    <div class="asof">数据截至 <strong>2026-10-31 15:00</strong> 北京时间</div>
+  </div>
+
+  <main>
+    <div class="grid">
+      <section class="card">
+        <div class="card-hd">
+          <div>
+            <div class="card-title">K 线 · MA55 与估值分档</div>
+            <div class="legend" style="margin-top:8px;">
+              <span><i class="sw" style="background:#F87171"></i>上涨</span>
+              <span><i class="sw" style="background:#4ADE80"></i>下跌</span>
+              <span><i class="sw-line"></i>MA55（周）</span>
+              <span><i class="sw" style="background:rgba(127,29,29,.35)"></i>85% 史诗底</span>
+              <span><i class="sw" style="background:rgba(185,28,28,.3)"></i>90% 重要底</span>
+              <span><i class="sw" style="background:rgba(234,88,12,.25)"></i>95%</span>
+              <span><i class="sw" style="background:rgba(100,116,139,.2)"></i>100%</span>
+              <span><i class="sw" style="background:rgba(37,99,235,.2)"></i>105%</span>
+              <span><i class="sw" style="background:rgba(14,165,233,.18)"></i>110%</span>
+              <span>▼ 已确认低点</span>
+              <span>◆ 未确认低点</span>
+            </div>
+          </div>
+          <label class="chk"><i></i>成交量</label>
+        </div>
+        <div class="chart-body">
+          <!-- SVG chart mock: sample weekly candles + MA55 + bands -->
+          <svg class="chart-svg" viewBox="0 0 1040 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="示例K线图">
+            <defs>
+              <linearGradient id="band85" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#7F1D1D" stop-opacity="0.18"/>
+                <stop offset="100%" stop-color="#7F1D1D" stop-opacity="0.06"/>
+              </linearGradient>
+            </defs>
+            <!-- plot area -->
+            <rect x="48" y="16" width="860" height="420" fill="#111827" stroke="#1F2A3D"/>
+            <!-- horizontal grid -->
+            <g stroke="#1F2A3D" stroke-width="1">
+              <line x1="48" y1="76" x2="908" y2="76"/>
+              <line x1="48" y1="136" x2="908" y2="136"/>
+              <line x1="48" y1="196" x2="908" y2="196"/>
+              <line x1="48" y1="256" x2="908" y2="256"/>
+              <line x1="48" y1="316" x2="908" y2="316"/>
+              <line x1="48" y1="376" x2="908" y2="376"/>
+            </g>
+            <!-- Tier bands as filled regions (schematic, following a gentle MA curve) -->
+            <!-- MA55 path approx y from ~210 to ~200 -->
+            <path d="M48,250 C180,240 320,220 460,210 S740,200 908,198 L908,380 L48,400 Z" fill="rgba(14,165,233,0.05)" />
+            <path d="M48,250 C180,240 320,220 460,210 S740,200 908,198 L908,230 L48,280 Z" fill="rgba(37,99,235,0.07)" />
+            <path d="M48,250 C180,240 320,220 460,210 S740,200 908,198 L908,198 L48,250 Z" fill="rgba(100,116,139,0.08)" />
+            <path d="M48,280 C180,270 320,250 460,240 S740,230 908,228 L908,198 C740,200 580,210 460,210 S180,240 48,250 Z" fill="rgba(234,88,12,0.10)" />
+            <path d="M48,310 C180,300 320,280 460,270 S740,260 908,258 L908,228 C740,230 580,240 460,240 S180,270 48,280 Z" fill="rgba(185,28,28,0.12)" />
+            <path d="M48,340 C180,330 320,310 460,300 S740,290 908,288 L908,258 C740,260 580,270 460,270 S180,300 48,310 Z" fill="rgba(127,29,29,0.16)" />
+
+            <!-- Tier dashed lines -->
+            <g fill="none" stroke-dasharray="4 4" stroke-width="1">
+              <path d="M48,250 C180,240 320,220 460,210 S740,200 908,198" stroke="#64748B"/>
+              <path d="M48,280 C180,270 320,250 460,240 S740,230 908,228" stroke="#EA580C"/>
+              <path d="M48,310 C180,300 320,280 460,270 S740,260 908,258" stroke="#B91C1C"/>
+              <path d="M48,340 C180,330 320,310 460,300 S740,290 908,288" stroke="#7F1D1D"/>
+              <path d="M48,220 C180,210 320,190 460,180 S740,170 908,168" stroke="#3B82F6"/>
+              <path d="M48,190 C180,180 320,160 460,150 S740,140 908,138" stroke="#0EA5E9"/>
+            </g>
+
+            <!-- MA55 solid -->
+            <path d="M48,250 C180,240 320,220 460,210 S740,200 908,198" fill="none" stroke="#C4B5FD" stroke-width="1.5"/>
+
+            <!-- Candles (schematic sample) -->
+            <g stroke-width="1">
+              <!-- helper: x positions 70..900 -->
+              <g stroke="#4ADE80" fill="#4ADE80">
+                <line x1="80" y1="268" x2="80" y2="302"/><rect x="74" y="275" width="12" height="20"/>
+                <line x1="120" y1="255" x2="120" y2="295"/><rect x="114" y="262" width="12" height="24"/>
+                <line x1="200" y1="248" x2="200" y2="288"/><rect x="194" y="255" width="12" height="22"/>
+                <line x1="280" y1="300" x2="280" y2="350"/><rect x="274" y="310" width="12" height="28"/>
+                <line x1="400" y1="255" x2="400" y2="295"/><rect x="394" y="265" width="12" height="20"/>
+                <line x1="520" y1="230" x2="520" y2="270"/><rect x="514" y="240" width="12" height="18"/>
+                <line x1="640" y1="248" x2="640" y2="285"/><rect x="634" y="255" width="12" height="20"/>
+                <line x1="800" y1="235" x2="800" y2="268"/><rect x="794" y="242" width="12" height="16"/>
+              </g>
+              <g stroke="#F87171" fill="#F87171">
+                <line x1="160" y1="240" x2="160" y2="275"/><rect x="154" y="240" width="12" height="22"/>
+                <line x1="240" y1="235" x2="240" y2="270"/><rect x="234" y="235" width="12" height="24"/>
+                <line x1="320" y1="268" x2="320" y2="305"/><rect x="314" y="268" width="12" height="26"/>
+                <line x1="360" y1="250" x2="360" y2="290"/><rect x="354" y="250" width="12" height="28"/>
+                <line x1="440" y1="220" x2="440" y2="260"/><rect x="434" y="220" width="12" height="26"/>
+                <line x1="480" y1="215" x2="480" y2="255"/><rect x="474" y="215" width="12" height="28"/>
+                <line x1="560" y1="210" x2="560" y2="248"/><rect x="554" y="210" width="12" height="24"/>
+                <line x1="600" y1="218" x2="600" y2="255"/><rect x="594" y="218" width="12" height="22"/>
+                <line x1="680" y1="205" x2="680" y2="245"/><rect x="674" y="205" width="12" height="26"/>
+                <line x1="720" y1="200" x2="720" y2="240"/><rect x="714" y="200" width="12" height="28"/>
+                <line x1="760" y1="208" x2="760" y2="245"/><rect x="754" y="208" width="12" height="22"/>
+                <line x1="840" y1="195" x2="840" y2="235"/><rect x="834" y="195" width="12" height="26"/>
+                <line x1="860" y1="200" x2="860" y2="238"/><rect x="854" y="205" width="12" height="20"/>
+                <line x1="890" y1="208" x2="890" y2="242"/><rect x="884" y="212" width="12" height="18"/>
+              </g>
+            </g>
+
+            <!-- Markers -->
+            <!-- confirmed epic ~ x=280 -->
+            <polygon points="280,362 274,350 286,350" fill="#FCA5A5" stroke="#fff" stroke-width="1.5"/>
+            <text x="280" y="378" text-anchor="middle" font-size="10" fill="#FCA5A5" font-family="Noto Sans SC,sans-serif">史诗底</text>
+            <!-- confirmed important ~ x=400 -->
+            <polygon points="400,318 394,306 406,306" fill="#FCA5A5" stroke="#fff" stroke-width="1.5"/>
+            <!-- unconfirmed diamond ~ x=760 -->
+            <polygon points="760,278 754,270 760,262 766,270" fill="#FBBF24" stroke="#0B1220" stroke-width="1.5"/>
+            <text x="760" y="296" text-anchor="middle" font-size="10" fill="#FDE68A" font-family="Noto Sans SC,sans-serif">未确认</text>
+
+            <!-- Crosshair sample -->
+            <line x1="760" y1="16" x2="760" y2="436" stroke="#64748B" stroke-dasharray="3 3" stroke-width="1"/>
+            <line x1="48" y1="230" x2="908" y2="230" stroke="#64748B" stroke-dasharray="3 3" stroke-width="1"/>
+
+            <!-- Tooltip -->
+            <g transform="translate(620,40)">
+              <rect width="200" height="92" rx="8" fill="#fff" stroke="#1F2A3D" filter="none"/>
+              <rect width="200" height="92" rx="8" fill="#fff" stroke="#1F2A3D"/>
+              <text x="12" y="18" font-size="11" fill="#CBD5E1" font-family="Noto Sans SC,sans-serif">2026-08-15 · 周线</text>
+              <text x="12" y="38" font-size="11" fill="#0F172A" font-family="JetBrains Mono,monospace">开 4620.10  收 4580.00</text>
+              <text x="12" y="56" font-size="11" fill="#0F172A" font-family="JetBrains Mono,monospace">高 4655.00  低 4568.20</text>
+              <text x="12" y="74" font-size="11" fill="#C4B5FD" font-family="JetBrains Mono,monospace">MA55 5100.00 (89.8%)</text>
+            </g>
+
+            <!-- Y axis labels (right) -->
+            <g font-size="10" font-family="JetBrains Mono,Noto Sans SC,monospace" text-anchor="start">
+              <text x="916" y="142" fill="#7DD3FC">110% 5632.00</text>
+              <text x="916" y="172" fill="#93C5FD">105% 5376.00</text>
+              <text x="916" y="202" fill="#CBD5E1">MA55 5120.00</text>
+              <text x="916" y="232" fill="#FDBA74">95% 4864.00</text>
+              <text x="916" y="262" fill="#FDA4AF">90% 4608.00</text>
+              <text x="916" y="292" fill="#FCA5A5">85% 4352.00</text>
+            </g>
+            <!-- X labels -->
+            <g font-size="10" fill="#94A3B8" font-family="JetBrains Mono,monospace" text-anchor="middle">
+              <text x="80" y="456">2022</text>
+              <text x="280" y="456">2023</text>
+              <text x="520" y="456">2024</text>
+              <text x="760" y="456">2025</text>
+              <text x="900" y="456">2026</text>
+            </g>
+            <text x="500" y="28" text-anchor="middle" font-size="11" fill="#D97706" font-family="Noto Sans SC,sans-serif" font-weight="600">示例数据</text>
+          </svg>
+        </div>
+      </section>
+
+      <aside class="rail">
+        <section class="card pos">
+          <div class="pos-label">当前位置 <span class="badge badge-important">偏低 · 近重要底</span></div>
+          <div class="hero">94.8%</div>
+          <div class="hero-sub">收盘 / MA55</div>
+          <div class="meta-row">
+            <span>收盘 <b>4856.32</b></span>
+            <span>MA55 <b>5120.00</b></span>
+          </div>
+          <div class="pct-label"><span>历史分位</span><span>22%</span></div>
+          <div class="meter"><i></i></div>
+          <div class="hint">分位越低表示相对越便宜（示例数据）</div>
+        </section>
+
+        <section class="card">
+          <div class="card-hd"><div class="card-title">分档点位</div></div>
+          <table class="qk">
+            <thead>
+              <tr><th>档位</th><th>含义</th><th>点位</th><th>距现价</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="name"><i class="tier-dot" style="background:#7F1D1D"></i>85%</td><td class="name">史诗底</td><td>4352.00</td><td>−10.4%</td></tr>
+              <tr><td class="name"><i class="tier-dot" style="background:#B91C1C"></i>90%</td><td class="name">重要底</td><td>4608.00</td><td>−5.1%</td></tr>
+              <tr class="hl"><td class="name"><i class="tier-dot" style="background:#EA580C"></i>95%</td><td class="name">—</td><td>4864.00</td><td>+0.2%</td></tr>
+              <tr><td class="name"><i class="tier-dot" style="background:#64748B"></i>100%</td><td class="name">MA55</td><td>5120.00</td><td>+5.4%</td></tr>
+              <tr><td class="name"><i class="tier-dot" style="background:#3B82F6"></i>105%</td><td class="name">—</td><td>5376.00</td><td>+10.7%</td></tr>
+              <tr><td class="name"><i class="tier-dot" style="background:#0EA5E9"></i>110%</td><td class="name">—</td><td>5632.00</td><td>+16.0%</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </aside>
+
+      <section class="card full lows-wrap">
+        <div class="card-hd">
+          <div class="card-title">显著低点</div>
+          <div style="font-size:12px;color:var(--qk-text-tertiary)">周低点/MA55 为 ±13 周最低且 &lt; 95%</div>
+        </div>
+        <table class="qk">
+          <thead>
+            <tr>
+              <th>周末日期</th><th>周低点</th><th>MA55</th><th>低点/MA55</th><th>标记</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="unconfirmed">
+              <td>2026-08-15</td>
+              <td>4580.00</td>
+              <td>5100.00</td>
+              <td>89.8%</td>
+              <td class="name"><span class="badge badge-important">重要底</span> <span class="badge badge-unconfirmed">未确认</span></td>
+            </tr>
+            <tr>
+              <td>2024-02-02</td>
+              <td>4201.00</td>
+              <td>5050.00</td>
+              <td>83.2%</td>
+              <td class="name"><span class="badge badge-epic">史诗底</span> <span class="badge badge-neutral">已确认</span></td>
+            </tr>
+            <tr>
+              <td>2022-10-28</td>
+              <td>4310.00</td>
+              <td>4980.00</td>
+              <td>86.5%</td>
+              <td class="name"><span class="badge badge-important">重要底</span> <span class="badge badge-neutral">已确认</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <footer class="disc">
+      <strong>免责声明：</strong>本站展示的指数行情、均线与估值分位数据来源于公开信息整理，仅供学习与研究参考，<strong>不构成投资建议</strong>。市场有风险，决策需独立判断。数据可能存在延迟或遗漏，请以官方与交易通道披露为准。
+    </footer>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "printWidth": 100,
+  "singleQuote": false,
+  "semi": true,
+  "tabWidth": 2,
+  "ignorePatterns": [
+    "dist/**",
+    "node_modules/**",
+    "data/**",
+    "design/mockups/**",
+    "db/migrations/**",
+    "pnpm-lock.yaml",
+    "package-lock.json"
+  ]
+}

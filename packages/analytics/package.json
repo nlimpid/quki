@@ -1,0 +1,20 @@
+{
+  "name": "@quki/analytics",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@quki/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@quki/ingest": "workspace:*",
+    "tsdown": "^0.23.5"
+  }
+}
