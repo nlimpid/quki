@@ -30,6 +30,9 @@ const source: MarketSource = {
     if (!instrument) return null;
     return load(symbol);
   },
+  async countInstruments() {
+    return SEEDED_INSTRUMENTS.length;
+  },
 };
 
 const app = createApp(source);

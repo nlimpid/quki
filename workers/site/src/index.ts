@@ -4,6 +4,8 @@ import {
   instrumentId,
   listInstrumentIds,
   loadDailyBars,
+  numOrNull,
+  rowsOf,
 } from "@quki/db";
 import { findInstrument, type InstrumentInfo } from "@quki/types";
 
@@ -32,6 +34,13 @@ function tidbSource(url: string): MarketSource {
       if (!id) return null;
       return loadDailyBars(conn, id);
     },
+    async countInstruments() {
+      const result = await conn.execute("SELECT COUNT(*) AS instrument_count FROM instruments");
+      const row = rowsOf(result)[0];
+      const count = numOrNull(row?.instrument_count);
+      if (count == null) throw new Error("instrument count query returned no row");
+      return count;
+    },
   };
 }
 
@@ -42,6 +51,9 @@ function unconfiguredSource(): MarketSource {
       return [];
     },
     async getDailyBars() {
+      throw new Error(`缺少 Worker secret ${DATABASE_URL_ENV}`);
+    },
+    async countInstruments() {
       throw new Error(`缺少 Worker secret ${DATABASE_URL_ENV}`);
     },
   };

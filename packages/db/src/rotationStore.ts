@@ -8,7 +8,7 @@ import {
 import type { DailyBar } from "@quki/types";
 import { ROTATION_PAIRS, resolveRotationPair } from "@quki/types";
 
-import type { SqlConn } from "./client.js";
+import { dateText, rowsOf, type SqlConn } from "./client.js";
 import { instrumentId, loadDailyBars } from "./repo.js";
 
 const CHUNK = 200;
@@ -36,16 +36,9 @@ async function latestRotationDate(
      ORDER BY trade_date DESC LIMIT 1`,
     [instrumentIdValue, hash],
   );
-  const rows =
-    result && typeof result === "object" && "rows" in result
-      ? (result as { rows?: unknown }).rows
-      : [];
-  if (!Array.isArray(rows) || rows.length === 0) return null;
-  const row = rows[0];
-  if (!row || typeof row !== "object" || !("trade_date" in row)) return null;
-  const value = (row as { trade_date: unknown }).trade_date;
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  return String(value).slice(0, 10);
+  const row = rowsOf(result)[0];
+  if (!row || row.trade_date == null) return null;
+  return dateText(row.trade_date);
 }
 
 export async function persistRotation(
@@ -113,11 +106,10 @@ export async function persistRotation(
       INSERT INTO analytics_series (
         instrument_id, freq, trade_date, metric, params_hash, params, metric_value, extra
       ) VALUES ${slice.map(() => tuple).join(",")}
-      AS new
       ON DUPLICATE KEY UPDATE
-        params = new.params,
-        metric_value = new.metric_value,
-        extra = new.extra,
+        params = VALUES(params),
+        metric_value = VALUES(metric_value),
+        extra = VALUES(extra),
         computed_at = CURRENT_TIMESTAMP(3),
         updated_at = CURRENT_TIMESTAMP(3)
     `;

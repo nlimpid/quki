@@ -53,8 +53,7 @@ export async function recordCrawl(
     await conn.execute(
       `INSERT INTO crawl_watermarks (job_name, source, instrument_id, freq, watermark)
        VALUES (?, 'csindex', ?, 'D', ?)
-       AS new
-       ON DUPLICATE KEY UPDATE watermark = new.watermark, updated_at = CURRENT_TIMESTAMP(3)`,
+       ON DUPLICATE KEY UPDATE watermark = VALUES(watermark), updated_at = CURRENT_TIMESTAMP(3)`,
       [input.jobName, input.instrumentId, input.watermark],
     );
   }
