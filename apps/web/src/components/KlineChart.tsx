@@ -11,7 +11,15 @@ import * as echarts from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { useEffect, useMemo, useRef } from "react";
 
-import { formatLevel, formatPct, formatVolume, rangeStart } from "../lib/format.js";
+import {
+  formatLevel,
+  formatPct,
+  formatPercentile,
+  formatVolume,
+  positionZone,
+  rangeStart,
+  temperatureBandLabel,
+} from "../lib/format.js";
 import { useTheme } from "../lib/theme.js";
 
 echarts.use([
@@ -25,6 +33,8 @@ echarts.use([
   DataZoomComponent,
   CanvasRenderer,
 ]);
+
+const CHART_TIERS = new Set<TierLevel>([85, 95, 105, 115]);
 
 const TIER_RATIOS: { tier: TierLevel; ratio: number; name: string }[] = [
   { tier: 85, ratio: 0.85, name: "85% 史诗底" },
@@ -60,6 +70,29 @@ function priceExtent(candles: Candle[], ma: readonly (number | null)[]): [number
   const hi = Math.max(...values);
   const pad = (hi - lo) * 0.06 || 1;
   return [lo - pad, hi + pad];
+}
+
+/** Expanding close/MA55 percentile by ISO week, same strictly-below rule as the study. */
+function percentileByWeek(overview: Overview): Map<string, number> {
+  const ma = new Map(overview.ma55Weekly.map((point) => [point.time, point.value]));
+  const ratios: { week: string; ratio: number }[] = [];
+  for (const week of overview.weekly) {
+    const average = ma.get(week.time);
+    if (average == null || average === 0) continue;
+    ratios.push({ week: isoWeekKey(week.time), ratio: week.close / average });
+  }
+  const byWeek = new Map<string, number>();
+  for (let i = 0; i < ratios.length; i += 1) {
+    const current = ratios[i];
+    if (!current) continue;
+    let below = 0;
+    for (let j = 0; j <= i; j += 1) {
+      const earlier = ratios[j];
+      if (earlier && earlier.ratio < current.ratio) below += 1;
+    }
+    byWeek.set(current.week, (below / (i + 1)) * 100);
+  }
+  return byWeek;
 }
 
 function alignMa(candles: Candle[], ma: MaPoint[], period: Period): (number | null)[] {
@@ -102,6 +135,7 @@ export function KlineChart({
     () => overview.lows.filter((low) => !start || low.weekEnd >= start),
     [overview.lows, start],
   );
+  const percentiles = useMemo(() => percentileByWeek(overview), [overview]);
 
   useEffect(() => {
     const el = host.current;
@@ -139,48 +173,22 @@ export function KlineChart({
     const levels = TIER_RATIOS.map((tier) =>
       maAligned.map((value) => (value == null ? null : value * tier.ratio)),
     );
-    const latestLevels = levels.map((series) => {
-      for (let i = series.length - 1; i >= 0; i -= 1) {
-        const value = series[i];
-        if (value != null) return value;
-      }
-      return null;
-    });
-
-    const bandSeries = TIER_RATIOS.map((tier, index) => {
-      const level = levels[index] ?? [];
-      const prev = index === 0 ? null : levels[index - 1];
-      const data =
-        index === 0
-          ? level
-          : level.map((value, i) => {
-              const lower = prev?.[i];
-              if (value == null || lower == null) return null;
-              return value - lower;
-            });
+    const bandSeries = TIER_RATIOS.flatMap((tier, index) => {
+      if (!CHART_TIERS.has(tier.tier)) return [];
       const color = cssVar(`--qk-tier-${tier.tier}-stroke`);
-      const fill = cssVar(`--qk-tier-${index === 0 ? 85 : TIER_RATIOS[index - 1]?.tier}-fill`);
-      const latest = latestLevels[index];
-      return {
-        name: tier.name,
-        type: "line" as const,
-        stack: "bands",
-        data,
-        symbol: "none",
-        connectNulls: false,
-        silent: true,
-        z: 1,
-        lineStyle: { width: 1, type: "dashed" as const, color },
-        ...(index === 0 ? {} : { areaStyle: { color: fill, opacity: 1 } }),
-        endLabel: {
-          show: latest != null,
-          formatter: latest == null ? "" : `${tier.tier}% ${formatLevel(latest)}`,
-          color: cssVar(`--qk-tier-${tier.tier}-label`),
-          fontSize: 10,
-          fontFamily: mono,
+      return [
+        {
+          name: tier.name,
+          type: "line" as const,
+          data: levels[index] ?? [],
+          symbol: "none",
+          connectNulls: false,
+          silent: true,
+          z: 1,
+          lineStyle: { width: 1, type: [3, 4] as const, color },
+          tooltip: { show: false },
         },
-        tooltip: { show: false },
-      };
+      ];
     });
 
     const [yMin, yMax] = priceExtent(candles, maAligned);
@@ -249,8 +257,9 @@ export function KlineChart({
         trigger: "axis",
         backgroundColor: tipBg,
         borderColor: tipBorder,
-        textStyle: { color: text, fontSize: 12, fontFamily: mono },
-        extraCssText: "border-radius:8px;box-shadow:var(--qk-shadow-md)",
+        textStyle: { color: text, fontSize: 12, fontFamily: font },
+        extraCssText:
+          "border-radius:12px;box-shadow:0 8px 24px rgba(24,24,27,0.08),0 2px 6px rgba(24,24,27,0.04);padding:14px 16px;",
         formatter: (raw: unknown) => {
           const items = Array.isArray(raw) ? raw : [raw];
           const first = items[0] as { dataIndex?: number } | undefined;
@@ -258,19 +267,33 @@ export function KlineChart({
           const candle = candles[index];
           if (!candle) return "";
           const ma = maAligned[index];
-          const prev = candles[index - 1]?.close;
-          const upClose = prev != null && candle.close >= prev;
-          const closeColor = upClose ? up : down;
-          const ratio = ma ? formatPct((candle.close / ma) * 100) : "—";
+          const ratioValue = ma ? (candle.close / ma) * 100 : null;
+          const zone = ratioValue == null ? null : positionZone(ratioValue);
+          const percentile = percentiles.get(isoWeekKey(candle.time));
+          const latest = index === candles.length - 1;
+          const temperature = latest ? overview.temperature : null;
+          const tempRow = temperature
+            ? `<div style="display:flex;justify-content:space-between;gap:16px;margin-top:10px"><span style="color:${secondary}">温度</span><b style="font-family:${mono};font-weight:600">${temperature.value} ${temperatureBandLabel(temperature.band)}</b></div>`
+            : "";
           const ohlc =
             candle.open == null
-              ? `收 <span style="color:${closeColor}">${formatLevel(candle.close)}</span>`
-              : `开 ${formatLevel(candle.open ?? candle.close)}  收 <span style="color:${closeColor}">${formatLevel(candle.close)}</span><br/>高 ${formatLevel(candle.high ?? candle.close)}  低 ${formatLevel(candle.low ?? candle.close)}`;
+              ? `收 ${formatLevel(candle.close)}`
+              : `开 ${formatLevel(candle.open)}　高 ${formatLevel(candle.high ?? candle.close)}<br/>低 ${formatLevel(candle.low ?? candle.close)}　收 ${formatLevel(candle.close)}`;
           const vol =
             showVolume && candle.volume != null ? `<br/>成交量 ${formatVolume(candle.volume)}` : "";
-          return `<div style="font-family:${font};color:${secondary}">${candle.time} · ${period === "W" ? "周线" : "日线"}</div>
-            <div style="margin-top:4px;color:${text}">${ohlc}</div>
-            <div style="color:${maColor}">MA55 ${ma == null ? "—" : formatLevel(ma)} (${ratio})</div>${vol}`;
+          const row = (label: string, value: string) =>
+            `<div style="display:flex;justify-content:space-between;gap:16px;margin-top:8px"><span style="color:${secondary}">${label}</span><b style="font-family:${mono};font-weight:500;color:${text}">${value}</b></div>`;
+          return `<div style="min-width:180px;font-family:${font};color:${text}">
+            <div style="color:${secondary};font-size:12px">${candle.time} · ${period === "W" ? "周线" : "日线"}</div>
+            ${tempRow}
+            ${row("区间", ratioValue == null ? "—" : formatPct(ratioValue))}
+            ${row("档位", zone?.label ?? "—")}
+            ${row("历史分位", percentile == null ? "—" : formatPercentile(percentile))}
+            <details style="margin-top:10px;color:${secondary};font-size:12px">
+              <summary style="cursor:pointer">开高低收</summary>
+              <div style="margin-top:6px;font-family:${mono};color:${text}">${ohlc}${vol}</div>
+            </details>
+          </div>`;
         },
       },
       dataZoom: [{ type: "inside", xAxisIndex: showVolume ? [0, 1] : 0 }],
@@ -283,8 +306,8 @@ export function KlineChart({
           data: maAligned,
           symbol: "none",
           connectNulls: false,
-          z: 3,
-          lineStyle: { width: 1.5, color: maColor },
+          z: 5,
+          lineStyle: { width: 1.75, color: maColor },
           itemStyle: { color: maColor },
         },
         {
@@ -359,56 +382,30 @@ export function KlineChart({
       observer.disconnect();
       chart.dispose();
     };
-  }, [candles, maAligned, markers, period, showVolume, theme]);
+  }, [candles, maAligned, markers, percentiles, period, showVolume, theme, overview.temperature]);
 
   return (
     <section className="card chart-card">
       <div className="card-hd">
         <div>
-          <div className="card-title">K 线 · MA55 与估值分档</div>
+          <div className="card-title">K 线 · MA55 与估值分位</div>
           <div className="legend">
             <span>
-              <i className="sw" style={{ background: "var(--qk-candle-up)" }} />
-              上涨
+              <i className="sw" style={{ background: "var(--qk-candle-up)" }} />涨
             </span>
             <span>
-              <i className="sw" style={{ background: "var(--qk-candle-down)" }} />
-              下跌
+              <i className="sw" style={{ background: "var(--qk-candle-down)" }} />跌
             </span>
             <span>
               <i className="sw-line" />
               MA55（周）
             </span>
             <span>
-              <i className="sw" style={{ background: "var(--qk-tier-85-fill)" }} />
-              85% 史诗底
+              <i className="sw-dash" />
+              估值线 · 冷→热
             </span>
-            <span>
-              <i className="sw" style={{ background: "var(--qk-tier-90-fill)" }} />
-              90% 重要底
-            </span>
-            <span>
-              <i className="sw" style={{ background: "var(--qk-tier-95-fill)" }} />
-              95%
-            </span>
-            <span>
-              <i className="sw" style={{ background: "var(--qk-tier-100-fill)" }} />
-              100%
-            </span>
-            <span>
-              <i className="sw" style={{ background: "var(--qk-tier-105-fill)" }} />
-              105%
-            </span>
-            <span>
-              <i className="sw" style={{ background: "var(--qk-tier-110-fill)" }} />
-              110%
-            </span>
-            <span>
-              <i className="sw" style={{ background: "var(--qk-tier-115-fill)" }} />
-              115%
-            </span>
-            <span>▼ 已确认低点</span>
-            <span>◆ 未确认低点</span>
+            <span>▼ 已确认</span>
+            <span>◇ 未确认</span>
           </div>
         </div>
         <label className="chk">

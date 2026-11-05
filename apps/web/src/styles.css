@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "../../../design/tokens.css";
+@import "./fonts.css";
 
 @theme inline {
   --font-sans: var(--qk-font-sans);
@@ -183,14 +184,14 @@ a {
 }
 
 .page-main {
-  padding: var(--qk-space-6) var(--qk-space-8) var(--qk-space-8);
+  padding: var(--qk-space-8) var(--qk-space-10) var(--qk-space-12);
   max-width: var(--qk-max-w);
   margin: 0 auto;
 }
 .layout-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--qk-sidebar-w);
-  gap: var(--qk-space-6);
+  gap: var(--qk-space-8);
   align-items: start;
 }
 .chart-card {
@@ -203,7 +204,7 @@ a {
   grid-row: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--qk-space-6);
   min-width: 0;
 }
 .lows-card {
@@ -220,8 +221,8 @@ a {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px 20px;
+  gap: 16px;
+  padding: 20px 24px;
   border-bottom: 1px solid var(--qk-border-muted);
 }
 .card-title {
@@ -254,10 +255,11 @@ a {
 .legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 14px;
-  margin-top: 8px;
-  font-size: 11px;
-  color: var(--qk-text-secondary);
+  gap: 8px 16px;
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--qk-text-tertiary);
 }
 .legend span {
   display: inline-flex;
@@ -271,9 +273,15 @@ a {
   display: inline-block;
 }
 .sw-line {
-  width: 14px;
+  width: 16px;
   height: 0;
   border-top: 2px solid var(--qk-ma55);
+  display: inline-block;
+}
+.sw-dash {
+  width: 16px;
+  height: 0;
+  border-top: 1px dashed var(--qk-fg-muted, var(--qk-text-tertiary));
   display: inline-block;
 }
 .chk {
@@ -285,7 +293,7 @@ a {
   white-space: nowrap;
 }
 .chart-body {
-  padding: 8px 8px 4px;
+  padding: 16px 16px 20px;
 }
 .chart-box {
   width: 100%;
@@ -296,35 +304,57 @@ a {
 }
 
 .pos {
-  padding: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.pos-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pos-kicker {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--qk-text-tertiary);
+}
+.pos-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .pos-label {
   font-size: 12px;
   color: var(--qk-text-tertiary);
-  margin-bottom: 8px;
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 .hero {
-  font-size: 32px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.1;
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
 }
 .hero-sub {
   font-size: 12px;
   color: var(--qk-text-tertiary);
-  margin: 4px 0 16px;
+  margin: 0;
+}
+.range-num {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
 }
 .meta-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 8px 16px;
   font-size: 13px;
   color: var(--qk-text-secondary);
-  margin-bottom: 16px;
 }
 .meta-row b {
   color: var(--qk-text-primary);
@@ -360,10 +390,23 @@ a {
   border-radius: inherit;
 }
 .hint {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--qk-text-tertiary);
-  margin-top: 8px;
+  margin: 0;
   line-height: 1.5;
+}
+.badge-cold {
+  background: color-mix(in srgb, #0891b2 14%, var(--qk-bg-surface));
+  color: #0e7490;
+  border-color: color-mix(in srgb, #0891b2 40%, var(--qk-border-default));
+}
+[data-theme="dark"] .badge-cold {
+  color: #67e8f9;
+}
+.badge-hot {
+  background: var(--qk-badge-epic-bg);
+  color: var(--qk-badge-epic-fg);
+  border-color: var(--qk-badge-epic-border);
 }
 
 .badge {
@@ -410,14 +453,15 @@ table.qk th {
   text-align: left;
   font-weight: 500;
   color: var(--qk-text-tertiary);
-  padding: 10px 12px;
+  padding: 16px;
   border-bottom: 1px solid var(--qk-border-muted);
   background: var(--qk-bg-surface-muted);
   font-family: var(--qk-font-sans);
 }
 table.qk td {
-  padding: 10px 12px;
+  padding: 16px;
   border-bottom: 1px solid var(--qk-border-muted);
+  white-space: nowrap;
 }
 table.qk td.num {
   font-family: var(--qk-font-tabular);
@@ -700,17 +744,11 @@ table.qk tr.unconfirmed td:first-child {
   .lows-card {
     order: 4;
   }
-  .hero {
-    font-size: 28px;
-  }
   .card-hd {
     padding: 12px 14px;
   }
   .legend {
-    display: none;
-  }
-  .legend.compact {
-    display: flex;
+    gap: 8px 12px;
   }
   .lows-table {
     display: none;
@@ -719,6 +757,10 @@ table.qk tr.unconfirmed td:first-child {
     display: block;
   }
   .pos {
-    padding: 16px 14px;
+    padding: 20px 16px;
+    gap: 20px;
+  }
+  .hero {
+    font-size: 32px;
   }
 }
