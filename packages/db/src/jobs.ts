@@ -1,8 +1,19 @@
+import {
+  TEMPERATURE_BROADS,
+  TEMPERATURE_FAMILIES,
+  buildSignalRows,
+  lastBarDate,
+  latestAlignedSession,
+  productionCandidate,
+  productionStudyParams,
+  temperaturePoints,
+} from "@quki/analytics";
 import { fetchCsindexDaily } from "@quki/ingest";
-import { findInstrument } from "@quki/types";
+import { findInstrument, type TemperatureFamilyId } from "@quki/types";
 
 import type { SqlConn } from "./client.js";
 import { recomputeStoredPairs } from "./rotationStore.js";
+import { persistTemperature } from "./temperatureStore.js";
 import {
   instrumentId,
   latestDailyDate,
@@ -121,12 +132,95 @@ export async function ingestAll(
     await sleep(1000);
   }
   const rotation = options?.rotation ?? "full";
-  if (rotation === "skip") return;
+  if (rotation !== "skip") {
+    try {
+      await recomputeStoredPairs(conn, {
+        mode: rotation === "incremental" ? "incremental" : "full",
+      });
+    } catch (error) {
+      console.error(
+        `rotation recompute failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  const temperatureMode = rotation === "full" ? "full" : "incremental";
   try {
-    await recomputeStoredPairs(conn, { mode: rotation === "incremental" ? "incremental" : "full" });
+    await recomputeTemperature(conn, { mode: temperatureMode });
   } catch (error) {
     console.error(
-      `rotation recompute failed: ${error instanceof Error ? error.message : String(error)}`,
+      `temperature recompute failed: ${error instanceof Error ? error.message : String(error)}`,
     );
+  }
+}
+
+export async function recomputeTemperature(
+  conn: SqlConn,
+  options?: { mode?: "full" | "incremental" },
+): Promise<void> {
+  const mode = options?.mode ?? "full";
+  const families = Object.keys(TEMPERATURE_FAMILIES) as TemperatureFamilyId[];
+  for (const family of families) {
+    for (const broad of TEMPERATURE_BROADS) {
+      const legs = {
+        priceSymbol: TEMPERATURE_FAMILIES[family].priceSymbol,
+        totalReturnSymbol: TEMPERATURE_FAMILIES[family].totalReturnSymbol,
+        broadSymbol: broad,
+      };
+      const jobName = `compute_temperature:${legs.totalReturnSymbol.toLowerCase()}-${broad.toLowerCase()}`;
+      try {
+        const priceId = await instrumentId(conn, legs.priceSymbol);
+        const totalReturnId = await instrumentId(conn, legs.totalReturnSymbol);
+        const broadId = await instrumentId(conn, legs.broadSymbol);
+        if (!priceId || !totalReturnId || !broadId) {
+          console.log(`temperature ${jobName}: instrument not seeded`);
+          continue;
+        }
+        const price = await loadDailyBars(conn, priceId);
+        const totalReturn = await loadDailyBars(conn, totalReturnId);
+        const broadBars = await loadDailyBars(conn, broadId);
+        if (price.length === 0 || totalReturn.length === 0 || broadBars.length === 0) continue;
+        const points = temperaturePoints(
+          buildSignalRows({
+            priceDaily: price,
+            totalReturnDaily: totalReturn,
+            broadDaily: broadBars,
+          }),
+          productionCandidate(),
+        );
+        const result = await persistTemperature(conn, {
+          instrumentId: totalReturnId,
+          params: productionStudyParams(legs),
+          broadSymbol: broad,
+          points,
+          latestAlignedDate: latestAlignedSession(totalReturn, broadBars),
+          latestPriceDate: lastBarDate(price),
+          mode,
+        });
+        await recordCrawl(conn, {
+          jobName,
+          symbol: legs.totalReturnSymbol,
+          instrumentId: totalReturnId,
+          status: "success",
+          rows: result.written,
+          watermark: result.action === "skip" ? null : result.through,
+        });
+        console.log(`temperature ${jobName} ${mode}: ${result.action} ${result.written}`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`temperature ${jobName} failed: ${message}`);
+        const totalReturnId = await instrumentId(conn, legs.totalReturnSymbol).catch(() => null);
+        if (totalReturnId) {
+          await recordCrawl(conn, {
+            jobName,
+            symbol: legs.totalReturnSymbol,
+            instrumentId: totalReturnId,
+            status: "failed",
+            rows: 0,
+            watermark: null,
+            error: message,
+          });
+        }
+      }
+    }
   }
 }

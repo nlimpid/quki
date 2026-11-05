@@ -1,0 +1,127 @@
+{
+  "mapping": "quantile",
+  "candidateId": "Q-w0.5",
+  "w": 0.5,
+  "k": null,
+  "paCold": null,
+  "pbCold": null,
+  "paHot": null,
+  "pbHot": null,
+  "coldMax": 20,
+  "hotMin": 80,
+  "qualified": true,
+  "scores": {
+    "quantile": {
+      "meanTestScore": 0.2800197830444458,
+      "frozenTestScore": 0.35390116837296076,
+      "folds": 7
+    },
+    "zscore": {
+      "meanTestScore": 0.34905736456515146,
+      "frozenTestScore": 0.31923813443382587,
+      "folds": 7
+    },
+    "rule": {
+      "meanTestScore": 0.3119645017605567,
+      "frozenTestScore": 0.3119645017605567,
+      "folds": 7
+    }
+  },
+  "trainScore": -0.25202758963998956,
+  "oosScore": -0.11246314282961556,
+  "notes": [],
+  "universes": [
+    {
+      "key": "dividend-h20903",
+      "chosen": "Q-w0.5",
+      "mapping": "quantile",
+      "oos": -0.11246314282961556,
+      "scores": {
+        "quantile": {
+          "meanTestScore": 0.2800197830444458,
+          "frozenTestScore": 0.35390116837296076,
+          "folds": 7
+        },
+        "zscore": {
+          "meanTestScore": 0.34905736456515146,
+          "frozenTestScore": 0.31923813443382587,
+          "folds": 7
+        },
+        "rule": {
+          "meanTestScore": 0.3119645017605567,
+          "frozenTestScore": 0.3119645017605567,
+          "folds": 7
+        }
+      }
+    },
+    {
+      "key": "dividend-h00985",
+      "chosen": "Z-w0.5-k1.2",
+      "mapping": "zscore",
+      "oos": -0.10250460564012889,
+      "scores": {
+        "quantile": {
+          "meanTestScore": 0.2738640972951786,
+          "frozenTestScore": 0.3480647661492981,
+          "folds": 7
+        },
+        "zscore": {
+          "meanTestScore": 0.342986179555324,
+          "frozenTestScore": 0.39468072172619567,
+          "folds": 7
+        },
+        "rule": {
+          "meanTestScore": 0.30803157394627273,
+          "frozenTestScore": 0.30893155299820885,
+          "folds": 7
+        }
+      }
+    },
+    {
+      "key": "lowvol-h20903",
+      "chosen": "Z-w0.5-k1.2",
+      "mapping": "zscore",
+      "oos": -0.06151686743766946,
+      "scores": {
+        "quantile": {
+          "meanTestScore": 0.372691301512998,
+          "frozenTestScore": 0.4087655665617809,
+          "folds": 6
+        },
+        "zscore": {
+          "meanTestScore": 0.3927867598024639,
+          "frozenTestScore": 0.43202274404779534,
+          "folds": 6
+        },
+        "rule": {
+          "meanTestScore": 0.3605955282297906,
+          "frozenTestScore": 0.358609785542821,
+          "folds": 6
+        }
+      }
+    },
+    {
+      "key": "lowvol-h00985",
+      "chosen": "Z-w0.5-k0.8",
+      "mapping": "zscore",
+      "oos": -0.06789317457469449,
+      "scores": {
+        "quantile": {
+          "meanTestScore": 0.37654110997329027,
+          "frozenTestScore": 0.41431198785093254,
+          "folds": 6
+        },
+        "zscore": {
+          "meanTestScore": 0.39867790531156516,
+          "frozenTestScore": 0.4388457493405687,
+          "folds": 6
+        },
+        "rule": {
+          "meanTestScore": 0.36666748233582885,
+          "frozenTestScore": 0.36605448358716636,
+          "folds": 6
+        }
+      }
+    }
+  ]
+}

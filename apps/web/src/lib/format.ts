@@ -1,4 +1,4 @@
-import type { RangeKey, TierLevel, TierRow } from "@quki/types";
+import type { RangeKey, TemperatureBand, TierLevel, TierRow } from "@quki/types";
 
 const levelFormat = new Intl.NumberFormat("zh-CN", {
   minimumFractionDigits: 2,
@@ -16,6 +16,18 @@ export function formatPct(value: number, digits = 1): string {
 
 export function formatPercentile(value: number): string {
   return `${Math.round(value)}%`;
+}
+
+const TEMP_LABEL: Record<TemperatureBand, string> = {
+  extreme_cold: "极冷",
+  cold: "偏冷",
+  neutral: "中性",
+  hot: "偏贵",
+  extreme_hot: "极热",
+};
+
+export function temperatureBandLabel(band: TemperatureBand): string {
+  return TEMP_LABEL[band];
 }
 
 export function formatDistance(value: number): string {
