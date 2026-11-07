@@ -1,3 +1,4 @@
+// Comment-only edit so Workers Builds deploys this master worker. Crawl behavior is unchanged.
 import {
   DATABASE_URL_ENV,
   applyMigrations,

@@ -1,3 +1,4 @@
+// Comment-only edit so Workers Builds deploys this master config. Triggers are unchanged.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "quki-crawler",
