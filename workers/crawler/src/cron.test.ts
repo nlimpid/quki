@@ -14,6 +14,7 @@ describe("crawler cron", () => {
     const worker = readFileSync("workers/crawler/src/index.ts", "utf8");
     expect(worker).toContain("ingestDividends");
     expect(worker).toContain("0004_dividends.sql");
+    expect(worker).toContain("0005_dividend_audit.sql");
     expect(worker).toContain('ingestDividends(connectTiDb(databaseUrl), "incremental")');
   });
 });

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { sanitizeHoldings, upsertHolding, removeHolding } from "./holdings.js";
 import {
+  addCalendarDays,
   addCalendarMonths,
   adjustedCashPerShare,
   portfolioDividendSummary,
+  publishedTrailingYield,
   trailingCashYield,
   trailingWindowStart,
   yearsStart,
@@ -67,6 +69,35 @@ describe("trailing cash yield", () => {
     });
     expect(noPrice.ttmCashPerShare).toBeCloseTo(0.5, 8);
     expect(noPrice.yieldPct).toBeNull();
+  });
+
+  it("closes [asOf-12 calendar months, asOf] on ex_dividend_date and drops a stale quote", () => {
+    const start = trailingWindowStart(asOf);
+    expect(start).toBe("2025-11-08");
+    expect(addCalendarDays(asOf, -365)).toBe(start);
+    const closed = trailingCashYield({
+      asOf,
+      price: 10,
+      quoteFresh: true,
+      events: [
+        { exDate: start, cashPerShare: 1, bonusPer10: 0, transferPer10: 0 },
+        { exDate: asOf, cashPerShare: 1, bonusPer10: 0, transferPer10: 0 },
+        { exDate: "2025-11-07", cashPerShare: 9, bonusPer10: 0, transferPer10: 0 },
+        { exDate: "2026-11-09", cashPerShare: 9, bonusPer10: 0, transferPer10: 0 },
+      ],
+    });
+    expect(closed.ttmCashPerShare).toBeCloseTo(2, 8);
+    expect(closed.yieldPct).toBeCloseTo(20, 8);
+    const stale = trailingCashYield({
+      asOf,
+      price: 10,
+      quoteFresh: false,
+      events: [{ exDate: "2026-06-01", cashPerShare: 1, bonusPer10: 0, transferPer10: 0 }],
+    });
+    expect(stale.ttmCashPerShare).toBeCloseTo(1, 8);
+    expect(stale.yieldPct).toBeNull();
+    expect(publishedTrailingYield(12.5, false)).toBeNull();
+    expect(publishedTrailingYield(12.5, true)).toBe(12.5);
   });
 });
 

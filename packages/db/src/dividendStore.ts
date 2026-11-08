@@ -3,6 +3,7 @@ import {
   dividendEventKind,
   exDateInYears,
   latestCashDividend,
+  publishedTrailingYield,
   shanghaiDate,
   trailingCashYield,
   trailingWindowStart,
@@ -29,6 +30,12 @@ import {
 } from "@quki/types";
 
 import { dateText, numOrNull, rowsOf, type SqlConn } from "./client.js";
+import {
+  checkDividendInvariants,
+  emptyInvariantStats,
+  recordInvariantFailure,
+  type DividendInvariantStats,
+} from "./dividendInvariants.js";
 
 const COMPANY_CHUNK = 80;
 const EVENT_CHUNK = 30;
@@ -195,7 +202,10 @@ function mapListItem(row: Record<string, unknown>): StockListItem | null {
     board: asBoard(row.exchange_board),
     lastClose: numOrNull(row.last_close),
     quoteFresh: quoteFresh(row.quote_fresh),
-    trailingYieldPct: numOrNull(row.trailing_yield_pct),
+    trailingYieldPct: publishedTrailingYield(
+      numOrNull(row.trailing_yield_pct),
+      quoteFresh(row.quote_fresh),
+    ),
     ttmCashPerShare: numOrNull(row.ttm_cash_per_share),
     lastCashDivDate: dateOrNull(row.last_ex_dividend_date),
     lastCashPer10: numOrNull(row.last_cash_per_10),
@@ -246,10 +256,25 @@ export async function upsertDividendEvents(
   conn: SqlConn,
   events: readonly NormalizedDividend[],
   fetchedAt: string,
+  stats: DividendInvariantStats = emptyInvariantStats(),
 ): Promise<number> {
+  const accepted: NormalizedDividend[] = [];
+  for (const event of events) {
+    const failures = checkDividendInvariants(event);
+    if (failures.length > 0) {
+      recordInvariantFailure(stats, failures);
+      const names = failures.map((failure) => failure.name).join(",");
+      const detail = failures.map((failure) => failure.detail).join("; ");
+      console.error(
+        `skip dividend invariant ${event.code}@${event.exDividendDate || "?"}: ${names} (${detail})`,
+      );
+      continue;
+    }
+    accepted.push(event);
+  }
   let written = 0;
-  for (let offset = 0; offset < events.length; offset += EVENT_CHUNK) {
-    const slice = events.slice(offset, offset + EVENT_CHUNK);
+  for (let offset = 0; offset < accepted.length; offset += EVENT_CHUNK) {
+    const slice = accepted.slice(offset, offset + EVENT_CHUNK);
     const keys = await Promise.all(slice.map((event) => dividendEventKey(event)));
     const args: unknown[] = [];
     slice.forEach((event, index) => {
@@ -310,7 +335,45 @@ type SummarySeed = {
   name: string;
   market: AshareMarket;
   price: number | null;
+  quoteFresh: boolean;
 };
+
+export type DividendQualitySummary = {
+  version: 1;
+  mode: "incremental" | "backfill";
+  invariantFailures: number;
+  invariantChecks: Record<string, number>;
+  eventsUpserted: number;
+  reconcileSample: { compared: number; matched: number; passRate: number | null };
+  sourceLatencyMs: number;
+  tolerances: { cashPer10: number; equityRecordDate: 0; exDividendDate: 0 };
+};
+
+export async function insertDividendCrawlRun(
+  conn: SqlConn,
+  input: {
+    status: "success" | "partial" | "failed";
+    rows: number;
+    watermark: string | null;
+    quality: DividendQualitySummary;
+    error?: string;
+  },
+): Promise<void> {
+  await conn.execute(
+    `INSERT INTO crawl_runs (
+       job_name, source, instrument_id, freq, status, rows_upserted,
+       cursor_watermark, request_meta, error_message, finished_at
+     ) VALUES (?, 'eastmoney', NULL, 'D', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(3))`,
+    [
+      "dividends_events",
+      input.status,
+      input.rows,
+      input.watermark,
+      JSON.stringify(input.quality),
+      input.error ?? null,
+    ],
+  );
+}
 
 function yieldEventFrom(row: Record<string, unknown>): (YieldEvent & { code: string }) | null {
   const code = String(row.code ?? "");
@@ -328,7 +391,7 @@ function yieldEventFrom(row: Record<string, unknown>): (YieldEvent & { code: str
 export async function recomputeDividendSummaries(conn: SqlConn, asOf: string): Promise<number> {
   const companies = rowsOf(
     await conn.execute(
-      `SELECT code, secucode, name, market, last_close
+      `SELECT code, secucode, name, market, last_close, quote_fresh
        FROM companies
        WHERE listing_status = 'listed' AND market IN ('SH', 'SZ')`,
     ),
@@ -344,6 +407,7 @@ export async function recomputeDividendSummaries(conn: SqlConn, asOf: string): P
       name: String(row.name ?? code),
       market,
       price: numOrNull(row.last_close),
+      quoteFresh: quoteFresh(row.quote_fresh),
     });
   }
   if (seeds.length === 0) return 0;
@@ -401,6 +465,7 @@ export async function recomputeDividendSummaries(conn: SqlConn, asOf: string): P
         events: byCode.get(seed.code) ?? [],
         price: seed.price,
         asOf,
+        quoteFresh: seed.quoteFresh,
       });
       const latest = latestByCode.get(seed.code) ?? null;
       args.push(
@@ -558,7 +623,12 @@ export async function getStockDetail(
   });
   const yieldEvents = pairs.map((pair) => pair.event);
   const asOfDate = dateOrNull(companyRow.yield_as_of) ?? shanghaiDate();
-  const live = trailingCashYield({ events: yieldEvents, price: item.lastClose, asOf: asOfDate });
+  const live = trailingCashYield({
+    events: yieldEvents,
+    price: item.lastClose,
+    asOf: asOfDate,
+    quoteFresh: item.quoteFresh,
+  });
   const latest = latestCashDividend(
     pairs.map((pair) => ({
       exDate: pair.event.exDate,
@@ -568,7 +638,10 @@ export async function getStockDetail(
   const company = {
     ...item,
     secucode: String(companyRow.secucode ?? `${item.code}.${item.exchange}`),
-    trailingYieldPct: item.trailingYieldPct ?? live.yieldPct,
+    trailingYieldPct: publishedTrailingYield(
+      item.trailingYieldPct ?? live.yieldPct,
+      item.quoteFresh,
+    ),
     ttmCashPerShare: item.ttmCashPerShare ?? live.ttmCashPerShare,
     lastCashDivDate: item.lastCashDivDate ?? latest?.exDate ?? null,
     lastCashPer10: item.lastCashPer10 ?? latest?.cashPer10 ?? null,

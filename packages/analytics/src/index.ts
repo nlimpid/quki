@@ -98,6 +98,7 @@ export {
   exDateInYears,
   latestCashDividend,
   portfolioDividendSummary,
+  publishedTrailingYield,
   shanghaiDate,
   trailingCashYield,
   trailingWindowStart,

@@ -1,0 +1,372 @@
+{
+  "version": 1,
+  "as_of": "2026-11-08",
+  "description": "Latest 3 implemented (实施分配) events for the golden sample. Cash, record, ex, and Eastmoney plan text are from reconcile_latest.csv. Names are from the 2026-11-08 multi-source compare. Cninfo plan text is included where the CSV had it. Sina has no plan text in that extract.",
+  "tolerances": {
+    "cash_div_pretax_per_10": 0.001,
+    "equity_record_date": 0,
+    "ex_dividend_date": 0
+  },
+  "events": [
+    {
+      "code": "600036",
+      "name": "招商银行",
+      "secucode": "600036.SH",
+      "assign_progress": "实施分配",
+      "ex_dividend_date": "2026-07-10",
+      "equity_record_date": "2026-07-09",
+      "cash_div_pretax_per_10": 10.03,
+      "impl_plan_profile": "10派10.03元(含税)",
+      "sources": {
+        "eastmoney": {
+          "cash_div_pretax_per_10": 10.03,
+          "equity_record_date": "2026-07-09",
+          "ex_dividend_date": "2026-07-10",
+          "impl_plan_profile": "10派10.03元(含税)"
+        },
+        "sina": {
+          "cash_div_pretax_per_10": 10.03,
+          "equity_record_date": "2026-07-09",
+          "ex_dividend_date": "2026-07-10",
+          "impl_plan_profile": null
+        },
+        "cninfo": {
+          "cash_div_pretax_per_10": 10.03,
+          "equity_record_date": "2026-07-09",
+          "ex_dividend_date": "2026-07-10",
+          "impl_plan_profile": "10派10.03元(含税)"
+        }
+      }
+    },
+    {
+      "code": "600036",
+      "name": "招商银行",
+      "secucode": "600036.SH",
+      "assign_progress": "实施分配",
+      "ex_dividend_date": "2026-01-16",
+      "equity_record_date": "2026-01-15",
+      "cash_div_pretax_per_10": 10.13,
+      "impl_plan_profile": "10派10.13元(含税,扣税后9.117元)",
+      "sources": {
+        "eastmoney": {
+          "cash_div_pretax_per_10": 10.13,
+          "equity_record_date": "2026-01-15",
+          "ex_dividend_date": "2026-01-16",
+          "impl_plan_profile": "10派10.13元(含税,扣税后9.117元)"
+        },
+        "sina": {
+          "cash_div_pretax_per_10": 10.13,
+          "equity_record_date": "2026-01-15",
+          "ex_dividend_date": "2026-01-16",
+          "impl_plan_profile": null
+        },
+        "cninfo": {
+          "cash_div_pretax_per_10": 10.13,
+          "equity_record_date": "2026-01-15",
+          "ex_dividend_date": "2026-01-16",
+          "impl_plan_profile": "10派10.13元(含税)"
+        }
+      }
+    },
+    {
+      "code": "600036",
+      "name": "招商银行",
+      "secucode": "600036.SH",
+      "assign_progress": "实施分配",
+      "ex_dividend_date": "2025-07-11",
+      "equity_record_date": "2025-07-10",
+      "cash_div_pretax_per_10": 20,
+      "impl_plan_profile": "10派20.00元(含税,扣税后18.00元)",
+      "sources": {
+        "eastmoney": {
+          "cash_div_pretax_per_10": 20,
+          "equity_record_date": "2025-07-10",
+          "ex_dividend_date": "2025-07-11",
+          "impl_plan_profile": "10派20.00元(含税,扣税后18.00元)"
+        },
+        "sina": {
+          "cash_div_pretax_per_10": 20,
+          "equity_record_date": "2025-07-10",
+          "ex_dividend_date": "2025-07-11",
+          "impl_plan_profile": null
+        },
+        "cninfo": {
+          "cash_div_pretax_per_10": 20,
+          "equity_record_date": "2025-07-10",
+          "ex_dividend_date": "2025-07-11",
+          "impl_plan_profile": "10派20元(含税)"
+        }
+      }
+    },
+    {
+      "code": "601919",
+      "name": "中远海控",
+      "secucode": "601919.SH",
+      "assign_progress": "实施分配",
+      "ex_dividend_date": "2026-10-23",
+      "equity_record_date": "2026-10-22",
+      "cash_div_pretax_per_10": 4.3,
+      "impl_plan_profile": "10派4.30元(含税,扣税后3.87元)",
+      "sources": {
+        "eastmoney": {
+          "cash_div_pretax_per_10": 4.3,
+          "equity_record_date": "2026-10-22",
+          "ex_dividend_date": "2026-10-23",
+          "impl_plan_profile": "10派4.30元(含税,扣税后3.87元)"
+        },
+        "sina": {
+          "cash_div_pretax_per_10": 4.3,
+          "equity_record_date": "2026-10-22",
+          "ex_dividend_date": "2026-10-23",
+          "impl_plan_profile": null
+        },
+        "cninfo": {
+          "cash_div_pretax_per_10": 4.3,
+          "equity_record_date": "2026-10-22",
+          "ex_dividend_date": "2026-10-23",
+          "impl_plan_profile": "10派4.3元(含税)"
+        }
+      }
+    },
+    {
+      "code": "601919",
+      "name": "中远海控",
+      "secucode": "601919.SH",
+      "assign_progress": "实施分配",
+      "ex_dividend_date": "2026-06-26",
+      "equity_record_date": "2026-06-25",
+      "cash_div_pretax_per_10": 4.4,
+      "impl_plan_profile": "10派4.40元(含税,扣税后3.96元)",
+      "sources": {
+        "eastmoney": {
+          "cash_div_pretax_per_10": 4.4,
+          "equity_record_date": "2026-06-25",
+          "ex_dividend_date": "2026-06-26",
+          "impl_plan_profile": "10派4.40元(含税,扣税后3.96元)"
+        },
+        "sina": {
+          "cash_div_pretax_per_10": 4.4,
+          "equity_record_date": "2026-06-25",
+          "ex_dividend_date": "2026-06-26",
+          "impl_plan_profile": null
+        },
+        "cninfo": {
+          "cash_div_pretax_per_10": 4.4,
+          "equity_record_date": "2026-06-25",
+          "ex_dividend_date": "2026-06-26",
+          "impl_plan_profile": "10派4.4元(含税)"
+        }
+      }
+    },
+    {
+      "code": "601919",
+      "name": "中远海控",
+      "secucode": "601919.SH",
+      "assign_progress": "实施分配",
+      "ex_dividend_date": "2025-10-24",
+      "equity_record_date": "2025-10-23",
+      "cash_div_pretax_per_10": 5.6,
+      "impl_plan_profile": "10派5.60元(含税,扣税后5.04元)",
+      "sources": {
+        "eastmoney": {
+          "cash_div_pretax_per_10": 5.6,
+          "equity_record_date": "2025-10-23",
+          "ex_dividend_date": "2025-10-24",
+          "impl_plan_profile": "10派5.60元(含税,扣税后5.04元)"
+        },
+        "sina": {
+          "cash_div_pretax_per_10": 5.6,
+          "equity_record_date": "2025-10-23",
+          "ex_dividend_date": "2025-10-24",
+          "impl_plan_profile": null
+        },
+        "cninfo": {
+          "cash_div_pretax_per_10": 5.6,
+          "equity_record_date": "2025-10-23",
+          "ex_dividend_date": "2025-10-24",
+          "impl_plan_profile": "10派5.6元(含税)"
+        }
+      }
+    },
+    {
+      "code": "600519",
+      "name": "贵州茅台",
+      "secucode": "600519.SH",
+      "assign_progress": "实施分配",
+      "ex_dividend_date": "2026-06-26",
+      "equity_record_date": "2026-06-25",
+      "cash_div_pretax_per_10": 280.2423,
+      "impl_plan_profile": "10派280.2423元(含税)",
+      "sources": {
+        "eastmoney": {
+          "cash_div_pretax_per_10": 280.2423,
+          "equity_record_date": "2026-06-25",
+          "ex_dividend_date": "2026-06-26",
+          "impl_plan_profile": "10派280.2423元(含税)"
+        },
+        "sina": {
+          "cash_div_pretax_per_10": 280.242,
+          "equity_record_date": "2026-06-25",
+          "ex_dividend_date": "2026-06-26",
+          "impl_plan_profile": null
+        },
+        "cninfo": {
+          "cash_div_pretax_per_10": 280.2423,
+          "equity_record_date": "2026-06-25",
+          "ex_dividend_date": "2026-06-26",
+          "impl_plan_profile": "10派280.2423元(含税)"
+        }
+      }
+    },
+    {
+      "code": "600519",
+      "name": "贵州茅台",
+      "secucode": "600519.SH",
+      "assign_progress": "实施分配",
+      "ex_dividend_date": "2025-12-19",
+      "equity_record_date": "2025-12-18",
+      "cash_div_pretax_per_10": 239.57,
+      "impl_plan_profile": "10派239.57元(含税,扣税后215.613元)",
+      "sources": {
+        "eastmoney": {
+          "cash_div_pretax_per_10": 239.57,
+          "equity_record_date": "2025-12-18",
+          "ex_dividend_date": "2025-12-19",
+          "impl_plan_profile": "10派239.57元(含税,扣税后215.613元)"
+        },
+        "sina": {
+          "cash_div_pretax_per_10": 239.57,
+          "equity_record_date": "2025-12-18",
+          "ex_dividend_date": "2025-12-19",
+          "impl_plan_profile": null
+        },
+        "cninfo": {
+          "cash_div_pretax_per_10": 239.57,
+          "equity_record_date": "2025-12-18",
+          "ex_dividend_date": "2025-12-19",
+          "impl_plan_profile": "10派239.57元(含税)"
+        }
+      }
+    },
+    {
+      "code": "600519",
+      "name": "贵州茅台",
+      "secucode": "600519.SH",
+      "assign_progress": "实施分配",
+      "ex_dividend_date": "2025-06-26",
+      "equity_record_date": "2025-06-25",
+      "cash_div_pretax_per_10": 276.73,
+      "impl_plan_profile": "10派276.73元(含税,扣税后249.057元)",
+      "sources": {
+        "eastmoney": {
+          "cash_div_pretax_per_10": 276.73,
+          "equity_record_date": "2025-06-25",
+          "ex_dividend_date": "2025-06-26",
+          "impl_plan_profile": "10派276.73元(含税,扣税后249.057元)"
+        },
+        "sina": {
+          "cash_div_pretax_per_10": 276.73,
+          "equity_record_date": "2025-06-25",
+          "ex_dividend_date": "2025-06-26",
+          "impl_plan_profile": null
+        },
+        "cninfo": {
+          "cash_div_pretax_per_10": 276.73,
+          "equity_record_date": "2025-06-25",
+          "ex_dividend_date": "2025-06-26",
+          "impl_plan_profile": "10派276.73元(含税)"
+        }
+      }
+    },
+    {
+      "code": "000001",
+      "name": "平安银行",
+      "secucode": "000001.SZ",
+      "assign_progress": "实施分配",
+      "ex_dividend_date": "2026-09-24",
+      "equity_record_date": "2026-09-23",
+      "cash_div_pretax_per_10": 2.49,
+      "impl_plan_profile": "10派2.49元(含税,扣税后2.241元)",
+      "sources": {
+        "eastmoney": {
+          "cash_div_pretax_per_10": 2.49,
+          "equity_record_date": "2026-09-23",
+          "ex_dividend_date": "2026-09-24",
+          "impl_plan_profile": "10派2.49元(含税,扣税后2.241元)"
+        },
+        "sina": {
+          "cash_div_pretax_per_10": 2.49,
+          "equity_record_date": "2026-09-23",
+          "ex_dividend_date": "2026-09-24",
+          "impl_plan_profile": null
+        },
+        "cninfo": {
+          "cash_div_pretax_per_10": 2.49,
+          "equity_record_date": "2026-09-23",
+          "ex_dividend_date": "2026-09-24",
+          "impl_plan_profile": "10派2.49元(含税)"
+        }
+      }
+    },
+    {
+      "code": "000001",
+      "name": "平安银行",
+      "secucode": "000001.SZ",
+      "assign_progress": "实施分配",
+      "ex_dividend_date": "2026-06-12",
+      "equity_record_date": "2026-06-11",
+      "cash_div_pretax_per_10": 3.6,
+      "impl_plan_profile": "10派3.60元(含税,扣税后3.24元)",
+      "sources": {
+        "eastmoney": {
+          "cash_div_pretax_per_10": 3.6,
+          "equity_record_date": "2026-06-11",
+          "ex_dividend_date": "2026-06-12",
+          "impl_plan_profile": "10派3.60元(含税,扣税后3.24元)"
+        },
+        "sina": {
+          "cash_div_pretax_per_10": 3.6,
+          "equity_record_date": "2026-06-11",
+          "ex_dividend_date": "2026-06-12",
+          "impl_plan_profile": null
+        },
+        "cninfo": {
+          "cash_div_pretax_per_10": 3.6,
+          "equity_record_date": "2026-06-11",
+          "ex_dividend_date": "2026-06-12",
+          "impl_plan_profile": "10派3.6元(含税)"
+        }
+      }
+    },
+    {
+      "code": "000001",
+      "name": "平安银行",
+      "secucode": "000001.SZ",
+      "assign_progress": "实施分配",
+      "ex_dividend_date": "2025-10-15",
+      "equity_record_date": "2025-10-14",
+      "cash_div_pretax_per_10": 2.36,
+      "impl_plan_profile": "10派2.36元(含税,扣税后2.124元)",
+      "sources": {
+        "eastmoney": {
+          "cash_div_pretax_per_10": 2.36,
+          "equity_record_date": "2025-10-14",
+          "ex_dividend_date": "2025-10-15",
+          "impl_plan_profile": "10派2.36元(含税,扣税后2.124元)"
+        },
+        "sina": {
+          "cash_div_pretax_per_10": 2.36,
+          "equity_record_date": "2025-10-14",
+          "ex_dividend_date": "2025-10-15",
+          "impl_plan_profile": null
+        },
+        "cninfo": {
+          "cash_div_pretax_per_10": 2.36,
+          "equity_record_date": "2025-10-14",
+          "ex_dividend_date": "2025-10-15",
+          "impl_plan_profile": "10派2.36元(含税)"
+        }
+      }
+    }
+  ]
+}

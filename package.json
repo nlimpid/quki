@@ -17,7 +17,8 @@
     "migrate": "tsx scripts/migrate.ts",
     "backfill": "tsx scripts/backfill.ts",
     "ingest": "tsx scripts/ingest.ts",
-    "temperature:backtest": "tsx scripts/temperature-backtest.ts"
+    "temperature:backtest": "tsx scripts/temperature-backtest.ts",
+    "dividends:check": "tsx scripts/check-dividend-golden.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.6",
@@ -28,6 +29,7 @@
     "hono": "^4.13.16"
   },
   "devDependencies": {
+    "@duckdb/node-api": "2.0.0-r.1",
     "@types/node": "^24.10.1",
     "concurrently": "^9.2.1",
     "oxfmt": "^0.76.0",
