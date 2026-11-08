@@ -14,14 +14,14 @@ Dates do not use a day offset. A different record date or ex-dividend date is a 
 
 ## How to run
 
-Offline (default CI and local). No network and no database:
+Offline (default CI and local). No network and no TiDB. Reconcile and missed-event joins run in an in-memory DuckDB (`@duckdb/node-api`). Production ingest stays on TiDB Serverless.
 
 ```bash
 pnpm dividends:check
 pnpm test
 ```
 
-`pnpm dividends:check` loads the fixtures, runs parser A vs parser B, reconciles Eastmoney vs cninfo (primary) and Sina (secondary), scans the missed-event fixture, and checks pre-insert invariants on the golden rows. It prints a breaks CSV. Exit code is 1 when any offline check fails.
+`pnpm dividends:check` writes the golden and missed-event fixtures to CSV, loads them with DuckDB `read_csv_auto`, and joins Eastmoney vs cninfo (primary) and Sina (secondary). It also runs parser A vs parser B and the pre-insert invariants on the golden rows. It prints a breaks CSV. Exit code is 1 when any offline check fails.
 
 Live Eastmoney refetch for the four codes (still no database write):
 

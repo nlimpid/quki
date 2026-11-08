@@ -282,5 +282,7 @@ describe("accuracy docs", () => {
     expect(text).toContain("zero");
     expect(text).toContain("DIVIDEND_GOLDEN_LIVE=1");
     expect(text).toContain("pnpm dividends:check");
+    expect(text).toContain("DuckDB");
+    expect(text).toContain("TiDB Serverless");
   });
 });

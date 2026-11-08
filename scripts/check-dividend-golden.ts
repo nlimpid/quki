@@ -1,10 +1,13 @@
 /**
- * Offline dividend accuracy check. Does not open a database and does not fetch
- * unless DIVIDEND_GOLDEN_LIVE=1. DIVIDEND_AUDIT_WRITE is refused: audit SQL is
- * migration 0005 and is not applied here.
+ * Offline dividend accuracy check. Reconcile and missed-event joins run in an
+ * in-memory DuckDB. Production stays on TiDB Serverless; this script does not
+ * open it. DIVIDEND_GOLDEN_LIVE=1 refetches Eastmoney only. DIVIDEND_AUDIT_WRITE
+ * is refused: migration 0005 is not applied here.
  */
+import { checkDividendInvariants } from "@quki/db";
 import {
   CASH_PER_10_TOLERANCE,
+  breaksToCsv,
   cashPer10Close,
   eastmoneyRawRows,
   fetchEastmoneyDividendsByCode,
@@ -13,12 +16,10 @@ import {
   goldenEastmoneyRaw,
   missedEventFixture,
   parserDiffReport,
-  reconcileGoldenSample,
-  breaksToCsv,
-  scanMissedEvents,
   selectImplementedDividend,
 } from "@quki/ingest";
-import { checkDividendInvariants } from "@quki/db";
+
+import { runLocalDividendQa } from "./dividendQaDuckdb.js";
 
 const failures: string[] = [];
 
@@ -27,8 +28,10 @@ function fail(message: string): void {
 }
 
 const golden = goldenDividends();
-const reconciled = reconcileGoldenSample();
+const qa = await runLocalDividendQa();
+const reconciled = qa.reconciled;
 process.stdout.write(breaksToCsv(reconciled));
+if (qa.engine !== "duckdb") fail(`local QA engine ${qa.engine}`);
 if (reconciled.length !== 12 || reconciled.some((row) => row.status !== "MATCH")) {
   fail(`golden reconcile expected 12 MATCH, got ${reconciled.map((row) => row.status).join(",")}`);
 }
@@ -39,9 +42,8 @@ if (diff.compared !== 20 || diff.disagreements.length > 0) {
 }
 
 const missed = missedEventFixture();
-const missing = scanMissedEvents(missed.source, missed.dividendEvents);
-if (JSON.stringify(missing) !== JSON.stringify(missed.expectedMissing)) {
-  fail(`missed-event scan ${JSON.stringify(missing)}`);
+if (JSON.stringify(qa.missing) !== JSON.stringify(missed.expectedMissing)) {
+  fail(`missed-event scan ${JSON.stringify(qa.missing)}`);
 }
 
 for (const event of golden) {
@@ -68,7 +70,7 @@ for (const event of golden) {
 
 if (process.env.DIVIDEND_AUDIT_WRITE === "1") {
   console.error(
-    "Refusing DIVIDEND_AUDIT_WRITE. This script does not open a database. 0005_dividend_audit.sql is not applied.",
+    "Refusing DIVIDEND_AUDIT_WRITE. This script does not open TiDB. 0005_dividend_audit.sql is not applied.",
   );
   process.exit(1);
 }
@@ -106,5 +108,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `dividend golden check ok: ${golden.length} events, parser rows ${diff.compared}, breaks 0, tolerance ${CASH_PER_10_TOLERANCE}`,
+  `dividend golden check ok: ${golden.length} events, parser rows ${diff.compared}, breaks 0, tolerance ${CASH_PER_10_TOLERANCE}, engine ${qa.engine}`,
 );
