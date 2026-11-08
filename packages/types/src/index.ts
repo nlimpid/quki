@@ -290,6 +290,22 @@ export type OverviewTemperature = {
   band: TemperatureBand;
 };
 
+export { DIVIDEND_DISCLAIMER, YIELD_NOTE } from "./dividends.js";
+export type {
+  AshareBoard,
+  AshareMarket,
+  DividendEventDto,
+  DividendEventKind,
+  DividendYears,
+  PortfolioWeight,
+  StockDetailResponse,
+  StockListItem,
+  StockListQuery,
+  StockListResponse,
+  StockMarketFilter,
+  StockSort,
+} from "./dividends.js";
+
 export type TemperatureHistoryPoint = {
   date: string;
   temperature: number;

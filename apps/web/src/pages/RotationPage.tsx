@@ -74,7 +74,7 @@ export function RotationPage() {
   if (!pair) {
     return (
       <>
-        <AppHeader code="H30269" search="" />
+        <AppHeader code="H30269" search="" activeNav="rotation" />
         <main className="page-main">
           <section className="card">
             <div className="state">
@@ -102,7 +102,7 @@ export function RotationPage() {
 
   return (
     <>
-      <AppHeader code="H30269" search="?period=W&range=5Y&vol=0" />
+      <AppHeader code="H30269" search="?period=W&range=5Y&vol=0" activeNav="rotation" />
       <div className="toolbar">
         <div className="seg" role="group" aria-label="口径">
           <button

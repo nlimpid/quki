@@ -1,0 +1,78 @@
+/* Dividend pages only. Scoped so index cold/hot and market colors stay on the chart views.
+ * Values follow design-v2/dividends/tokens-dividends.css.
+ */
+
+.dividends-app {
+  --qk-font-sans: "IBM Plex Sans SC", "IBM Plex Sans", system-ui, sans-serif;
+  --qk-font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --qk-canvas: #f4f4f5;
+  --qk-surface: #ffffff;
+  --qk-surface-muted: #fafafa;
+  --qk-border: #e4e4e7;
+  --qk-fg: #18181b;
+  --qk-fg-secondary: #52525b;
+  --qk-fg-muted: #a1a1aa;
+  --qk-accent: #4f46e5;
+  --qk-accent-hover: #4338ca;
+  --qk-accent-muted: #eef2ff;
+  --qk-accent-fg: #3730a3;
+  --qk-brand-accent: var(--qk-accent);
+  --qk-brand-accent-muted: var(--qk-accent-muted);
+  --qk-border-focus: #c7d2fe;
+  --qk-div-cash-bg: #eef2ff;
+  --qk-div-cash-fg: #3730a3;
+  --qk-div-cash-border: #c7d2fe;
+  --qk-div-bonus-bg: #ecfdf5;
+  --qk-div-bonus-fg: #065f46;
+  --qk-div-bonus-border: #a7f3d0;
+  --qk-div-transfer-bg: #f0f9ff;
+  --qk-div-transfer-fg: #075985;
+  --qk-div-transfer-border: #bae6fd;
+  --qk-div-mixed-bg: #f4f4f5;
+  --qk-div-mixed-fg: #3f3f46;
+  --qk-div-mixed-border: #e4e4e7;
+  --qk-sample-bg: #fef9c3;
+  --qk-sample-fg: #a16207;
+  --qk-sample-border: #fde68a;
+  --qk-metric-hero: 28px;
+  --qk-metric-hero-sm: 22px;
+  --qk-radius-card: 16px;
+  --qk-radius-control: 8px;
+  --qk-radius-pill: 999px;
+  --qk-div-shadow: 0 8px 24px rgba(24, 24, 27, 0.04);
+  --qk-danger: #dc2626;
+  background: var(--qk-canvas);
+  color: var(--qk-fg);
+  min-height: 100%;
+}
+
+[data-theme="dark"] .dividends-app {
+  --qk-canvas: #0a0a0b;
+  --qk-surface: #111113;
+  --qk-surface-muted: #18181b;
+  --qk-border: #27272a;
+  --qk-fg: #fafafa;
+  --qk-fg-secondary: #a1a1aa;
+  --qk-fg-muted: #71717a;
+  --qk-accent: #818cf8;
+  --qk-accent-hover: #a5b4fc;
+  --qk-accent-muted: rgba(99, 102, 241, 0.18);
+  --qk-accent-fg: #c7d2fe;
+  --qk-div-cash-bg: rgba(99, 102, 241, 0.18);
+  --qk-div-cash-fg: #c7d2fe;
+  --qk-div-cash-border: rgba(129, 140, 248, 0.35);
+  --qk-div-bonus-bg: rgba(16, 185, 129, 0.14);
+  --qk-div-bonus-fg: #6ee7b7;
+  --qk-div-bonus-border: rgba(52, 211, 153, 0.3);
+  --qk-div-transfer-bg: rgba(14, 165, 233, 0.14);
+  --qk-div-transfer-fg: #7dd3fc;
+  --qk-div-transfer-border: rgba(56, 189, 248, 0.3);
+  --qk-div-mixed-bg: #18181b;
+  --qk-div-mixed-fg: #a1a1aa;
+  --qk-div-mixed-border: #27272a;
+  --qk-sample-bg: rgba(234, 179, 8, 0.15);
+  --qk-sample-fg: #fde68a;
+  --qk-sample-border: rgba(250, 204, 21, 0.35);
+  --qk-div-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --qk-danger: #f87171;
+}

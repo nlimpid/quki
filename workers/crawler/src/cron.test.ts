@@ -9,4 +9,11 @@ describe("crawler cron", () => {
     expect(text).toContain('"0 10 * * 1-5"');
     expect(text).not.toContain("15 8 * * 1-5");
   });
+
+  it("runs the dividend ingest on the weekday cron and ships the migration", () => {
+    const worker = readFileSync("workers/crawler/src/index.ts", "utf8");
+    expect(worker).toContain("ingestDividends");
+    expect(worker).toContain("0004_dividends.sql");
+    expect(worker).toContain('ingestDividends(connectTiDb(databaseUrl), "incremental")');
+  });
 });
