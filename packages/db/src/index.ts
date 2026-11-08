@@ -1,4 +1,29 @@
 export { DATABASE_URL_ENV, connectTiDb, dateText, numOrNull, rowsOf } from "./client.js";
+export {
+  DIVIDEND_INCREMENTAL_OVERLAP_DAYS,
+  MAX_EM_PAGES,
+  MAX_SINA_PAGES,
+  MIN_LISTED_UNIVERSE,
+  ingestDividends,
+  parseDividendWatermark,
+  resolveDividendCrawl,
+  shouldMarkMissingDelisted,
+} from "./dividendJobs.js";
+export type { DividendCrawlMode, DividendCrawlPlan } from "./dividendJobs.js";
+export {
+  companyUpsertSql,
+  dividendUpsertSql,
+  getStockDetail,
+  listStocks,
+  lookupStocks,
+  markUnseenCompaniesDelisted,
+  recomputeDividendSummaries,
+  stockListFilter,
+  summaryUpsertSql,
+  upsertCompanies,
+  upsertDividendEvents,
+  watermarkUpsertSql,
+} from "./dividendStore.js";
 export type { SqlConn } from "./client.js";
 export { ingestAll, ingestSymbol, recordCrawl, recomputeTemperature } from "./jobs.js";
 export { applyMigrations, defaultMigrationsDir, readMigrationFiles } from "./migrate.js";

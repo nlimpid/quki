@@ -25,7 +25,7 @@ data/SOURCES.md     Endpoint notes and quirks
 design              SPEC, tokens, HTML mockups
 ```
 
-Theme tokens live only in `design/tokens.css` (imported by the app). The fetcher is `packages/ingest/src/csindex.ts`. Schema changes belong in `db/migrations`.
+Theme tokens live in `design/tokens.css` (imported by the app). Dividend pages add `design/tokens-dividends.css`, scoped to those routes. The index fetcher is `packages/ingest/src/csindex.ts`. A-share list and dividend fetchers are `packages/ingest/src/sinaList.ts` and `packages/ingest/src/eastmoneyDividends.ts`. Schema changes belong in `db/migrations`.
 
 ## Data source
 
@@ -146,6 +146,16 @@ curl -X POST https://<quki-crawler>/admin/ingest -H "Authorization: Bearer $INGE
 ```
 
 The CSV backfill stays a Node script: the seed files are not on the edge.
+
+## A-share dividends
+
+`/stocks`, `/stock/:code`, and `/portfolio` are Shanghai and Shenzhen A-shares (main board, ChiNext, STAR). Beijing and delisted names are excluded. The stock page has no K-line. Holdings stay in this browser under `qk.holdings.v1`. `/me` redirects to `/portfolio`. Login is not implemented.
+
+近12月股息率 and a holding's 平均股息率 use the same formula: trailing 12 calendar months of pretax cash per share, divided by the latest close. Cash paid before a later bonus or transfer is divided by that split so it lines up with today's share count. Bonus and transfer shares are not cash. 「最近分红」is the ex-dividend date. A close the latest crawl did not refresh stays on the card in gray.
+
+The same weekday cron refreshes the company list from Sina `Market_Center` `node=hs_a` (100 names per page, Beijing dropped) and dividends from Eastmoney `RPT_SHAREBONUS_DET`. The first run, or a missing watermark, walks every dividend page at 500 rows and writes `backfill:N` after each page so a timeout can resume. Later runs read `NOTICE_DATE` descending and stop 14 days behind the stored notice date. Only `实施分配` rows with an ex-dividend date and a non-zero cash, bonus, or transfer amount are stored. Upserts use `VALUES(col)`.
+
+`POST /admin/ingest` runs that incremental dividend job in `waitUntil`. Send `{"dividends":"backfill"}` to walk history again, or `{"dividends":"skip"}` to leave it alone. `pnpm dev` serves a labeled sample book and does not call Sina, Eastmoney, or TiDB.
 
 ## Deploy with Workers Builds
 

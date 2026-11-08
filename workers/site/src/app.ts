@@ -13,8 +13,15 @@ import {
   resolveRotationPair,
   ROTATION_PAIRS,
   type DailyBar,
+  type DividendYears,
   type InstrumentInfo,
   type OverviewTemperature,
+  type StockDetailResponse,
+  type StockListItem,
+  type StockListQuery,
+  type StockListResponse,
+  type StockMarketFilter,
+  type StockSort,
   type TemperatureFamilyId,
   type TemperatureResponse,
 } from "@quki/types";
@@ -31,7 +38,36 @@ export type MarketSource = {
     family: TemperatureFamilyId;
     broad: "H20903" | "H00985";
   }) => Promise<TemperatureResponse | null>;
+  listStocks?: (query: StockListQuery) => Promise<StockListResponse>;
+  getStock?: (code: string, years: DividendYears) => Promise<StockDetailResponse | null>;
+  lookupStocks?: (codes: string[]) => Promise<{ items: StockListItem[]; isSample: boolean }>;
 };
+
+function publicStorageMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : "storage_error";
+  if (message.includes("://") || message.toLowerCase().includes("password")) return "存储不可用";
+  return message;
+}
+
+function parseMarket(value: string | undefined): StockMarketFilter {
+  if (value === "SH" || value === "SZ" || value === "BJ") return value;
+  return "ALL";
+}
+
+function parseSort(value: string | undefined): StockSort {
+  if (value === "yield" || value === "lastDivDate") return value;
+  return "code";
+}
+
+function parseYears(value: string | undefined): DividendYears {
+  if (value === "5" || value === "10" || value === "MAX") return value;
+  return "10";
+}
+
+function parsePage(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 
 async function readOverviewTemperature(
   source: MarketSource,
@@ -65,6 +101,57 @@ export function createApp(source: MarketSource) {
   app.get("/api/instruments", async (c) => {
     const instruments = await source.listInstruments();
     return c.json({ instruments });
+  });
+
+  app.get("/api/stocks/batch", async (c) => {
+    if (!source.lookupStocks) {
+      return c.json({ error: "storage_error", message: "分红列表尚未接入" }, 503);
+    }
+    const codes = (c.req.query("codes") ?? "")
+      .split(",")
+      .map((code) => code.trim())
+      .filter((code) => /^\d{6}$/.test(code))
+      .slice(0, 50);
+    try {
+      return c.json(await source.lookupStocks(codes));
+    } catch (error) {
+      return c.json({ error: "storage_error", message: publicStorageMessage(error) }, 503);
+    }
+  });
+
+  app.get("/api/stocks", async (c) => {
+    if (!source.listStocks) {
+      return c.json({ error: "storage_error", message: "分红列表尚未接入" }, 503);
+    }
+    const query: StockListQuery = {
+      q: c.req.query("q") ?? "",
+      market: parseMarket(c.req.query("market")),
+      sort: parseSort(c.req.query("sort")),
+      page: parsePage(c.req.query("page"), 1),
+      pageSize: parsePage(c.req.query("pageSize"), 50),
+    };
+    try {
+      return c.json(await source.listStocks(query));
+    } catch (error) {
+      return c.json({ error: "storage_error", message: publicStorageMessage(error) }, 503);
+    }
+  });
+
+  app.get("/api/stocks/:code", async (c) => {
+    if (!source.getStock) {
+      return c.json({ error: "storage_error", message: "分红详情尚未接入" }, 503);
+    }
+    const code = c.req.param("code");
+    if (!/^\d{6}$/.test(code)) {
+      return c.json({ error: "bad_code", message: "股票代码需为 6 位数字" }, 400);
+    }
+    try {
+      const detail = await source.getStock(code, parseYears(c.req.query("years")));
+      if (!detail) return c.json({ error: "not_found", message: "未找到该股票" }, 404);
+      return c.json(detail);
+    } catch (error) {
+      return c.json({ error: "storage_error", message: publicStorageMessage(error) }, 503);
+    }
   });
 
   app.get("/api/indices/:code/overview", async (c) => {

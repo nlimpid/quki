@@ -1,15 +1,17 @@
-// Comment-only edit so Workers Builds deploys this master worker. Crawl behavior is unchanged.
 import {
   DATABASE_URL_ENV,
   applyMigrations,
   connectTiDb,
   ingestAll,
+  ingestDividends,
   recomputeStoredPairs,
+  type DividendCrawlMode,
 } from "@quki/db";
 import { Hono } from "hono";
 
 import alterSql from "../../../db/migrations/0002_bars_nullable_ohlc.sql";
 import benchmarkSql from "../../../db/migrations/0003_rotation_benchmarks.sql";
+import dividendSql from "../../../db/migrations/0004_dividends.sql";
 import initSql from "../../../db/migrations/0001_init.sql";
 
 export interface Env {
@@ -45,17 +47,27 @@ crawler.post("/admin/migrate", async (c) => {
     { filename: "0001_init.sql", sql: initSql },
     { filename: "0002_bars_nullable_ohlc.sql", sql: alterSql },
     { filename: "0003_rotation_benchmarks.sql", sql: benchmarkSql },
+    { filename: "0004_dividends.sql", sql: dividendSql },
   ]);
   return c.json({ applied: ran });
 });
+
+function dividendMode(body: { dividends?: string }): DividendCrawlMode | "skip" {
+  if (body.dividends === "skip") return "skip";
+  if (body.dividends === "backfill") return "backfill";
+  return "incremental";
+}
 
 crawler.post("/admin/ingest", async (c) => {
   if (!authorized(c.req.raw, c.env)) return c.json({ error: "unauthorized" }, 401);
   const databaseUrl = c.env.TIDB_QUKI_DATABASE_URL;
   if (!databaseUrl) return c.json({ error: `missing ${DATABASE_URL_ENV}` }, 503);
-  const body = await c.req.json().catch(() => ({}) as { mode?: string; symbols?: string[] });
+  const body = await c.req
+    .json()
+    .catch(() => ({}) as { mode?: string; symbols?: string[]; dividends?: string });
   const mode = body.mode === "backfill" ? "backfill" : "incremental";
   await ingestAll(connectTiDb(databaseUrl), mode, body.symbols, { rotation: "skip" });
+  const dividends = dividendMode(body);
   c.executionCtx.waitUntil(
     recomputeStoredPairs(connectTiDb(databaseUrl), { mode: "incremental" }).catch(
       (error: unknown) => {
@@ -65,7 +77,16 @@ crawler.post("/admin/ingest", async (c) => {
       },
     ),
   );
-  return c.json({ ok: true, mode });
+  if (dividends !== "skip") {
+    c.executionCtx.waitUntil(
+      ingestDividends(connectTiDb(databaseUrl), dividends).catch((error: unknown) => {
+        console.error(
+          `dividend ingest failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }),
+    );
+  }
+  return c.json({ ok: true, mode, dividends });
 });
 
 async function runCron(env: Env): Promise<void> {
@@ -73,9 +94,11 @@ async function runCron(env: Env): Promise<void> {
     console.error(`cron skipped: missing ${DATABASE_URL_ENV}`);
     return;
   }
-  await ingestAll(connectTiDb(env.TIDB_QUKI_DATABASE_URL), "incremental", undefined, {
+  const databaseUrl = env.TIDB_QUKI_DATABASE_URL;
+  await ingestAll(connectTiDb(databaseUrl), "incremental", undefined, {
     rotation: "incremental",
   });
+  await ingestDividends(connectTiDb(databaseUrl), "incremental");
 }
 
 export default {

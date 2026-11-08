@@ -18,6 +18,11 @@ import {
 } from "@quki/types";
 
 import { createApp, type MarketSource } from "../workers/site/src/app.js";
+import {
+  getFixtureStock,
+  listFixtureStocks,
+  lookupFixtureStocks,
+} from "../workers/site/src/stockFixture.js";
 
 const cache = new Map<string, DailyBar[]>();
 const temperatureCache = new Map<string, TemperatureResponse | null>();
@@ -45,6 +50,15 @@ const source: MarketSource = {
   },
   async countInstruments() {
     return SEEDED_INSTRUMENTS.length;
+  },
+  async listStocks(query) {
+    return listFixtureStocks(query);
+  },
+  async getStock(code, years) {
+    return getFixtureStock(code, years);
+  },
+  async lookupStocks(codes) {
+    return { items: await lookupFixtureStocks(codes), isSample: true };
   },
   async getTemperature(query) {
     const key = `${query.family}:${query.broad}`;

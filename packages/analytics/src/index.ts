@@ -90,5 +90,34 @@ export type {
   UniverseStudy,
   WindowReport,
 } from "./temperatureBacktest.js";
+export {
+  addCalendarDays,
+  addCalendarMonths,
+  adjustedCashPerShare,
+  dividendEventKind,
+  exDateInYears,
+  latestCashDividend,
+  portfolioDividendSummary,
+  shanghaiDate,
+  trailingCashYield,
+  trailingWindowStart,
+  yearsStart,
+} from "./dividendYield.js";
+export type {
+  HoldingYieldInput,
+  PortfolioDividendSummary,
+  TrailingCashYield,
+  YieldEvent,
+} from "./dividendYield.js";
+export {
+  HOLDINGS_MAX_SHARES,
+  HOLDINGS_STORAGE_KEY,
+  emptyHoldings,
+  removeHolding,
+  sanitizeHoldings,
+  upsertHolding,
+  validShareCount,
+} from "./holdings.js";
+export type { HoldingRecord, HoldingsState } from "./holdings.js";
 export { isoWeekKey, toWeeklyBars, weekFriday } from "./weekly.js";
 export type { WeeklyBar } from "./weekly.js";

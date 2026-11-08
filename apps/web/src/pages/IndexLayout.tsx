@@ -36,7 +36,11 @@ export function IndexLayout() {
 
   return (
     <>
-      <AppHeader code={known ? code : "H30269"} search={location.search} />
+      <AppHeader
+        code={known ? code : "H30269"}
+        search={location.search}
+        activeNav={location.pathname.endsWith("/backtest") ? "backtest" : "index"}
+      />
       {known ? (
         <Toolbar
           code={code}

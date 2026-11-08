@@ -7,10 +7,13 @@ import {
 import {
   DATABASE_URL_ENV,
   connectTiDb,
+  getStockDetail,
   instrumentId,
   listInstrumentIds,
+  listStocks as queryStocks,
   loadDailyBars,
   loadTemperatureSeries,
+  lookupStocks as queryLookup,
   numOrNull,
   rowsOf,
 } from "@quki/db";
@@ -56,6 +59,15 @@ function tidbSource(url: string): MarketSource {
       const points = await loadTemperatureSeries(conn, id, hash);
       return buildTemperatureReading(points, legs);
     },
+    listStocks(query) {
+      return queryStocks(conn, query);
+    },
+    getStock(code, years) {
+      return getStockDetail(conn, code, years);
+    },
+    async lookupStocks(codes) {
+      return { items: await queryLookup(conn, codes), isSample: false };
+    },
   };
 }
 
@@ -69,6 +81,15 @@ function unconfiguredSource(): MarketSource {
       throw new Error(`缺少 Worker secret ${DATABASE_URL_ENV}`);
     },
     async countInstruments() {
+      throw new Error(`缺少 Worker secret ${DATABASE_URL_ENV}`);
+    },
+    async listStocks() {
+      throw new Error(`缺少 Worker secret ${DATABASE_URL_ENV}`);
+    },
+    async getStock() {
+      throw new Error(`缺少 Worker secret ${DATABASE_URL_ENV}`);
+    },
+    async lookupStocks() {
       throw new Error(`缺少 Worker secret ${DATABASE_URL_ENV}`);
     },
   };
