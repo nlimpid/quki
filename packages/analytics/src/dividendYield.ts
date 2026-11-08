@@ -13,6 +13,14 @@ export type TrailingCashYield = {
   yieldPct: number | null;
 };
 
+/** A stale last close stays on the row for display, but it must not publish a yield. */
+export function publishedTrailingYield(
+  yieldPct: number | null,
+  quoteFresh: boolean,
+): number | null {
+  return quoteFresh ? yieldPct : null;
+}
+
 export type HoldingYieldInput = {
   shares: number;
   price: number | null;
@@ -115,6 +123,8 @@ export function trailingCashYield(input: {
   events: readonly YieldEvent[];
   price: number | null;
   asOf: string;
+  /** Omitted means the caller already knows the price is usable. `false` drops the yield only. */
+  quoteFresh?: boolean;
 }): TrailingCashYield {
   const start = trailingWindowStart(input.asOf);
   const relevant = input.events.filter(
@@ -124,10 +134,13 @@ export function trailingCashYield(input: {
   for (const event of relevant) {
     if (event.cashPerShare > 0) sum += adjustedCashPerShare(event, relevant);
   }
-  const price = input.price;
+  const price = input.quoteFresh === false ? null : input.price;
   return {
     ttmCashPerShare: sum,
-    yieldPct: price != null && price > 0 ? (sum / price) * 100 : null,
+    yieldPct: publishedTrailingYield(
+      price != null && price > 0 ? (sum / price) * 100 : null,
+      input.quoteFresh !== false,
+    ),
   };
 }
 

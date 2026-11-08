@@ -42,6 +42,22 @@ export function eastmoneyDividendUrl(page: number): string {
   return `${EASTMONEY_DIVIDEND_URL}?${params.toString()}`;
 }
 
+/** One code, newest ex-dividend date first. Used by the offline-by-default golden check, not the crawl. */
+export function eastmoneyDividendByCodeUrl(code: string, pageSize = 50): string {
+  const params = new URLSearchParams({
+    reportName: "RPT_SHAREBONUS_DET",
+    columns: "ALL",
+    filter: `(SECURITY_CODE="${code}")`,
+    pageNumber: "1",
+    pageSize: String(pageSize),
+    sortTypes: "-1",
+    sortColumns: "EX_DIVIDEND_DATE",
+    source: "WEB",
+    client: "WEB",
+  });
+  return `${EASTMONEY_DIVIDEND_URL}?${params.toString()}`;
+}
+
 export function emDate(value: unknown): string | null {
   if (value == null || value === "") return null;
   const match = /^(\d{4}-\d{2}-\d{2})/.exec(String(value).trim());
@@ -148,25 +164,36 @@ export function shouldStopIncremental(
   return oldest < cutoff;
 }
 
-export async function fetchEastmoneyDividendPage(
-  page: number,
-  fetchImpl: FetchLike = fetch,
-): Promise<{ pages: number; rows: Record<string, unknown>[] }> {
+async function fetchEastmoneyJson(url: string, fetchImpl: FetchLike): Promise<unknown> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      const response = await fetchImpl(eastmoneyDividendUrl(page), {
+      const response = await fetchImpl(url, {
         headers: { Accept: "application/json", "User-Agent": "Cloudflare-Workers" },
         signal: AbortSignal.timeout(20_000),
       });
       if (!response.ok) throw new Error(`Eastmoney HTTP ${response.status}`);
-      return parseEastmoneyPage(await response.json());
+      return await response.json();
     } catch (error) {
       lastError = error;
       await new Promise((resolve) => setTimeout(resolve, 400 * 2 ** attempt));
     }
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+export async function fetchEastmoneyDividendPage(
+  page: number,
+  fetchImpl: FetchLike = fetch,
+): Promise<{ pages: number; rows: Record<string, unknown>[] }> {
+  return parseEastmoneyPage(await fetchEastmoneyJson(eastmoneyDividendUrl(page), fetchImpl));
+}
+
+export async function fetchEastmoneyDividendsByCode(
+  code: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<{ pages: number; rows: Record<string, unknown>[] }> {
+  return parseEastmoneyPage(await fetchEastmoneyJson(eastmoneyDividendByCodeUrl(code), fetchImpl));
 }
 
 export async function dividendEventKey(event: NormalizedDividend): Promise<string> {

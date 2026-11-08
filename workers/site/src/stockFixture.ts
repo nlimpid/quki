@@ -205,6 +205,7 @@ function toItem(company: FixtureCompany): StockListItem {
     events: company.events,
     price: company.lastClose,
     asOf: FIXTURE_AS_OF,
+    quoteFresh: company.quoteFresh,
   });
   const latest = latestCashDividend(company.events);
   return {

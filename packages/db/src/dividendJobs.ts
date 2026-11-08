@@ -1,6 +1,8 @@
 import { addCalendarDays, shanghaiDate } from "@quki/analytics";
 import {
+  CASH_PER_10_TOLERANCE,
   SINA_PAGE_SIZE,
+  compareGoldenSample,
   fetchEastmoneyDividendPage,
   fetchSinaCount,
   fetchSinaPage,
@@ -13,7 +15,9 @@ import {
 } from "@quki/ingest";
 
 import type { SqlConn } from "./client.js";
+import { emptyInvariantStats, type DividendInvariantStats } from "./dividendInvariants.js";
 import {
+  insertDividendCrawlRun,
   markUnseenCompaniesDelisted,
   maxNoticeDate,
   readDividendWatermark,
@@ -21,6 +25,7 @@ import {
   upsertCompanies,
   upsertDividendEvents,
   writeDividendWatermark,
+  type DividendQualitySummary,
 } from "./dividendStore.js";
 
 export const MIN_LISTED_UNIVERSE = 1000;
@@ -112,6 +117,58 @@ async function refreshCompanies(
   return companies.length;
 }
 
+type CrawlProgress = DividendInvariantStats & {
+  events: number;
+  latencyMs: number;
+  seen: NormalizedDividend[];
+};
+
+async function timedEastmoneyPage(page: number, fetchImpl: FetchLike, progress: CrawlProgress) {
+  const started = Date.now();
+  try {
+    return await fetchEastmoneyDividendPage(page, fetchImpl);
+  } finally {
+    progress.latencyMs += Date.now() - started;
+  }
+}
+
+function qualitySummary(
+  mode: DividendQualitySummary["mode"],
+  progress: CrawlProgress,
+): DividendQualitySummary {
+  return {
+    version: 1,
+    mode,
+    invariantFailures: progress.skipped,
+    invariantChecks: progress.byCheck,
+    eventsUpserted: progress.events,
+    reconcileSample: compareGoldenSample(progress.seen),
+    sourceLatencyMs: progress.latencyMs,
+    tolerances: {
+      cashPer10: CASH_PER_10_TOLERANCE,
+      equityRecordDate: 0,
+      exDividendDate: 0,
+    },
+  };
+}
+
+async function recordQuality(
+  conn: SqlConn,
+  status: "success" | "partial" | "failed",
+  mode: DividendQualitySummary["mode"],
+  progress: CrawlProgress,
+  error?: string,
+): Promise<void> {
+  const watermark = await readDividendWatermark(conn).catch(() => null);
+  await insertDividendCrawlRun(conn, {
+    status,
+    rows: progress.events,
+    watermark,
+    quality: qualitySummary(mode, progress),
+    error,
+  });
+}
+
 async function crawlBackfill(
   conn: SqlConn,
   startPage: number,
@@ -119,18 +176,19 @@ async function crawlBackfill(
   sleepMs: number,
   now: Date,
   asOf: string,
-  progress: { events: number },
+  progress: CrawlProgress,
 ): Promise<void> {
   let page = startPage;
   let pages = startPage;
   while (page <= pages && page <= MAX_EM_PAGES) {
-    const parsed = await fetchEastmoneyDividendPage(page, fetchImpl);
+    const parsed = await timedEastmoneyPage(page, fetchImpl, progress);
     pages = Math.min(parsed.pages, MAX_EM_PAGES);
     const events = parsed.rows.flatMap((row) => {
       const event = selectImplementedDividend(row);
       return event ? [event] : [];
     });
-    progress.events += await upsertDividendEvents(conn, events, sqlNow(now));
+    progress.seen.push(...events);
+    progress.events += await upsertDividendEvents(conn, events, sqlNow(now), progress);
     await writeDividendWatermark(conn, `backfill:${page + 1}`);
     if (parsed.rows.length === 0) break;
     page += 1;
@@ -146,14 +204,14 @@ async function crawlIncremental(
   fetchImpl: FetchLike,
   sleepMs: number,
   now: Date,
-  progress: { events: number },
+  progress: CrawlProgress,
 ): Promise<void> {
   const cutoff = addCalendarDays(noticeDate, -DIVIDEND_INCREMENTAL_OVERLAP_DAYS);
   let page = 1;
   let pages = 1;
   let newest = noticeDate;
   while (page <= pages && page <= MAX_EM_PAGES) {
-    const parsed = await fetchEastmoneyDividendPage(page, fetchImpl);
+    const parsed = await timedEastmoneyPage(page, fetchImpl, progress);
     pages = Math.min(parsed.pages, MAX_EM_PAGES);
     const events: NormalizedDividend[] = [];
     for (const row of parsed.rows) {
@@ -162,7 +220,8 @@ async function crawlIncremental(
       events.push(event);
       if (event.noticeDate && event.noticeDate > newest) newest = event.noticeDate;
     }
-    progress.events += await upsertDividendEvents(conn, events, sqlNow(now));
+    progress.seen.push(...events);
+    progress.events += await upsertDividendEvents(conn, events, sqlNow(now), progress);
     if (parsed.rows.length === 0 || shouldStopIncremental(pageNoticeDates(parsed.rows), cutoff)) {
       break;
     }
@@ -188,7 +247,7 @@ export async function ingestDividends(
     console.error(`company list failed: ${error instanceof Error ? error.message : String(error)}`);
   }
   const plan = resolveDividendCrawl(mode, await readDividendWatermark(conn));
-  const progress = { events: 0 };
+  const progress: CrawlProgress = { ...emptyInvariantStats(), events: 0, latencyMs: 0, seen: [] };
   try {
     if (plan.kind === "backfill") {
       await crawlBackfill(conn, plan.startPage, fetchImpl, sleepMs, now, asOf, progress);
@@ -196,6 +255,7 @@ export async function ingestDividends(
       await crawlIncremental(conn, plan.noticeDate, fetchImpl, sleepMs, now, progress);
     }
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     if (progress.events > 0) {
       await recomputeDividendSummaries(conn, asOf).catch((recomputeError: unknown) => {
         console.error(
@@ -203,11 +263,28 @@ export async function ingestDividends(
         );
       });
     }
+    await recordQuality(
+      conn,
+      progress.events > 0 ? "partial" : "failed",
+      plan.kind,
+      progress,
+      message,
+    ).catch((logError: unknown) => {
+      console.error(
+        `dividend quality log failed: ${logError instanceof Error ? logError.message : String(logError)}`,
+      );
+    });
     throw error;
   }
   await recomputeDividendSummaries(conn, asOf);
+  await recordQuality(conn, "success", plan.kind, progress).catch((logError: unknown) => {
+    console.error(
+      `dividend quality log failed: ${logError instanceof Error ? logError.message : String(logError)}`,
+    );
+  });
+  const sample = compareGoldenSample(progress.seen);
   console.log(
-    `dividends ${plan.kind}: companies ${companies}, events ${progress.events}, asOf ${asOf}`,
+    `dividends ${plan.kind}: companies ${companies}, events ${progress.events}, skipped ${progress.skipped}, sample ${sample.matched}/${sample.compared}, asOf ${asOf}`,
   );
   return { companies, events: progress.events, mode: plan.kind };
 }

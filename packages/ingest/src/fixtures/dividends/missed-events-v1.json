@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "description": "Eastmoney implemented list minus a fixture stand-in for dividend_events. CI does not query TiDB. The missing row is source-has/db-missing.",
+  "source": [
+    {
+      "code": "600036",
+      "ex_dividend_date": "2026-07-10",
+      "cash_div_pretax_per_10": 10.03
+    },
+    {
+      "code": "600036",
+      "ex_dividend_date": "2026-01-16",
+      "cash_div_pretax_per_10": 10.13
+    },
+    {
+      "code": "600519",
+      "ex_dividend_date": "2026-06-26",
+      "cash_div_pretax_per_10": 280.2423
+    }
+  ],
+  "dividend_events": [
+    { "code": "600036", "ex_dividend_date": "2026-07-10" },
+    { "code": "600519", "ex_dividend_date": "2026-06-26" }
+  ],
+  "expected_missing": [{ "code": "600036", "ex_dividend_date": "2026-01-16" }]
+}

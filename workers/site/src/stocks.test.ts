@@ -114,8 +114,18 @@ describe("stock dividend API", () => {
     };
     expect(body.isSample).toBe(true);
     expect(body.items.map((item) => item.code)).toEqual(["000001", "300750"]);
-    expect(body.items[0]).toMatchObject({ quoteFresh: false, lastClose: 11.2 });
-    expect(body.items[0]?.trailingYieldPct).not.toBeNull();
+    expect(body.items[0]).toMatchObject({
+      quoteFresh: false,
+      lastClose: 11.2,
+      trailingYieldPct: null,
+    });
+    const staleDetail = await app().request("http://quki.test/api/stocks/000001");
+    const staleBody = (await staleDetail.json()) as {
+      company: { quoteFresh: boolean; trailingYieldPct: number | null; ttmCashPerShare: number };
+    };
+    expect(staleBody.company.quoteFresh).toBe(false);
+    expect(staleBody.company.trailingYieldPct).toBeNull();
+    expect(staleBody.company.ttmCashPerShare).toBeGreaterThan(0);
     expect(body.items[1]).toMatchObject({ lastClose: null, trailingYieldPct: null });
   });
 });

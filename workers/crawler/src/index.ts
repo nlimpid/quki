@@ -10,6 +10,7 @@ import {
 import { Hono } from "hono";
 
 import alterSql from "../../../db/migrations/0002_bars_nullable_ohlc.sql";
+import auditSql from "../../../db/migrations/0005_dividend_audit.sql";
 import benchmarkSql from "../../../db/migrations/0003_rotation_benchmarks.sql";
 import dividendSql from "../../../db/migrations/0004_dividends.sql";
 import initSql from "../../../db/migrations/0001_init.sql";
@@ -48,6 +49,7 @@ crawler.post("/admin/migrate", async (c) => {
     { filename: "0002_bars_nullable_ohlc.sql", sql: alterSql },
     { filename: "0003_rotation_benchmarks.sql", sql: benchmarkSql },
     { filename: "0004_dividends.sql", sql: dividendSql },
+    { filename: "0005_dividend_audit.sql", sql: auditSql },
   ]);
   return c.json({ applied: ran });
 });
