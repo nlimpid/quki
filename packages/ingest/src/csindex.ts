@@ -62,6 +62,7 @@ export async function fetchCsindexDaily(options: {
   endDate: string;
   startAlreadyStored?: boolean;
   fetchImpl?: FetchLike;
+  timeoutMs?: number;
 }): Promise<SeedBar[]> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const start = options.startDate.replaceAll("-", "");
@@ -75,6 +76,7 @@ export async function fetchCsindexDaily(options: {
           Accept: "application/json",
           "User-Agent": "quki-crawler",
         },
+        signal: AbortSignal.timeout(options.timeoutMs ?? 20_000),
       });
       if (!response.ok) throw new Error(`CSIndex HTTP ${response.status} for ${options.symbol}`);
       const body = (await response.json()) as { data?: ApiRow[]; code?: string; msg?: string };

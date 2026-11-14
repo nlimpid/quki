@@ -4,8 +4,11 @@ import {
   connectTiDb,
   ingestAll,
   ingestDividends,
+  readMarketFreshness,
+  recordCronRun,
   recomputeStoredPairs,
   type DividendCrawlMode,
+  type MarketFreshness,
 } from "@quki/db";
 import { Hono } from "hono";
 
@@ -14,6 +17,7 @@ import auditSql from "../../../db/migrations/0005_dividend_audit.sql";
 import benchmarkSql from "../../../db/migrations/0003_rotation_benchmarks.sql";
 import dividendSql from "../../../db/migrations/0004_dividends.sql";
 import initSql from "../../../db/migrations/0001_init.sql";
+import { isCatchUpCron, scheduledIngest } from "./schedule.js";
 
 export interface Env {
   TIDB_QUKI_DATABASE_URL?: string;
@@ -91,25 +95,108 @@ crawler.post("/admin/ingest", async (c) => {
   return c.json({ ok: true, mode, dividends });
 });
 
-async function runCron(env: Env): Promise<void> {
-  if (!env.TIDB_QUKI_DATABASE_URL) {
-    console.error(`cron skipped: missing ${DATABASE_URL_ENV}`);
-    return;
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function logEvent(level: "log" | "error", payload: Record<string, unknown>): void {
+  const line = JSON.stringify(payload);
+  if (level === "error") console.error(line);
+  else console.log(line);
+}
+
+async function safeRecord(
+  databaseUrl: string,
+  status: "success" | "failed",
+  cron: string,
+  error?: string,
+): Promise<void> {
+  try {
+    await recordCronRun(connectTiDb(databaseUrl), { status, cron, error });
+  } catch (error_) {
+    logEvent("error", { message: "cron log failed", cron, error: errorText(error_) });
   }
+}
+
+/**
+ * Quotes and dividends run first. CSIndex fetches time out, so a stuck index
+ * response cannot use the whole cron budget before the company refresh.
+ */
+async function runIncremental(databaseUrl: string, cron: string): Promise<void> {
+  const failures: string[] = [];
+  try {
+    await ingestDividends(connectTiDb(databaseUrl), "incremental");
+  } catch (error) {
+    const message = errorText(error);
+    failures.push(`dividends: ${message}`);
+    logEvent("error", { message: "dividend ingest failed", cron, error: message });
+  }
+  try {
+    const bars = await ingestAll(connectTiDb(databaseUrl), "incremental", undefined, {
+      rotation: "incremental",
+    });
+    for (const symbol of bars.failedSymbols) failures.push(`bars: ${symbol}`);
+    failures.push(...bars.failedSteps);
+  } catch (error) {
+    const message = errorText(error);
+    failures.push(`bars: ${message}`);
+    logEvent("error", { message: "index ingest failed", cron, error: message });
+  }
+  if (failures.length > 0) {
+    const error = failures.join("; ").slice(0, 500);
+    await safeRecord(databaseUrl, "failed", cron, error);
+    throw new Error(error);
+  }
+  await safeRecord(databaseUrl, "success", cron);
+}
+
+async function runScheduled(cron: string, env: Env): Promise<void> {
   const databaseUrl = env.TIDB_QUKI_DATABASE_URL;
-  await ingestAll(connectTiDb(databaseUrl), "incremental", undefined, {
-    rotation: "incremental",
-  });
-  await ingestDividends(connectTiDb(databaseUrl), "incremental");
+  if (!databaseUrl) {
+    const message = `cron skipped: missing ${DATABASE_URL_ENV}`;
+    logEvent("error", { message, cron });
+    throw new Error(message);
+  }
+  if (isCatchUpCron(cron)) {
+    let freshness: MarketFreshness | null = null;
+    try {
+      freshness = await readMarketFreshness(connectTiDb(databaseUrl));
+    } catch (error) {
+      logEvent("error", { message: "freshness read failed", cron, error: errorText(error) });
+    }
+    logEvent("log", {
+      message: "freshness",
+      cron,
+      stale: freshness?.stale ?? null,
+      expectedSession: freshness?.expectedSession ?? null,
+      asOf: freshness?.asOf ?? null,
+      indexThrough: freshness?.indexThrough ?? null,
+    });
+    if (freshness && !scheduledIngest(cron, freshness.stale)) return;
+    if (freshness?.stale) {
+      logEvent("log", {
+        message: "stale trading session; retrying incremental",
+        cron,
+        expectedSession: freshness.expectedSession,
+        asOf: freshness.asOf,
+        indexThrough: freshness.indexThrough,
+        quotesStale: freshness.quotesStale,
+        indexStale: freshness.indexStale,
+      });
+    }
+  }
+  await runIncremental(databaseUrl, cron);
 }
 
 export default {
   fetch: crawler.fetch,
   async scheduled(
-    _event: unknown,
+    event: { cron?: string },
     env: Env,
     ctx: { waitUntil: (promise: Promise<unknown>) => void },
   ) {
-    ctx.waitUntil(runCron(env));
+    const run = runScheduled(event.cron ?? "", env);
+    ctx.waitUntil(run);
+    await run;
   },
 };

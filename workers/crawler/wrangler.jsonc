@@ -1,4 +1,6 @@
-// Comment-only edit so Workers Builds deploys this master config. Triggers are unchanged.
+// Cloudflare cron weekdays are 1 = Sunday through 7 = Saturday.
+// MON-FRI is Monday–Friday. A numeric 1-5 range runs Sunday–Thursday and skips Friday.
+// 30 12 is 20:30 Asia/Shanghai and retries only when the trading session is still stale.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "quki-crawler",
@@ -7,8 +9,13 @@
   "compatibility_date": "2026-10-15",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 1 },
+  },
   "triggers": {
-    "crons": ["30 8 * * 1-5", "0 10 * * 1-5"],
+    "crons": ["30 8 * * MON-FRI", "0 10 * * MON-FRI", "30 12 * * MON-FRI"],
   },
   "rules": [{ "type": "Text", "globs": ["**/*.sql"], "fallthrough": true }],
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mapCsindexRows } from "./csindex.js";
+import { fetchCsindexDaily, mapCsindexRows } from "./csindex.js";
 import { parseSeedCsv } from "./csv.js";
 import { dedupeBars, dropClonedBaseRows, dropPhantomStartRow } from "./dedupe.js";
 
@@ -95,5 +95,22 @@ describe("csindex mapper", () => {
     expect(bars[0]?.close).toBe("10204.610000");
     expect(bars[0]?.amount).toBe("1.2500");
     expect(bars[1]?.open).toBeNull();
+  });
+
+  it("aborts the CSIndex request instead of waiting out the cron budget", async () => {
+    let signal: AbortSignal | undefined;
+    const bars = await fetchCsindexDaily({
+      symbol: "000922",
+      startDate: "2026-11-13",
+      endDate: "2026-11-13",
+      timeoutMs: 50,
+      fetchImpl: async (_url, init) => {
+        signal = init?.signal ?? undefined;
+        return Response.json({ data: [] });
+      },
+    });
+    expect(bars).toEqual([]);
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal?.aborted).toBe(false);
   });
 });
