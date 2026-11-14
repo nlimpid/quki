@@ -15,6 +15,7 @@ import {
   loadTemperatureSeries,
   lookupStocks as queryLookup,
   numOrNull,
+  readMarketFreshness,
   rowsOf,
 } from "@quki/db";
 import { findInstrument, type InstrumentInfo } from "@quki/types";
@@ -67,6 +68,9 @@ function tidbSource(url: string): MarketSource {
     },
     async lookupStocks(codes) {
       return { items: await queryLookup(conn, codes), isSample: false };
+    },
+    getFreshness() {
+      return readMarketFreshness(conn);
     },
   };
 }
