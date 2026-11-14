@@ -1,0 +1,23 @@
+// Workers Builds runs `npx wrangler preview` from the repository root for pull
+// requests. Wrangler will not guess a project at a pnpm workspace root, so this
+// file is the site worker with paths relative to the repo root.
+// Production deploys keep using `npx wrangler deploy -c workers/site/wrangler.jsonc`.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "quki",
+  "account_id": "a0eb1f96a32491ca1f70971c118831fd",
+  "main": "workers/site/src/index.ts",
+  "compatibility_date": "2026-10-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "assets": {
+    "directory": "apps/web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"],
+  },
+  "routes": [
+    { "pattern": "quki.cc", "custom_domain": true },
+    { "pattern": "www.quki.cc", "custom_domain": true },
+  ],
+}

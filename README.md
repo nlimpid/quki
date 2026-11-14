@@ -171,6 +171,8 @@ Create two Workers Builds projects on this repo. Leave the root directory empty 
 
 `build:site` compiles `apps/web`. `build:crawler` is a no-op; Wrangler bundles the crawler during deploy. Paths in each `wrangler.jsonc` are relative to that config file, so deploy from the repo root still finds `workers/site/src/index.ts` and the assets directory `apps/web/dist`. Assets stay a binding. They are not inlined into the script. `npx wrangler` uses the Wrangler version pinned in the root `devDependencies`.
 
+Pull-request builds use Workers Builds' preview command, `npx wrangler preview`, from the repository root. Wrangler will not pick a project at a pnpm workspace root, so the root `wrangler.jsonc` is the site worker with root-relative paths. It does not change the production deploy commands above.
+
 Account `a0eb1f96a32491ca1f70971c118831fd`, zone `quki.cc`. Custom domains `quki.cc` and `www.quki.cc` stay in the site config.
 
 First-time order: create the TiDB database, `pnpm migrate`, `pnpm backfill`, set `TIDB_QUKI_DATABASE_URL` on both Workers and `INGEST_TOKEN` on the crawler. `POST /admin/ingest` returns after the bar upsert and the temperature update; rotation rows are refreshed in `waitUntil` for the recent tail only. `pnpm backfill` still writes the full rotation history and the full temperature history. Local `pnpm dev` does not need any of that.
