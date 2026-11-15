@@ -6,6 +6,7 @@ import {
   computeRotation,
   parseTemperatureQuery,
   temperatureFamilyForSymbol,
+  type MarketFreshness,
 } from "@quki/analytics";
 import {
   findInstrument,
@@ -41,7 +42,34 @@ export type MarketSource = {
   listStocks?: (query: StockListQuery) => Promise<StockListResponse>;
   getStock?: (code: string, years: DividendYears) => Promise<StockDetailResponse | null>;
   lookupStocks?: (codes: string[]) => Promise<{ items: StockListItem[]; isSample: boolean }>;
+  /** Listed-quote and index-bar freshness. Omitted only when storage has no crawl tables. */
+  getFreshness?: () => Promise<MarketFreshness>;
 };
+
+function freshnessFields(report: MarketFreshness | null) {
+  return {
+    asOf: report?.asOf ?? null,
+    expectedSession: report?.expectedSession ?? null,
+    indexThrough: report?.indexThrough ?? null,
+    lastSuccess: report?.lastSuccess ?? null,
+    quotesStale: report?.quotesStale ?? null,
+    indexStale: report?.indexStale ?? null,
+    stale: report?.stale ?? null,
+    calendarKnown: report?.calendarKnown ?? null,
+  };
+}
+
+async function readFreshness(source: MarketSource): Promise<MarketFreshness | null> {
+  if (!source.getFreshness) return null;
+  try {
+    return await source.getFreshness();
+  } catch (error) {
+    console.error(
+      `freshness lookup failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  }
+}
 
 function publicStorageMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : "storage_error";
@@ -92,9 +120,13 @@ export function createApp(source: MarketSource) {
   app.get("/api/health", async (c) => {
     try {
       const instruments = await source.countInstruments();
-      return c.json({ ok: true, storage: source.mode, instruments });
+      const freshness = await readFreshness(source);
+      return c.json({ ok: true, storage: source.mode, instruments, ...freshnessFields(freshness) });
     } catch {
-      return c.json({ ok: false, storage: source.mode, instruments: null }, 503);
+      return c.json(
+        { ok: false, storage: source.mode, instruments: null, ...freshnessFields(null) },
+        503,
+      );
     }
   });
 

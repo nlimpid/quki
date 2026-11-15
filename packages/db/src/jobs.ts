@@ -107,7 +107,9 @@ export async function ingestAll(
   mode: "incremental" | "backfill",
   symbols?: string[],
   options?: { rotation?: "full" | "incremental" | "skip" },
-): Promise<void> {
+): Promise<{ failedSymbols: string[]; failedSteps: string[] }> {
+  const failedSymbols: string[] = [];
+  const failedSteps: string[] = [];
   const known = symbols ?? (await listInstrumentIds(conn)).map((row) => row.symbol);
   for (const symbol of known) {
     try {
@@ -116,6 +118,7 @@ export async function ingestAll(
     } catch (error) {
       const id = await instrumentId(conn, symbol).catch(() => null);
       const message = error instanceof Error ? error.message : String(error);
+      failedSymbols.push(symbol);
       console.error(`ingest ${symbol} failed: ${message}`);
       if (id) {
         await recordCrawl(conn, {
@@ -138,19 +141,20 @@ export async function ingestAll(
         mode: rotation === "incremental" ? "incremental" : "full",
       });
     } catch (error) {
-      console.error(
-        `rotation recompute failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      const message = error instanceof Error ? error.message : String(error);
+      failedSteps.push(`rotation: ${message}`);
+      console.error(`rotation recompute failed: ${message}`);
     }
   }
   const temperatureMode = rotation === "full" ? "full" : "incremental";
   try {
     await recomputeTemperature(conn, { mode: temperatureMode });
   } catch (error) {
-    console.error(
-      `temperature recompute failed: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    const message = error instanceof Error ? error.message : String(error);
+    failedSteps.push(`temperature: ${message}`);
+    console.error(`temperature recompute failed: ${message}`);
   }
+  return { failedSymbols, failedSteps };
 }
 
 export async function recomputeTemperature(

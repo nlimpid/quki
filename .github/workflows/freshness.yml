@@ -1,0 +1,56 @@
+name: freshness
+
+on:
+  schedule:
+    # GitHub Actions cron is Unix: 1 = Monday … 5 = Friday, 6 = Saturday.
+    # This is not Cloudflare's numbering (there, 1 = Sunday). Do not copy these
+    # expressions into workers/crawler/wrangler.jsonc.
+    # 13:30 UTC = 21:30 Asia/Shanghai, after the 20:30 catch-up has finished.
+    - cron: "30 13 * * 1-5"
+    # 02:30 UTC Saturday = 10:30 Asia/Shanghai Saturday, if Friday's check did not run.
+    - cron: "30 2 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  freshness:
+    name: freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check quki.cc data freshness
+        env:
+          HEALTH_URL: https://quki.cc/api/health
+        run: |
+          set -euo pipefail
+          body=$(curl -fsS --retry 3 --retry-delay 5 --max-time 30 "$HEALTH_URL")
+          BODY="$body" python3 - <<'PY'
+          import json, os, sys
+          try:
+              report = json.loads(os.environ["BODY"])
+          except json.JSONDecodeError as error:
+              print(f"health body was not JSON: {error}", file=sys.stderr)
+              sys.exit(1)
+          summary = {
+              "ok": report.get("ok"),
+              "asOf": report.get("asOf"),
+              "expectedSession": report.get("expectedSession"),
+              "indexThrough": report.get("indexThrough"),
+              "quotesStale": report.get("quotesStale"),
+              "indexStale": report.get("indexStale"),
+              "stale": report.get("stale"),
+              "lastSuccess": report.get("lastSuccess"),
+          }
+          print(json.dumps(summary, ensure_ascii=False))
+          if report.get("ok") is not True:
+              print("health ok is not true", file=sys.stderr)
+              sys.exit(1)
+          if report.get("stale") is not False:
+              print(
+                  "trading-day increment is missing or not reported; stale must be false",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          PY
