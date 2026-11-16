@@ -15,11 +15,22 @@ describe("auth lifecycle does not touch holdings", () => {
       "apps/web/src/pages/LoginPage.tsx",
       "workers/site/src/auth/routes.ts",
     ];
-    for (const file of files) {
+    const product = [...files, "apps/web/src/auth.css", "apps/web/src/lib/authState.ts"];
+    const hidden = [
+      "登录方式（实现位）",
+      "本规格不规定",
+      "不得使用尚未确认",
+      "关于登录收集的信息",
+      "继续登录",
+      "pointer-events: none",
+      "loginSlotModel",
+    ];
+    for (const file of product) {
       const source = readFileSync(resolve(file), "utf8");
       expect(source).not.toMatch(/qk\.holdings|writeHoldings|readHoldings|localStorage/);
       expect(source).not.toContain("已退出");
       expect(source).not.toContain("登录同步即将推出");
+      for (const phrase of hidden) expect(source).not.toContain(phrase);
     }
   });
 });

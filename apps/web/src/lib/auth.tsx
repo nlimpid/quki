@@ -26,7 +26,10 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [phase, setPhase] = useState<AuthPhase>({ kind: "initializing" });
+  const [phase, setPhase] = useState<AuthPhase>({
+    kind: "initializing",
+    login: { state: "unknown" },
+  });
   const [generation, setGeneration] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const [expiryDismissed, setExpiryDismissed] = useState(false);
@@ -60,12 +63,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const retry = () => {
     setRetrying(true);
-    setPhase({ kind: "initializing" });
+    setPhase({ kind: "initializing", login: { state: "unknown" } });
     setGeneration((current) => current + 1);
   };
 
   const recheck = () => {
-    setPhase((current) => (current.kind === "unknown" ? { kind: "initializing" } : current));
+    setPhase((current) =>
+      current.kind === "unknown" ? { kind: "initializing", login: { state: "unknown" } } : current,
+    );
     setGeneration((current) => current + 1);
   };
 
@@ -76,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPhase(pending);
     try {
       await logoutSession(pending.csrfToken);
-      setPhase(finishLogout());
+      setPhase(finishLogout(pending));
       setExpiryDismissed(false);
     } catch {
       setPhase(failLogout(pending));

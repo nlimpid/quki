@@ -20,7 +20,7 @@ These alternatives do not fit this app:
 | Auth.js MySQL adapter | Same TCP driver problem as `mysql2`, unless a custom adapter is written on top of `@tidbcloud/serverless`. That is more glue than calling the driver directly. |
 | Email, password, SMS, WeChat, GitHub, or Google | Each one is an owner decision. The audience is a Chinese market page with no mailer and no user table. This change does not pick one. |
 
-Tradeoff: the generic OIDC callback is implemented and tested with an in-process stand-in, but the page will not start it. Turning on the dashed slot is a separate change after the owner chooses the issuer and replaces the consent sentence. Until then, login fails closed with `登录尚未配置` and no session cookie.
+Tradeoff: the OIDC callback is implemented and tested with an in-process stand-in. `login.ready` on `GET /api/auth/session` only means the Worker has a database URL and an `openid` issuer configured. The page does not treat that as a working sign-in. `LOGIN_UI_ENABLED` in `apps/web/src/lib/authState.ts` stays `false` until a provider is chosen and a real consent sentence replaces the empty one. Until then the header and the expiry banner do not offer 登录 or 重新登录, and `/login` says `登录暂不可用`. There is no 继续登录 button.
 
 `pnpm dev` keeps using seed CSVs. It does not open TiDB for login.
 
@@ -39,7 +39,7 @@ Names only. Do not create the provider account in this change.
    - `AUTH_OIDC_CLIENT_SECRET`
    - `AUTH_OIDC_SCOPES` — omit it, or set exactly `openid`. `email`, `profile`, or `phone` keep login unavailable so the consent placeholder is not a lie.
 4. Apply `db/migrations/0006_auth.sql` with `pnpm migrate` after review. It is not applied here. It does not modify dividend tables and does not depend on `0005_dividend_audit.sql`.
-5. Replace the `/login` consent paragraph, then change `loginSlotModel()` so the slot can post to `POST /api/auth/login`. Do that only after the provider is chosen.
+5. Choose the provider, write the real consent sentence, then set `LOGIN_UI_ENABLED` and add the unbranded 继续登录 control that posts to `POST /api/auth/login`. Do not flip the flag while the consent text is still missing. `login.ready: true` alone does not show that button.
 6. Local `http://127.0.0.1` will not keep the session cookie, because `Secure` is always set. Exercise login on HTTPS.
 
 `TIDB_QUKI_DATABASE_URL` is still required for any real session read. Missing issuer, client, secret, or database leaves `login.ready: false`. A storage error during a configured request is HTTP 503 and does not describe the user as logged out.
@@ -145,14 +145,16 @@ Copy:
 | State | Header | Meaning |
 | --- | --- | --- |
 | `initializing` | 16px spinner, at most 4 seconds | Probe in flight. Pages stay usable. |
-| `unknown` | `登录` | Timeout or network/`503`. Not logged out. A late `200` still updates the header. |
-| `guest` | `登录` | Server says there is no session. |
-| `guest` + `expired` | `登录` plus a dismissible banner | Previous cookie is dead. Unsaved holdings edits stay. |
-| `authenticated` | `账户` | Menu label is `displayName` or `已登录`. |
+| `unknown` | `登录` as a session check | Timeout, network error, or HTTP 503. Not logged out. `/login` says `无法确认登录状态，请重试。` A late `200` still updates the header. |
+| `guest` and login not offered | no 登录 link | Includes `login.ready: false` (`auth_not_configured`, `storage_unconfigured`, `scopes_not_confirmed`) and `login.ready: true` while `LOGIN_UI_ENABLED` is false. `/login` says `登录暂不可用。访客仍可查看行情，并在本机管理持仓。` 重试 only probes the session again. |
+| `guest` + `expired` | dismissible banner, no 重新登录 while login is not offered | Previous cookie is dead. Unsaved holdings edits stay. |
+| `authenticated` | `账户` | Still shown when `login.ready` is false. Menu label is `displayName` or `已登录`. |
 | `logoutPending` | `账户`, menu says `正在退出…` | Second submit disabled. |
 | `logoutFailed` | `账户` stays | Menu says `退出失败，请重试。` There is no `已退出` string. |
 
-`/login` keeps the dashed non-interactive region from the design spec. `login.ready: true` does not turn that region into a button.
+The account panel is not a focus trap. Opening it moves focus to 退出. Escape closes it and returns focus to 账户. Tab and Shift+Tab leave the panel and close it.
+
+Unresolved: which OIDC provider to use, and the consent sentence for what that provider collects. Those two choices gate `LOGIN_UI_ENABLED`. The API can report `login.ready: true` before either choice is made.
 
 ## Tests
 
@@ -173,8 +175,11 @@ Covered in process, with no network and no database:
 - Storage errors do not echo the driver URL.
 - `authRuntimeFromEnv` does not call `connect` until a query runs.
 - Display-name filter, `returnTo`, and the 4 second unknown state.
+- Header and relogin stay hidden for `auth_not_configured`, `storage_unconfigured`, `scopes_not_confirmed`, and for `login.ready: true` while `LOGIN_UI_ENABLED` is false. An existing session still shows 账户.
 - Auth client and auth modules do not touch `qk.holdings.v1`.
 
-Local run while preparing this branch: `pnpm test` passed (29 files, 125 tests), `pnpm typecheck` passed, `pnpm lint` passed with three existing effect-dependency warnings in `RotationChart`, `KlineChart`, and `OverviewPage`, and `pnpm --filter @quki/web build` passed.
+These checks use an in-process stand-in for the auth tables. They do not open TiDB, an issuer, or a browser.
+
+Local run for the login-shell correction: `pnpm test` passed (29 files, 128 tests), `pnpm typecheck` passed, `pnpm lint` passed with three existing effect-dependency warnings in `RotationChart`, `KlineChart`, and `OverviewPage`, and `pnpm --filter @quki/web build` passed. Those tests use an in-process auth stand-in. They are not a TiDB, issuer, or browser run, and they are not a security approval.
 
 Not covered: a live issuer, a real TiDB connection, applying `0006_auth.sql`, a browser click-through, or wrangler deploy. `0005_dividend_audit.sql` was not edited or rerun.

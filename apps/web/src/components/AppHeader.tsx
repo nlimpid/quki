@@ -4,7 +4,7 @@ import { NavLink, useLocation } from "react-router";
 import { AccountMenu } from "./AccountMenu.js";
 import { SessionBanner } from "./SessionBanner.js";
 import { useAuth } from "../lib/auth.js";
-import { headerControl, showExpiryBanner } from "../lib/authState.js";
+import { headerControl, showExpiryBanner, showRelogin } from "../lib/authState.js";
 import { useTheme } from "../lib/theme.js";
 
 export type ActiveNav = "index" | "backtest" | "rotation" | "stocks" | "portfolio";
@@ -101,7 +101,11 @@ export function AppHeader({
         </div>
       </header>
       {showExpiryBanner(phase, expiryDismissed) ? (
-        <SessionBanner onClose={dismissExpiry} onRecheck={recheck} />
+        <SessionBanner
+          onClose={dismissExpiry}
+          onRecheck={recheck}
+          showRelogin={showRelogin(phase, expiryDismissed)}
+        />
       ) : null}
     </>
   );

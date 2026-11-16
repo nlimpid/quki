@@ -10,6 +10,13 @@
   border: 0;
 }
 
+.auth-slot {
+  min-width: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .auth-slot,
 .auth-header-btn,
 .auth-back,
@@ -197,24 +204,6 @@
   font-size: 14px;
 }
 
-.auth-slot-panel {
-  min-height: 160px;
-  margin-top: 24px;
-  padding: 24px;
-  border-radius: 8px;
-  border: 1px dashed var(--qk-border, var(--qk-border-default));
-  background: var(--qk-surface-muted, var(--qk-bg-surface-muted));
-  color: var(--qk-fg-secondary, var(--qk-text-secondary));
-  pointer-events: none;
-}
-
-.auth-slot-panel h2 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.auth-slot-panel p,
 .auth-note,
 .auth-foot {
   font-size: 12px;
@@ -224,11 +213,6 @@
 
 .auth-note {
   margin: 16px 0 0;
-}
-
-.auth-note-title {
-  margin: 0 0 4px;
-  font-weight: 500;
 }
 
 .auth-foot {
@@ -251,10 +235,6 @@
   }
   .auth-card {
     padding: 24px;
-  }
-  .auth-slot-panel {
-    min-height: 136px;
-    padding: 16px;
   }
   .auth-banner,
   .auth-foot {

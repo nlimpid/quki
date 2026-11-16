@@ -1,5 +1,7 @@
 import { accountLabel } from "@quki/types";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+
+import { panelTabLeaves } from "../lib/authState.js";
 
 export function AccountMenu({
   displayName,
@@ -17,7 +19,7 @@ export function AccountMenu({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const logoutRef = useRef<HTMLButtonElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
-  const menuId = useId();
+  const panelId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -43,21 +45,32 @@ export function AccountMenu({
     if (failed && open) errorRef.current?.focus();
   }, [failed, open]);
 
+  const onPanelKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") return;
+    const panel = event.currentTarget;
+    const items = [...panel.querySelectorAll<HTMLElement>("button, a[href]")].filter(
+      (item) => !item.hasAttribute("disabled"),
+    );
+    const index = items.indexOf(document.activeElement as HTMLElement);
+    if (!panelTabLeaves(event.shiftKey, index, items.length)) return;
+    setOpen(false);
+  };
+
   return (
     <div className="auth-menu-wrap" ref={wrapRef}>
       <button
         ref={buttonRef}
         type="button"
         className="auth-header-btn"
-        aria-haspopup="menu"
+        aria-haspopup="true"
         aria-expanded={open}
-        aria-controls={menuId}
+        aria-controls={panelId}
         onClick={() => setOpen((value) => !value)}
       >
         账户
       </button>
       {open ? (
-        <div className="auth-menu" id={menuId} role="menu" aria-label="账户">
+        <div className="auth-menu" id={panelId} aria-label="账户" onKeyDown={onPanelKeyDown}>
           <div className="auth-menu-name">{accountLabel(displayName)}</div>
           {failed ? (
             <p ref={errorRef} className="auth-error" role="alert" tabIndex={-1}>
@@ -67,18 +80,11 @@ export function AccountMenu({
           <button
             ref={logoutRef}
             type="button"
-            role="menuitem"
             className="auth-menu-item"
             disabled={pending}
             aria-busy={pending}
             onClick={() => {
               if (!pending) onLogout();
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-                event.preventDefault();
-                logoutRef.current?.focus();
-              }
             }}
           >
             {pending ? "正在退出…" : "退出"}

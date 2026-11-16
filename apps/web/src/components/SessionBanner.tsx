@@ -5,9 +5,11 @@ import { safeReturnTo } from "@quki/types";
 export function SessionBanner({
   onClose,
   onRecheck,
+  showRelogin,
 }: {
   onClose: () => void;
   onRecheck: () => void;
+  showRelogin: boolean;
 }) {
   const location = useLocation();
   const returnTo =
@@ -18,13 +20,15 @@ export function SessionBanner({
     <div className="auth-banner" role="status">
       <p>登录已过期。你仍可继续使用访客功能与本地持仓，未保存的本机编辑不会因此丢失。</p>
       <div className="auth-banner-actions">
-        <Link
-          className="auth-header-btn"
-          to={`/login?returnTo=${encodeURIComponent(returnTo)}`}
-          onClick={onRecheck}
-        >
-          重新登录
-        </Link>
+        {showRelogin ? (
+          <Link
+            className="auth-header-btn"
+            to={`/login?returnTo=${encodeURIComponent(returnTo)}`}
+            onClick={onRecheck}
+          >
+            重新登录
+          </Link>
+        ) : null}
         <button type="button" className="auth-header-btn" onClick={onClose} aria-label="关闭">
           关闭
         </button>
