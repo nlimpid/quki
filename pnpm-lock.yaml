@@ -179,6 +179,9 @@ importers:
       hono:
         specifier: ^4.13.16
         version: 4.13.16
+      oauth4webapi:
+        specifier: ^3.8.8
+        version: 3.8.8
     devDependencies:
       typescript:
         specifier: ^7.0.2
@@ -1784,6 +1787,9 @@ packages:
     resolution: {integrity: sha512-6li2QanLsAXpIH2R6j77MzRyvOyrvdTqlKtO4CgBdHGNvN99ZZfyxszHc5o5+IZBWD5u6Hzwg83JoGXmqZNG9Q==}
     engines: {node: '>=18'}
 
+  oauth4webapi@3.8.8:
+    resolution: {integrity: sha512-8N28E+a/oxfXWBgOMt+ZP/JUf/XR+IFbvkAEPP3gznXOMv9BpAAwiIj0TFNz3tGTPc0ZQ8zmWBNgN1nAys0gng==}
+
   obug@3.0.0:
     resolution: {integrity: sha512-5vvB5+W7ePv+p3uqxi+RcW1XAzLW0/hxt3/4X4Lc4qHudzOhmBiBwOY6DRob4WnanAEGvNcLjF+KNOufrUoEQw==}
     engines: {node: '>=12.20.0'}
@@ -3361,6 +3367,8 @@ snapshots:
   nanoid@3.3.20: {}
 
   node-releases@2.0.63: {}
+
+  oauth4webapi@3.8.8: {}
 
   obug@3.0.0: {}
 

@@ -2,34 +2,51 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router";
 
-import { Navigate } from "react-router";
+import { Navigate, Outlet } from "react-router";
 
 import { BacktestRoute, LayoutRoute, OverviewRoute, RootRedirect } from "./App.js";
+import { AuthProvider } from "./lib/auth.js";
 import { PortfolioPage } from "./pages/PortfolioPage.js";
 import { RotationPage } from "./pages/RotationPage.js";
 import { StockPage } from "./pages/StockPage.js";
 import { StocksPage } from "./pages/StocksPage.js";
 import { ThemeProvider } from "./lib/theme.js";
+import { LoginPage } from "./pages/LoginPage.js";
 import "./styles.css";
 import "./dividends.css";
+import "./auth.css";
+
+function RootLayout() {
+  return (
+    <AuthProvider>
+      <Outlet />
+    </AuthProvider>
+  );
+}
 
 const router = createBrowserRouter([
-  { path: "/", element: <RootRedirect /> },
   {
-    path: "/index/:code",
-    element: <LayoutRoute />,
+    element: <RootLayout />,
     children: [
-      { index: true, element: <OverviewRoute /> },
-      { path: "backtest", element: <BacktestRoute /> },
+      { path: "/", element: <RootRedirect /> },
+      {
+        path: "/index/:code",
+        element: <LayoutRoute />,
+        children: [
+          { index: true, element: <OverviewRoute /> },
+          { path: "backtest", element: <BacktestRoute /> },
+        ],
+      },
+      { path: "/rotation", element: <RotationPage /> },
+      { path: "/rotation/:pairId", element: <RotationPage /> },
+      { path: "/stocks", element: <StocksPage /> },
+      { path: "/stock/:code", element: <StockPage /> },
+      { path: "/portfolio", element: <PortfolioPage /> },
+      { path: "/me", element: <Navigate to="/portfolio" replace /> },
+      { path: "/login", element: <LoginPage /> },
+      { path: "*", element: <RootRedirect /> },
     ],
   },
-  { path: "/rotation", element: <RotationPage /> },
-  { path: "/rotation/:pairId", element: <RotationPage /> },
-  { path: "/stocks", element: <StocksPage /> },
-  { path: "/stock/:code", element: <StockPage /> },
-  { path: "/portfolio", element: <PortfolioPage /> },
-  { path: "/me", element: <Navigate to="/portfolio" replace /> },
-  { path: "*", element: <RootRedirect /> },
 ]);
 
 const root = document.getElementById("root");

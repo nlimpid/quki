@@ -13,7 +13,8 @@
     "@quki/analytics": "workspace:*",
     "@quki/db": "workspace:*",
     "@quki/types": "workspace:*",
-    "hono": "^4.13.16"
+    "hono": "^4.13.16",
+    "oauth4webapi": "^3.8.8"
   },
   "devDependencies": {
     "typescript": "^7.0.2",

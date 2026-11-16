@@ -1,8 +1,9 @@
-/* Dividend pages only. Scoped so index cold/hot and market colors stay on the chart views.
+/* Dividend pages and the login shell. Scoped so index cold/hot and market colors stay on the chart views.
  * Values follow design-v2/dividends/tokens-dividends.css.
  */
 
-.dividends-app {
+.dividends-app,
+.auth-app {
   --qk-font-sans: "IBM Plex Sans SC", "IBM Plex Sans", system-ui, sans-serif;
   --qk-font-mono: "IBM Plex Mono", ui-monospace, monospace;
   --qk-canvas: #f4f4f5;
@@ -46,7 +47,8 @@
   min-height: 100%;
 }
 
-[data-theme="dark"] .dividends-app {
+[data-theme="dark"] .dividends-app,
+[data-theme="dark"] .auth-app {
   --qk-canvas: #0a0a0b;
   --qk-surface: #111113;
   --qk-surface-muted: #18181b;

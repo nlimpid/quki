@@ -28,6 +28,9 @@ import {
 } from "@quki/types";
 import { Hono } from "hono";
 
+import { mountAuthRoutes } from "./auth/routes.js";
+import { unavailableAuth, type AuthRuntime } from "./auth/runtime.js";
+
 export type MarketSource = {
   mode: "fixture" | "tidb";
   listInstruments: () => Promise<InstrumentInfo[]>;
@@ -114,8 +117,9 @@ async function readOverviewTemperature(
   }
 }
 
-export function createApp(source: MarketSource) {
+export function createApp(source: MarketSource, auth: AuthRuntime = unavailableAuth()) {
   const app = new Hono();
+  mountAuthRoutes(app, auth);
 
   app.get("/api/health", async (c) => {
     try {
