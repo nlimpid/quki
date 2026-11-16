@@ -72,21 +72,53 @@ export function reviewVisionRows(
   });
 }
 
+export type LocalImportPlan = {
+  changes: { code: string; shares: number; previousShares: number | null }[];
+  /** Account codes absent from this import. They stay until a separate delete. */
+  preserved: { code: string; shares: number }[];
+};
+
 export function localImportPlan(
   localItems: readonly { code: string; shares: number }[],
   serverItems: readonly { code: string; shares: number }[],
-): { code: string; shares: number; previousShares: number | null }[] {
+): LocalImportPlan {
   const seen = new Set<string>();
-  const plan: { code: string; shares: number; previousShares: number | null }[] = [];
+  const changes: LocalImportPlan["changes"] = [];
   for (const item of localItems) {
     if (!/^\d{6}$/.test(item.code) || seen.has(item.code) || validShareCount(item.shares) == null) {
       throw new Error("holding_line");
     }
     seen.add(item.code);
     const previous = serverItems.find((row) => row.code === item.code);
-    plan.push({ code: item.code, shares: item.shares, previousShares: previous?.shares ?? null });
+    changes.push({
+      code: item.code,
+      shares: item.shares,
+      previousShares: previous?.shares ?? null,
+    });
   }
-  return plan;
+  const preserved = serverItems.filter(
+    (row) => /^\d{6}$/.test(row.code) && validShareCount(row.shares) != null && !seen.has(row.code),
+  );
+  return { changes, preserved };
+}
+
+export function visionFlagLabel(flag: VisionFlag): string {
+  switch (flag) {
+    case "ambiguous_shares":
+      return "总股数无法确定，需要你填写";
+    case "ignored_available_shares":
+      return "已忽略可用股数，只采用总股数";
+    case "duplicate_code":
+      return "同一代码出现多次，不会自动相加";
+    case "bad_code":
+      return "代码不是 6 位数字";
+    case "name_mismatch":
+      return "名称与代码表不一致";
+    case "unknown_code":
+      return "代码表里没有这只代码";
+    case "untrusted_text":
+      return "识别文字只作核对，不会执行";
+  }
 }
 
 export function confirmImportRows(

@@ -3,7 +3,7 @@ import { createAuthStore } from "@quki/db";
 import { createAuthMemoryConn } from "../../../../packages/db/src/authMemory.js";
 import { createHoldingsMemory } from "../../../../packages/db/src/holdingsMemory.js";
 import type { HoldingCashQuote } from "@quki/db";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createApp, type MarketSource } from "../app.js";
 import type { AuthRuntime } from "../auth/runtime.js";
@@ -40,13 +40,16 @@ function quotesFor(codes: readonly string[]): HoldingCashQuote[] {
     }));
 }
 
-async function harness(vision: VisionExtractor | null = syntheticVisionExtractor()) {
+async function harness(
+  vision: VisionExtractor | null = syntheticVisionExtractor(),
+  previewLimit = 5,
+) {
   const memory = createAuthMemoryConn();
   const authStore = createAuthStore(() => memory);
   const holdingsStore = createHoldingsMemory();
-  const now = new Date("2026-11-16T00:00:00.000Z");
+  let clock = new Date("2026-11-16T00:00:00.000Z");
   const auth: AuthRuntime = {
-    now: () => now,
+    now: () => clock,
     store: authStore,
     oidc: null,
     unavailableReason: null,
@@ -63,12 +66,12 @@ async function harness(vision: VisionExtractor | null = syntheticVisionExtractor
       }
     : null;
   const holdings: HoldingsRuntime = {
-    now: () => now,
+    now: () => clock,
     store: holdingsStore,
     quotes: async (codes) => quotesFor(codes),
     vision: counting,
     visionTimeoutMs: 8_000,
-    previewLimit: 5,
+    previewLimit,
     previewWindowMs: 10 * 60 * 1000,
   };
   const app = createApp(market(), auth, holdings);
@@ -84,10 +87,18 @@ async function harness(vision: VisionExtractor | null = syntheticVisionExtractor
       userId,
       tokenHash: await sha256Hex(token),
       csrfToken: csrf,
-      expiresAt: new Date(now.getTime() + 60_000),
+      expiresAt: new Date("2027-01-01T00:00:00.000Z"),
     });
   }
-  return { app, holdingsStore, signIn, calls: () => calls };
+  return {
+    app,
+    holdingsStore,
+    signIn,
+    calls: () => calls,
+    setNow(date: Date) {
+      clock = date;
+    },
+  };
 }
 
 function post(
@@ -248,7 +259,7 @@ describe("account holdings", () => {
   });
 
   it("does not call the extractor when no vision provider is configured", async () => {
-    const { app, signIn, calls } = await harness(null);
+    const { app, holdingsStore, signIn, calls } = await harness(null);
     await signIn("user-a", "token-a", "csrf-a");
     const response = await post(app, "/api/holdings/preview", "token-a", "csrf-a", {
       consent: IMAGE_PROCESS_CONSENT,
@@ -258,5 +269,107 @@ describe("account holdings", () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({ error: "vision_not_configured" });
     expect(calls()).toBe(0);
+    expect(holdingsStore.attempts).toHaveLength(0);
+  });
+
+  it("rejects share quantities that are not canonical decimal integers", async () => {
+    const { app, signIn } = await harness(null);
+    await signIn("user-a", "token-a", "csrf-a");
+    for (const shares of ["0x10", "1e2", " 10", "+10", "-1", "10.0", "01"]) {
+      const response = await post(app, "/api/holdings", "token-a", "csrf-a", {
+        idempotencyKey: "55555555-5555-4555-8555-555555555555",
+        items: [{ code: "000001", shares }],
+      });
+      expect(response.status).toBe(400);
+    }
+    const saved = await post(app, "/api/holdings", "token-a", "csrf-a", {
+      idempotencyKey: "55555555-5555-4555-8555-555555555555",
+      items: [{ code: "000001", shares: 16 }],
+    });
+    expect(saved.status).toBe(200);
+    expect(
+      await (
+        await app.request(`${origin}/api/holdings`, { headers: { cookie: "qk_session=token-a" } })
+      ).json(),
+    ).toMatchObject({
+      items: [expect.objectContaining({ code: "000001", shares: 16 })],
+    });
+  });
+
+  it("lets only one of two different payloads write for the same idempotency key", async () => {
+    const { app, holdingsStore, signIn } = await harness(null);
+    await signIn("user-a", "token-a", "csrf-a");
+    let release: () => void = () => undefined;
+    holdingsStore.blockWrite = new Promise((resolve) => {
+      release = resolve;
+    });
+    const key = "66666666-6666-4666-8666-666666666666";
+    const first = post(app, "/api/holdings/import", "token-a", "csrf-a", {
+      idempotencyKey: key,
+      items: [{ code: "000001", shares: 40 }],
+    });
+    await vi.waitFor(() => expect(holdingsStore.entered).toBe(1));
+    const second = await post(app, "/api/holdings/import", "token-a", "csrf-a", {
+      idempotencyKey: key,
+      items: [{ code: "000001", shares: 41 }],
+    });
+    expect(second.status).toBe(409);
+    release();
+    expect((await first).status).toBe(200);
+    expect(holdingsStore.writes).toHaveLength(1);
+    expect(await holdingsStore.list("user-a")).toEqual([
+      expect.objectContaining({ code: "000001", shares: 40 }),
+    ]);
+  });
+
+  it("does not report success when the holdings write fails, and retries the same payload after the lease", async () => {
+    const { app, holdingsStore, signIn, setNow } = await harness(null);
+    await signIn("user-a", "token-a", "csrf-a");
+    holdingsStore.failWrites = 1;
+    const key = "77777777-7777-4777-8777-777777777777";
+    const failed = await post(app, "/api/holdings/import", "token-a", "csrf-a", {
+      idempotencyKey: key,
+      items: [{ code: "600519", shares: 10 }],
+    });
+    expect(failed.status).toBe(503);
+    expect(await holdingsStore.list("user-a")).toEqual([]);
+    const busy = await post(app, "/api/holdings/import", "token-a", "csrf-a", {
+      idempotencyKey: key,
+      items: [{ code: "600519", shares: 10 }],
+    });
+    expect(busy.status).toBe(409);
+    expect(holdingsStore.writes).toHaveLength(0);
+    setNow(new Date("2026-11-16T00:01:01.000Z"));
+    const retried = await post(app, "/api/holdings/import", "token-a", "csrf-a", {
+      idempotencyKey: key,
+      items: [{ code: "600519", shares: 10 }],
+    });
+    expect(retried.status).toBe(200);
+    expect(await holdingsStore.list("user-a")).toEqual([
+      expect.objectContaining({ code: "600519", shares: 10 }),
+    ]);
+  });
+
+  it("counts timed-out vision calls against the attempt budget", async () => {
+    const vision: VisionExtractor = {
+      id: "timeouts",
+      async extract() {
+        throw new Error("vision_timeout");
+      },
+    };
+    const { app, holdingsStore, signIn, calls } = await harness(vision, 2);
+    await signIn("user-a", "token-a", "csrf-a");
+    const imageBase64 = btoa(String.fromCharCode(...tinyPng()));
+    const body = {
+      consent: IMAGE_PROCESS_CONSENT,
+      mediaType: "image/png",
+      imageBase64,
+    };
+    expect((await post(app, "/api/holdings/preview", "token-a", "csrf-a", body)).status).toBe(504);
+    expect((await post(app, "/api/holdings/preview", "token-a", "csrf-a", body)).status).toBe(504);
+    const limited = await post(app, "/api/holdings/preview", "token-a", "csrf-a", body);
+    expect(limited.status).toBe(429);
+    expect(calls()).toBe(2);
+    expect(holdingsStore.attempts.filter((attempt) => attempt.status === "failed")).toHaveLength(2);
   });
 });

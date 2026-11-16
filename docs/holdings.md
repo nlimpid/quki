@@ -22,7 +22,15 @@ Before a configured extractor runs, the request must send `consent: "third-party
 
 PNG validation inflates the IDAT stream and checks that the pixel-buffer length matches the header. JPEG validation uses `jpeg-js` with `tolerantDecoding: false` and checks the decoded RGBA length. Files over 1.5 MB, an edge over 4096, or more than 2 megapixels are rejected. That is below the zone upload cap (100 MB on Free and Pro) and the Worker 128 MB memory cap. These checks run in unit tests. They were not run inside a production isolate.
 
-Reviewed text is stored in `auth_import_drafts` for ten minutes. The image, its base64 form, and account identifiers are not stored and are not written to logs. Model text is data: available shares are ignored, ambiguous quantities are not guessed, leading zeros stay, and a repeated code in one image does not add. Apply consumes the draft with one conditional update. A second apply with the same idempotency key returns the existing rows. The same key for another user is a different row.
+Reviewed text is stored in `auth_import_drafts` for ten minutes. The image, its base64 form, and account identifiers are not stored and are not written to logs. Model text is data: available shares are ignored, ambiguous quantities are not guessed, leading zeros stay, and a repeated code in one image does not add. The page shows those flags and asks for an explicit confirmation before `POST /api/holdings/apply`. Production leaves the file control disabled because no provider is configured. Tests inject a fetch double; there is no client switch that turns the synthetic fixture into recognition.
+
+A JPEG or PNG with an EXIF orientation other than 1 is rejected. The decoder does not rotate pixels, so a turned screenshot is not read as if it were upright.
+
+Before a vision call, the server inserts `auth_import_attempts`. A timeout or failed extraction stays counted until the 10 minute window expires. Requests over the limit are released and do not call the provider. `vision: null` returns 503 before that insert.
+
+`auth_holding_applies` is claimed with one INSERT before any holdings write. That is not a multi-statement transaction. The row stays `pending` until the write finishes and a later UPDATE marks it `applied`. A second payload for the same user and key does not write. A crash leaves `pending`; the same payload may redo the absolute write after 60 seconds. A failed write returns 503 and is not reported as success.
+
+Share quantities at the API are canonical decimal integers. `0x10`, `1e2`, signs, fractions, blanks, and leading zeros are rejected. A stock code is still a 6-character string, so `000001` stays `000001`.
 
 ## Migrations
 
@@ -31,7 +39,7 @@ Not applied in this change. `pnpm migrate` and `POST /admin/migrate` were not ru
 | File | Depends on | Rollback |
 | --- | --- | --- |
 | `0006_auth.sql` | `0001`–`0005` already applied. No schema dependency on them. | Drop `auth_users`, `auth_sessions`, `auth_oauth_transactions`. No market rows change. |
-| `0007_holdings.sql` | Apply only after `0006`, because holdings rows point at auth user ids. No foreign key is created. | Drop `auth_holding_applies`, `auth_import_drafts`, and `auth_holdings`. Saved share counts disappear. Market and dividend tables stay. |
+| `0007_holdings.sql` | Apply only after `0006`, because holdings rows point at auth user ids. No foreign key is created. | Drop `auth_holding_applies`, `auth_import_attempts`, `auth_import_drafts`, and `auth_holdings`. Saved share counts disappear. Market and dividend tables stay. |
 
 There is no dual-write. If `0007` fails, `0006` can remain and the holdings routes return a storage error rather than a partial account book.
 

@@ -1,10 +1,11 @@
 import { portfolioDividendSummary, type HoldingsState } from "@quki/analytics";
 import type { StockListItem } from "@quki/types";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { useAuth } from "../lib/auth.js";
-import { portfolioSubtitle, usesAccountHoldings, type AuthPhase } from "../lib/authState.js";
+import { accountUserId, portfolioSubtitle, type AuthPhase } from "../lib/authState.js";
+import { readGuestDrawerDraft, writeGuestDrawerDraft } from "../lib/accountDraft.js";
 import { AccountHoldings } from "../components/AccountHoldings.js";
 import { deleteHolding, readHoldings, saveHolding } from "../lib/holdingsStore.js";
 import { fetchStockBatch, fetchStockList } from "../lib/stockApi.js";
@@ -26,13 +27,23 @@ type Card = {
 
 export function PortfolioPage() {
   const { phase } = useAuth();
-  if (usesAccountHoldings(phase)) {
-    return (
-      <DividendShell activeNav="portfolio">
-        <AccountHoldings phase={phase} />
-      </DividendShell>
-    );
-  }
+  return (
+    <DividendShell activeNav="portfolio">
+      <PortfolioBody phase={phase} />
+    </DividendShell>
+  );
+}
+
+export function PortfolioBody({
+  phase,
+  fetchImpl,
+}: {
+  phase: AuthPhase;
+  fetchImpl?: typeof fetch;
+}) {
+  const userId = accountUserId(phase);
+  if (userId)
+    return <AccountHoldings key={userId} phase={phase} userId={userId} fetchImpl={fetchImpl} />;
   return <LocalPortfolio phase={phase} />;
 }
 
@@ -52,8 +63,19 @@ function LocalPortfolio({ phase }: { phase: AuthPhase }) {
   }
   const loading = codeKey.length > 0 && loadedKey !== codeKey && quoteError === null;
   const shownQuotes = codeKey ? quotes : [];
-  const [drawer, setDrawer] = useState<{ code: string; shares: string } | null>(null);
+  const [drawer, setDrawer] = useState<{ code: string; shares: string } | null>(
+    readGuestDrawerDraft,
+  );
+  const drawerRef = useRef(drawer);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  useEffect(() => {
+    drawerRef.current = drawer;
+  });
+  useEffect(() => {
+    return () => {
+      writeGuestDrawerDraft(drawerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!codeKey) return;
@@ -104,7 +126,7 @@ function LocalPortfolio({ phase }: { phase: AuthPhase }) {
   );
 
   return (
-    <DividendShell activeNav="portfolio">
+    <>
       <div className="page-head">
         <div>
           <h1 className="page-title">
@@ -240,7 +262,7 @@ function LocalPortfolio({ phase }: { phase: AuthPhase }) {
           }}
         />
       ) : null}
-    </DividendShell>
+    </>
   );
 }
 

@@ -27,18 +27,21 @@ export type AuthPhase =
   | { kind: "guest"; expired: boolean; login: LoginCapability }
   | {
       kind: "authenticated";
+      userId: string;
       displayName: string | null;
       csrfToken: string;
       login: LoginCapability;
     }
   | {
       kind: "logoutPending";
+      userId: string;
       displayName: string | null;
       csrfToken: string;
       login: LoginCapability;
     }
   | {
       kind: "logoutFailed";
+      userId: string;
       displayName: string | null;
       csrfToken: string;
       login: LoginCapability;
@@ -56,6 +59,7 @@ export function sessionToPhase(session: AuthSessionResponse): AuthPhase {
   if (session.status === "authenticated" && session.user && session.csrfToken) {
     return {
       kind: "authenticated",
+      userId: session.user.id,
       displayName: session.user.displayName,
       csrfToken: session.csrfToken,
       login,
@@ -90,6 +94,7 @@ export function beginLogout(phase: AuthPhase): AuthPhase {
   if (phase.kind !== "authenticated" && phase.kind !== "logoutFailed") return phase;
   return {
     kind: "logoutPending",
+    userId: phase.userId,
     displayName: phase.displayName,
     csrfToken: phase.csrfToken,
     login: phase.login,
@@ -104,6 +109,7 @@ export function failLogout(phase: AuthPhase): AuthPhase {
   if (phase.kind !== "logoutPending") return phase;
   return {
     kind: "logoutFailed",
+    userId: phase.userId,
     displayName: phase.displayName,
     csrfToken: phase.csrfToken,
     login: phase.login,
@@ -159,11 +165,18 @@ export function portfolioSubtitle(phase: AuthPhase): string {
 }
 
 export function usesAccountHoldings(phase: AuthPhase): boolean {
-  return (
+  return accountUserId(phase) != null;
+}
+
+export function accountUserId(phase: AuthPhase): string | null {
+  if (
     phase.kind === "authenticated" ||
     phase.kind === "logoutPending" ||
     phase.kind === "logoutFailed"
-  );
+  ) {
+    return phase.userId;
+  }
+  return null;
 }
 
 export type LoginView = {

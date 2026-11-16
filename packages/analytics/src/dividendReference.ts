@@ -162,13 +162,16 @@ export function buildDividendReference(rows: readonly CashCoverage[]): DividendR
 }
 
 export function dividendReferenceNote(reference: DividendReference): string {
-  const parts = [reference.label, "税前，不是收益承诺。"];
+  const parts = [
+    reference.label,
+    "税前，不是收益承诺。",
+    `已计入 ${reference.coveredCount} 只，持仓共 ${reference.heldCount} 只。`,
+    reference.asOf ? `统计日期 ${reference.asOf}。` : "没有可用的统计日期。",
+  ];
   if (reference.coveredCount === 0) {
     parts.push("目前没有可计入的已实施现金，因此没有合计。");
   } else if (reference.partial) {
-    parts.push(
-      `合计只含有数据的 ${reference.coveredCount} 只，另有 ${reference.missingCount} 只未计入。`,
-    );
+    parts.push(`另有 ${reference.missingCount} 只未计入合计。`);
   }
   if (reference.datesDiffer) parts.push("各股统计日期不完全相同，显示的日期是其中较早的一天。");
   return parts.join("");

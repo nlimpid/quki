@@ -18,6 +18,7 @@ import {
   headerControl,
   loginView,
   panelTabLeaves,
+  accountUserId,
   portfolioSubtitle,
   usesAccountHoldings,
   showExpiryBanner,
@@ -114,9 +115,12 @@ describe("auth view state", () => {
     });
     expect(signedIn).toMatchObject({
       kind: "authenticated",
+      userId: "user-1",
       displayName: "林",
       login: { state: "unavailable", reason: "auth_not_configured" },
     });
+    expect(accountUserId(signedIn)).toBe("user-1");
+    expect(accountUserId(guest("auth_not_configured"))).toBeNull();
     expect(headerControl(signedIn)).toBe("account");
     expect(applyProbeFailure(signedIn)).toEqual(signedIn);
     const pending = beginLogout(signedIn);

@@ -39,7 +39,9 @@ describe("trailing cash reference", () => {
     expect(reference.missingCount).toBe(1);
     expect(reference.asOf).toBe("2026-11-14");
     expect(reference.lines[1]?.cashCny).toBeNull();
-    expect(dividendReferenceNote(reference)).toContain("另有 1 只未计入");
+    expect(dividendReferenceNote(reference)).toContain("已计入 1 只，持仓共 2 只");
+    expect(dividendReferenceNote(reference)).toContain("统计日期 2026-11-14");
+    expect(dividendReferenceNote(reference)).toContain("另有 1 只未计入合计");
     expect(dividendReferenceNote(reference)).not.toContain("未来分红预测会兑现");
   });
 
@@ -98,11 +100,17 @@ describe("image text review", () => {
           { code: "000001", shares: 40 },
           { code: "600519", shares: 10 },
         ],
-        [{ code: "000001", shares: 100 }],
+        [
+          { code: "000001", shares: 100 },
+          { code: "000002", shares: 7 },
+        ],
       ),
-    ).toEqual([
-      { code: "000001", shares: 40, previousShares: 100 },
-      { code: "600519", shares: 10, previousShares: null },
-    ]);
+    ).toEqual({
+      changes: [
+        { code: "000001", shares: 40, previousShares: 100 },
+        { code: "600519", shares: 10, previousShares: null },
+      ],
+      preserved: [{ code: "000002", shares: 7 }],
+    });
   });
 });

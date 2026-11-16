@@ -101,21 +101,30 @@ export function mountHoldingsRoutes(app: Hono, auth: AuthRuntime, holdings: Hold
     try {
       image = decodeBase64(encoded);
       const decoded = await decodeImage(image, mediaType);
-      const recent = await store.countDraftsSince(
+      const reservation = await store.reserveAttempt(
         user.id,
-        new Date(holdings.now().getTime() - holdings.previewWindowMs),
+        holdings.now(),
+        holdings.previewLimit,
+        holdings.previewWindowMs,
       );
-      if (recent >= holdings.previewLimit) {
+      if (reservation === "limited") {
         return c.json({ error: "rate_limited", message: "识图过于频繁，请稍后再试" }, 429);
       }
-      const extracted = await withTimeout(
-        holdings.vision.extract({
-          mediaType: decoded.mediaType,
-          byteLength: image.byteLength,
-          bytes: image,
-        }),
-        holdings.visionTimeoutMs,
-      );
+      let extracted: Awaited<ReturnType<NonNullable<HoldingsRuntime["vision"]>["extract"]>>;
+      try {
+        extracted = await withTimeout(
+          holdings.vision.extract({
+            mediaType: decoded.mediaType,
+            byteLength: image.byteLength,
+            bytes: image,
+          }),
+          holdings.visionTimeoutMs,
+        );
+      } catch (error) {
+        await store.finishAttempt(user.id, reservation.id, "failed");
+        throw error;
+      }
+      await store.finishAttempt(user.id, reservation.id, "finished");
       const quotes = await holdings.quotes(
         extracted.rows.flatMap((row) => (row.code && /^\d{6}$/.test(row.code) ? [row.code] : [])),
       );
@@ -136,6 +145,8 @@ export function mountHoldingsRoutes(app: Hono, auth: AuthRuntime, holdings: Hold
       return c.json({
         draftId,
         rows: reviewed,
+        sourceRows: extracted.rows,
+        catalog: quotes.map((quote) => ({ code: quote.code, name: quote.name })),
         imageDisclosure: IMAGE_PROCESS_DISCLOSURE,
         pixels: decoded.pixels,
       });
@@ -164,45 +175,48 @@ export function mountHoldingsRoutes(app: Hono, auth: AuthRuntime, holdings: Hold
       return c.json({ error: "bad_request", message: "确认内容无效" }, 400);
     }
     try {
-      const replay = await replayOrReserve(
-        store,
-        user.id,
-        key,
-        "apply",
-        submitted.map((row) => ({
-          code: row.code,
-          shares: row.shares,
-        })),
-      );
-      if (replay === "conflict")
-        return c.json({ error: "idempotency_conflict", message: "重复提交的内容不一致" }, 409);
-      if (replay) return c.json(replay);
       const now = holdings.now();
       const draft = await store.readDraft(user.id, draftId, now);
       if (draft === "missing")
         return c.json({ error: "draft_missing", message: "没有这份预览" }, 404);
-      if (draft !== "consumed" && draft !== "expired" && "payloadJson" in draft) {
-        const reviewed = parseReviewed(draft.payloadJson);
-        if (!reviewed) return c.json({ error: "draft_missing", message: "没有这份预览" }, 404);
-        const quotes = await holdings.quotes(submitted.map((row) => row.code));
-        const confirmed = confirmImportRows(reviewed, submitted, catalogOf(quotes));
-        if (!confirmed.ok)
-          return c.json({ error: confirmed.error, message: "还有待核对的识别结果" }, 400);
+      if (draft === "expired")
+        return c.json({ error: "draft_used", message: "这份预览已经用过" }, 409);
+      const reviewed = parseReviewed(draft.payloadJson);
+      if (!reviewed) return c.json({ error: "draft_missing", message: "没有这份预览" }, 404);
+      const quotes = await holdings.quotes(submitted.map((row) => row.code));
+      const confirmed = confirmImportRows(reviewed, submitted, catalogOf(quotes));
+      if (!confirmed.ok)
+        return c.json({ error: confirmed.error, message: "还有待核对的识别结果" }, 400);
+      const lines = confirmed.lines.map((line) => ({ ...line, updatedAt: now.toISOString() }));
+      const hash = await payloadHash("apply", lines);
+      const claim = await store.claimApply(user.id, key, hash, now);
+      if (claim === "conflict")
+        return c.json({ error: "idempotency_conflict", message: "重复提交的内容不一致" }, 409);
+      if (claim === "in_progress")
+        return c.json({ error: "idempotency_in_progress", message: "同一请求正在处理" }, 409);
+      if (claim === "replay") {
+        const items = await store.list(user.id);
+        return c.json({ items, replayed: true });
+      }
+      if (!draft.consumed) {
         const consumed = await store.consumeDraft(user.id, draftId, now);
-        if (typeof consumed === "string") {
+        if (consumed === "missing" || consumed === "expired") {
           return c.json({ error: "draft_used", message: "这份预览已经用过" }, 409);
         }
-        const lines = confirmed.lines.map((line) => ({ ...line, updatedAt: now.toISOString() }));
-        await store.setExact(user.id, lines, now);
-        await store.insertApply(user.id, key, await payloadHash("apply", lines), now);
-        const items = await store.list(user.id);
-        return c.json({
-          items,
-          reference: buildDividendReference(await cover(holdings, items)),
-          applied: "set",
-        });
       }
-      return c.json({ error: "draft_used", message: "这份预览已经用过" }, 409);
+      await store.setExact(user.id, lines, now);
+      if (!(await store.completeApply(user.id, key, hash))) {
+        return c.json(
+          { error: "idempotency_incomplete", message: "写入未确认，请用同一请求重试" },
+          503,
+        );
+      }
+      const items = await store.list(user.id);
+      return c.json({
+        items,
+        reference: buildDividendReference(await cover(holdings, items)),
+        applied: "set",
+      });
     } catch (error) {
       return storageFailed(c, error);
     }
@@ -226,21 +240,25 @@ async function writeLines(
     return c.json({ error: "confirm_empty", message: "清空账户持仓需要明确确认" }, 400);
   }
   try {
-    const replay = await replayOrReserve(store, userId, key, mode, parsed);
-    if (replay === "conflict")
-      return c.json({ error: "idempotency_conflict", message: "重复提交的内容不一致" }, 409);
-    if (replay) return c.json(replay);
     const now = holdings.now();
     const lines = parsed.map((line) => ({ ...line, updatedAt: now.toISOString() }));
+    const hash = await payloadHash(mode, lines);
+    const claim = await store.claimApply(userId, key, hash, now);
+    if (claim === "conflict")
+      return c.json({ error: "idempotency_conflict", message: "重复提交的内容不一致" }, 409);
+    if (claim === "in_progress")
+      return c.json({ error: "idempotency_in_progress", message: "同一请求正在处理" }, 409);
+    if (claim === "replay") {
+      const items = await store.list(userId);
+      return c.json({ items, replayed: true });
+    }
     if (mode === "replace") await store.replaceAll(userId, lines, now);
     else await store.setExact(userId, lines, now);
-    const inserted = await store.insertApply(userId, key, await payloadHash(mode, lines), now);
-    if (!inserted) {
-      const raced = await store.findApply(userId, key);
-      const hash = await payloadHash(mode, lines);
-      if (!raced || raced.hash !== hash) {
-        return c.json({ error: "idempotency_conflict", message: "重复提交的内容不一致" }, 409);
-      }
+    if (!(await store.completeApply(userId, key, hash))) {
+      return c.json(
+        { error: "idempotency_incomplete", message: "写入未确认，请用同一请求重试" },
+        503,
+      );
     }
     const items = await store.list(userId);
     return c.json({
@@ -251,22 +269,6 @@ async function writeLines(
   } catch (error) {
     return storageFailed(c, error);
   }
-}
-
-async function replayOrReserve(
-  store: HoldingsStore,
-  userId: string,
-  key: string,
-  mode: "replace" | "set" | "apply",
-  lines: readonly { code: string; shares: number }[],
-): Promise<
-  { items: Awaited<ReturnType<HoldingsStore["list"]>>; replayed: true } | "conflict" | null
-> {
-  const existing = await store.findApply(userId, key);
-  if (!existing) return null;
-  const hash = await payloadHash(mode, lines);
-  if (existing.hash !== hash) return "conflict";
-  return { items: await store.list(userId), replayed: true };
 }
 
 async function payloadHash(

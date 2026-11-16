@@ -4,10 +4,20 @@
 -- Independent of 0005_dividend_audit.sql. This file does not read or alter dividend or index tables.
 -- No foreign keys. The app scopes every statement by the session user id.
 --
--- Rollback drops only these three tables. That deletes saved share counts and unused
--- import drafts. It does not change companies, dividend_events, or qk.holdings.v1.
+-- Rollback drops auth_holding_applies, auth_import_attempts, auth_import_drafts, and
+-- auth_holdings. That deletes saved share counts and unused import rows. It does not
+-- change companies, dividend_events, or qk.holdings.v1.
 -- There is no online dual-write, so a failed apply leaves 0006 in place and these tables absent.
 -- auth_holdings.shares is an exact integer quantity, not a sum of screenshot passes.
+--
+-- Idempotency is one INSERT into auth_holding_applies, not a multi-statement transaction.
+-- The TiDB HTTP driver does not claim a transaction here. The primary key is the atomic claim.
+-- status stays 'pending' until the holdings write finishes and a later UPDATE marks 'applied'.
+-- A crash leaves 'pending'. The same user and same payload may redo that absolute write after
+-- the claim lease. A different payload for that key does not write. A concurrent loser does not write.
+-- auth_import_attempts is inserted before a vision call. Failed and timed-out calls stay counted
+-- until the window expires. Over-limit rows are marked 'released' and do not occupy a slot.
+-- This file is still not applied.
 
 SET NAMES utf8mb4;
 
@@ -32,11 +42,23 @@ CREATE TABLE IF NOT EXISTS auth_import_drafts (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='One-time preview of untrusted image text. Consumed before a holdings write.';
 
+CREATE TABLE IF NOT EXISTS auth_import_attempts (
+  id          CHAR(36)    NOT NULL,
+  user_id     CHAR(36)    NOT NULL,
+  status      VARCHAR(16) NOT NULL COMMENT 'reserved, finished, failed, or released',
+  created_at  DATETIME(3) NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_auth_import_attempt_user (user_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='One row before each vision call. Failures count until the window expires.';
+
 CREATE TABLE IF NOT EXISTS auth_holding_applies (
   user_id          CHAR(36) NOT NULL,
   idempotency_key  CHAR(36) NOT NULL,
-  payload_hash     CHAR(64) NOT NULL COMMENT 'SHA-256 of the confirmed code and share list',
+  payload_hash     CHAR(64) NOT NULL COMMENT 'SHA-256 of mode plus the confirmed code and share list',
+  status           VARCHAR(16) NOT NULL COMMENT 'pending until the holdings write is marked applied',
+  claimed_at       DATETIME(3) NOT NULL,
   created_at       DATETIME(3) NOT NULL,
   PRIMARY KEY (user_id, idempotency_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Stops a repeated apply from writing a second time. Same key is isolated per user.';
+  COMMENT='Claim row for one user and idempotency key. Not a multi-statement transaction.';

@@ -2,47 +2,72 @@ import { dividendReferenceNote, type DividendReference } from "@quki/analytics";
 import { useEffect, useState } from "react";
 
 import { fetchAccountHoldings, HoldingsRequestError } from "../lib/holdingsAccount.js";
-import { usesAccountHoldings } from "../lib/authState.js";
+import { usesAccountHoldings, type AuthPhase } from "../lib/authState.js";
 import { useAuth } from "../lib/auth.js";
+
+export const HOLDINGS_ESTIMATE_LOADING = "正在读取账户股数。这不会读取本机持仓。";
+export const HOLDINGS_ESTIMATE_EXPIRED = "登录状态已失效，无法读取账户股数。本机持仓未改动。";
+export const HOLDINGS_ESTIMATE_UNAVAILABLE = "账户持仓暂不可用。本机持仓未改动。";
+
+type EstimateState =
+  | { status: "loading" }
+  | { status: "ready"; reference: DividendReference }
+  | { status: "expired" }
+  | { status: "unavailable" };
 
 export function HoldingsEstimateCard() {
   const { phase } = useAuth();
+  return <HoldingsEstimate phase={phase} />;
+}
+
+export function HoldingsEstimate({
+  phase,
+  fetchImpl = fetch,
+}: {
+  phase: AuthPhase;
+  fetchImpl?: typeof fetch;
+}) {
   const visible = usesAccountHoldings(phase);
-  const [reference, setReference] = useState<DividendReference | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<EstimateState>({ status: "loading" });
 
   useEffect(() => {
     if (!visible) return;
-    const cancelled = { current: false };
-    fetchAccountHoldings()
+    let cancelled = false;
+    fetchAccountHoldings(fetchImpl)
       .then((body) => {
-        if (!cancelled.current) setReference(body.reference);
+        if (!cancelled) setState({ status: "ready", reference: body.reference });
       })
       .catch((reason: unknown) => {
-        if (cancelled.current) return;
-        if (reason instanceof HoldingsRequestError && reason.status === 401) return;
-        setError("账户持仓暂不可用。本机持仓未改动。");
+        if (cancelled) return;
+        if (reason instanceof HoldingsRequestError && reason.status === 401) {
+          setState({ status: "expired" });
+          return;
+        }
+        setState({ status: "unavailable" });
       });
     return () => {
-      cancelled.current = true;
+      cancelled = true;
     };
-  }, [visible]);
+  }, [visible, fetchImpl]);
 
   if (!visible) return null;
+  const message =
+    state.status === "loading"
+      ? HOLDINGS_ESTIMATE_LOADING
+      : state.status === "expired"
+        ? HOLDINGS_ESTIMATE_EXPIRED
+        : state.status === "unavailable"
+          ? HOLDINGS_ESTIMATE_UNAVAILABLE
+          : dividendReferenceNote(state.reference);
   return (
     <section className="card estimate-card">
       <div className="pos-kicker">持仓分红参考</div>
-      <p>
-        {reference ? dividendReferenceNote(reference) : "正在读取账户股数。这不会读取本机持仓。"}
-      </p>
+      <p>{message}</p>
       <div className="hero qk-tabular">
-        {reference?.totalCashCny == null ? "—" : `${reference.totalCashCny} 元`}
+        {state.status === "ready" && state.reference.totalCashCny != null
+          ? `${state.reference.totalCashCny} 元`
+          : "—"}
       </div>
-      <p className="hint">
-        {reference?.asOf ? `统计截止 ${reference.asOf}` : "尚无可用的统计日期"}
-        {reference?.partial ? " · 合计不完整" : ""}
-      </p>
-      {error ? <p className="hint">{error}</p> : null}
     </section>
   );
 }

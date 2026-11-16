@@ -67,6 +67,9 @@ async function decodePng(bytes: Uint8Array): Promise<DecodedImage> {
       idat.push(chunk);
     } else if (type === "PLTE") {
       sawPlte = true;
+    } else if (type === "eXIf") {
+      const orientation = tiffOrientation(chunk);
+      if (orientation == null || orientation !== 1) throw new Error("image_orientation");
     } else if (type === "IEND") {
       sawIend = true;
     } else if (type.charCodeAt(0) >= 65 && type.charCodeAt(0) <= 90) {
@@ -94,6 +97,10 @@ async function decodePng(bytes: Uint8Array): Promise<DecodedImage> {
 }
 
 function decodeJpegPixels(bytes: Uint8Array): DecodedImage {
+  const orientation = jpegExifOrientation(bytes);
+  if (orientation === "unsupported" || orientation === "unreadable") {
+    throw new Error("image_orientation");
+  }
   try {
     const decoded = decodeJpeg(bytes, {
       useTArray: true,
@@ -117,6 +124,48 @@ function assertBounds(width: number, height: number): void {
     throw new Error("image_pixels");
   }
   if (width * height > IMAGE_MAX_PIXELS) throw new Error("image_pixels");
+}
+
+function jpegExifOrientation(bytes: Uint8Array): "missing" | "ok" | "unsupported" | "unreadable" {
+  let offset = 2;
+  while (offset + 4 < bytes.length) {
+    if (bytes[offset] !== 0xff) return "missing";
+    const marker = bytes[offset + 1] ?? 0;
+    if (marker === 0xda || marker === 0xd9) return "missing";
+    const size = ((bytes[offset + 2] ?? 0) << 8) | (bytes[offset + 3] ?? 0);
+    if (size < 2 || offset + 2 + size > bytes.length) return "unreadable";
+    if (marker === 0xe1 && size >= 8) {
+      const header = ascii(bytes, offset + 4, 6);
+      if (header === "Exif\u0000\u0000") {
+        const orientation = tiffOrientation(bytes.subarray(offset + 10, offset + 2 + size));
+        if (orientation == null) return "unreadable";
+        return orientation === 1 ? "ok" : "unsupported";
+      }
+    }
+    offset += 2 + size;
+  }
+  return "missing";
+}
+
+function tiffOrientation(tiff: Uint8Array): number | null {
+  if (tiff.length < 8) return null;
+  const little = tiff[0] === 0x49 && tiff[1] === 0x49;
+  const big = tiff[0] === 0x4d && tiff[1] === 0x4d;
+  if (!little && !big) return null;
+  const view = new DataView(tiff.buffer, tiff.byteOffset, tiff.byteLength);
+  const read16 = (offset: number) => view.getUint16(offset, little);
+  const read32 = (offset: number) => view.getUint32(offset, little);
+  if (read16(2) !== 0x2a) return null;
+  let offset = read32(4);
+  if (offset < 0 || offset + 2 > tiff.length) return null;
+  const count = read16(offset);
+  offset += 2;
+  for (let index = 0; index < count; index += 1) {
+    const entry = offset + index * 12;
+    if (entry + 12 > tiff.length) return null;
+    if (read16(entry) === 0x0112 && read16(entry + 2) === 3) return read16(entry + 8);
+  }
+  return 1;
 }
 
 function samplesFor(colorType: number): number | null {

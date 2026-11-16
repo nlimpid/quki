@@ -135,9 +135,15 @@ export type {
   DividendReference,
   DividendReferenceLine,
 } from "./dividendReference.js";
-export { confirmImportRows, localImportPlan, reviewVisionRows } from "./visionReview.js";
+export {
+  confirmImportRows,
+  localImportPlan,
+  reviewVisionRows,
+  visionFlagLabel,
+} from "./visionReview.js";
 export type {
   ImportConfirmation,
+  LocalImportPlan,
   ReviewedVisionRow,
   VisionFlag,
   VisionRow,

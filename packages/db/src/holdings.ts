@@ -14,13 +14,33 @@ export type HoldingCashQuote = {
   yieldAsOf: string | null;
 };
 
+/** A pending claim older than this may be retried. Not a database lock timeout. */
+export const APPLY_LEASE_MS = 60_000;
+
+export type ApplyClaim = "claimed" | "replay" | "conflict" | "in_progress";
+
 export type HoldingsStore = {
   list(userId: string): Promise<HoldingLine[]>;
   replaceAll(userId: string, lines: readonly HoldingLine[], now: Date): Promise<void>;
   setExact(userId: string, lines: readonly HoldingLine[], now: Date): Promise<void>;
-  findApply(userId: string, key: string): Promise<{ hash: string } | null>;
-  insertApply(userId: string, key: string, hash: string, now: Date): Promise<boolean>;
-  countDraftsSince(userId: string, since: Date): Promise<number>;
+  /**
+   * Inserts the pending claim before any holdings write. One primary key, one statement.
+   * The loser of that insert does not write. This is not a multi-statement transaction.
+   */
+  claimApply(userId: string, key: string, hash: string, now: Date): Promise<ApplyClaim>;
+  /** Marks the claim applied only after the holdings write returned. False is not success. */
+  completeApply(userId: string, key: string, hash: string): Promise<boolean>;
+  /**
+   * Reserves one vision attempt before the provider call. Failed attempts stay counted
+   * until the window expires. Over-limit reservations are released and do not proceed.
+   */
+  reserveAttempt(
+    userId: string,
+    now: Date,
+    limit: number,
+    windowMs: number,
+  ): Promise<{ id: string } | "limited">;
+  finishAttempt(userId: string, id: string, status: "finished" | "failed"): Promise<void>;
   insertDraft(input: {
     id: string;
     userId: string;
@@ -32,18 +52,21 @@ export type HoldingsStore = {
     userId: string,
     id: string,
     now: Date,
-  ): Promise<{ payloadJson: string } | "missing" | "expired" | "consumed">;
+  ): Promise<{ payloadJson: string; consumed: boolean } | "missing" | "expired">;
   consumeDraft(
     userId: string,
     id: string,
     now: Date,
-  ): Promise<{ payloadJson: string } | "missing" | "lost">;
+  ): Promise<{ payloadJson: string } | "missing" | "lost" | "expired">;
 };
 
 function sharesOf(value: unknown): number | null {
-  const parsed = typeof value === "number" ? value : Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1) return null;
-  return parsed;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 1) return value;
+  if (typeof value === "string" && /^[1-9]\d*$/.test(value)) {
+    const parsed = Number(value);
+    if (Number.isSafeInteger(parsed) && parsed >= 1 && String(parsed) === value) return parsed;
+  }
+  return null;
 }
 
 export function createHoldingsStore(getConn: () => SqlConn): HoldingsStore {
@@ -80,34 +103,69 @@ export function createHoldingsStore(getConn: () => SqlConn): HoldingsStore {
     async setExact(userId, lines, now) {
       await upsertLines(db, userId, lines, now);
     },
-    async findApply(userId, key) {
-      const result = await db().execute(
-        "SELECT payload_hash FROM auth_holding_applies WHERE user_id = ? AND idempotency_key = ? LIMIT 1",
-        [userId, key],
-      );
-      const row = rowsOf(result)[0];
-      const hash = row && typeof row.payload_hash === "string" ? row.payload_hash : null;
-      return hash ? { hash } : null;
-    },
-    async insertApply(userId, key, hash, now) {
+    async claimApply(userId, key, hash, now) {
+      const stamp = formatSqlDateTime(now);
       try {
         await db().execute(
-          "INSERT INTO auth_holding_applies (user_id, idempotency_key, payload_hash, created_at) VALUES (?, ?, ?, ?)",
-          [userId, key, hash, formatSqlDateTime(now)],
+          "INSERT INTO auth_holding_applies (user_id, idempotency_key, payload_hash, status, claimed_at, created_at) VALUES (?, ?, ?, 'pending', ?, ?)",
+          [userId, key, hash, stamp, stamp],
         );
-        return true;
-      } catch {
-        return false;
+        return "claimed";
+      } catch (error) {
+        const result = await db().execute(
+          "SELECT payload_hash, status, claimed_at FROM auth_holding_applies WHERE user_id = ? AND idempotency_key = ? LIMIT 1",
+          [userId, key],
+        );
+        const row = rowsOf(result)[0];
+        if (!row || row.payload_hash !== hash) {
+          void error;
+          return "conflict";
+        }
+        if (row.status === "applied") return "replay";
+        const claimedAt = parseSqlDateTime(row.claimed_at);
+        if (!claimedAt || now.getTime() - claimedAt.getTime() < APPLY_LEASE_MS)
+          return "in_progress";
+        const updated = await db().execute(
+          "UPDATE auth_holding_applies SET claimed_at = ? WHERE user_id = ? AND idempotency_key = ? AND payload_hash = ? AND status = 'pending' AND claimed_at = ?",
+          [stamp, userId, key, hash, formatSqlDateTime(claimedAt)],
+        );
+        return rowsAffectedOf(updated) === 1 ? "claimed" : "in_progress";
       }
     },
-    async countDraftsSince(userId, since) {
-      const result = await db().execute(
-        "SELECT COUNT(*) AS draft_count FROM auth_import_drafts WHERE user_id = ? AND created_at > ?",
+    async completeApply(userId, key, hash) {
+      const updated = await db().execute(
+        "UPDATE auth_holding_applies SET status = 'applied' WHERE user_id = ? AND idempotency_key = ? AND payload_hash = ? AND status = 'pending'",
+        [userId, key, hash],
+      );
+      return rowsAffectedOf(updated) === 1;
+    },
+    async reserveAttempt(userId, now, limit, windowMs) {
+      const id = crypto.randomUUID();
+      const since = new Date(now.getTime() - windowMs);
+      await db().execute(
+        "INSERT INTO auth_import_attempts (id, user_id, status, created_at) VALUES (?, ?, 'reserved', ?)",
+        [id, userId, formatSqlDateTime(now)],
+      );
+      const counted = await db().execute(
+        "SELECT COUNT(*) AS attempt_count FROM auth_import_attempts WHERE user_id = ? AND created_at > ? AND status <> 'released'",
         [userId, formatSqlDateTime(since)],
       );
-      const value = rowsOf(result)[0]?.draft_count;
+      const value = rowsOf(counted)[0]?.attempt_count;
       const parsed = typeof value === "number" ? value : Number(value);
-      return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+      if (!Number.isInteger(parsed) || parsed > limit) {
+        await db().execute(
+          "UPDATE auth_import_attempts SET status = 'released' WHERE id = ? AND user_id = ? AND status = 'reserved'",
+          [id, userId],
+        );
+        return "limited";
+      }
+      return { id };
+    },
+    async finishAttempt(userId, id, status) {
+      await db().execute(
+        "UPDATE auth_import_attempts SET status = ? WHERE id = ? AND user_id = ? AND status = 'reserved'",
+        [status, id, userId],
+      );
     },
     async insertDraft(input) {
       await db().execute(
@@ -128,10 +186,10 @@ export function createHoldingsStore(getConn: () => SqlConn): HoldingsStore {
       );
       const row = rowsOf(result)[0];
       if (!row || typeof row.payload_json !== "string") return "missing";
-      if (row.consumed_at != null) return "consumed";
       const expires = parseSqlDateTime(row.expires_at);
-      if (!expires || expires.getTime() <= now.getTime()) return "expired";
-      return { payloadJson: row.payload_json };
+      if (row.consumed_at == null && (!expires || expires.getTime() <= now.getTime()))
+        return "expired";
+      return { payloadJson: row.payload_json, consumed: row.consumed_at != null };
     },
     async consumeDraft(userId, id, now) {
       const updated = await db().execute(
@@ -140,10 +198,13 @@ export function createHoldingsStore(getConn: () => SqlConn): HoldingsStore {
       );
       if (rowsAffectedOf(updated) !== 1) {
         const existing = await db().execute(
-          "SELECT id FROM auth_import_drafts WHERE id = ? AND user_id = ? LIMIT 1",
+          "SELECT consumed_at, expires_at FROM auth_import_drafts WHERE id = ? AND user_id = ? LIMIT 1",
           [id, userId],
         );
-        return rowsOf(existing).length === 0 ? "missing" : "lost";
+        const row = rowsOf(existing)[0];
+        if (!row) return "missing";
+        if (row.consumed_at == null) return "expired";
+        return "lost";
       }
       const result = await db().execute(
         "SELECT payload_json FROM auth_import_drafts WHERE id = ? AND user_id = ? LIMIT 1",
