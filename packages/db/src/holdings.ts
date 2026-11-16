@@ -14,9 +14,12 @@ export type HoldingCashQuote = {
   yieldAsOf: string | null;
 };
 
-/** How long a server-issued operation token can be committed or replayed. */
+/** Original idempotency id stays acceptable while serverNow - timestamp is at most this long. */
 export const OPERATION_RETENTION_MS = 10 * 60 * 1000;
-/** Unexpired operation records kept in the document. Older ones are reclaimed, not replayed. */
+/**
+ * Implementation bounds, not an approved product quota.
+ * A confirmed clear counts as one of the four unexpired saves.
+ */
 export const MAX_LIVE_APPLIES = 4;
 export const MAX_LIVE_DRAFTS = 2;
 
@@ -107,10 +110,16 @@ function emptyDoc(): BookDocument {
 const OP_RE =
   /^op\.v1\.(\d{13})\.([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
+/**
+ * Formats `op.v1.{serverNowMs}.{uuid}` for the normal response body.
+ * The string is not stored here, not an authentication credential, and not a checked issuance.
+ * Any well-formed id inside the server-clock window is a new operation until that exact string is stored.
+ */
 export function issueOperationToken(now: Date): string {
   return `op.v1.${String(now.getTime()).padStart(13, "0")}.${crypto.randomUUID()}`;
 }
 
+/** Shape plus server clock. More than 60s ahead is malformed. Older than 10 minutes is expired. */
 export function classifyOperationToken(key: string, now: Date): "ok" | "malformed" | "expired" {
   const match = OP_RE.exec(key);
   if (!match?.[1]) return "malformed";

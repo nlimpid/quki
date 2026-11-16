@@ -161,7 +161,14 @@ export function mountHoldingsRoutes(app: Hono, auth: AuthRuntime, holdings: Hold
       if (code === "vision_timeout")
         return c.json({ error: "vision_timeout", message: "识图超时，图片未保存" }, 504);
       if (code === "window_full")
-        return c.json({ error: "window_full", message: "这次保存已过期或过密，账户股数未改" }, 409);
+        return c.json(
+          {
+            error: "window_full",
+            message:
+              "这 10 分钟内已有 2 份未过期的识图草稿。账户股数没有改，已有草稿还在。请等一份超过 10 分钟后再生成。清空账户不会腾出次数。",
+          },
+          409,
+        );
       return storageFailed(c, error);
     }
   });
@@ -256,12 +263,8 @@ function commitResponse(
     return c.json({ error: "draft_missing", message: "没有这份预览" }, 404);
   if (result.outcome === "draft_used" || result.outcome === "draft_expired")
     return c.json({ error: "draft_used", message: "这份预览已经用过" }, 409);
-  if (
-    result.outcome === "expired" ||
-    result.outcome === "malformed_key" ||
-    result.outcome === "window_full"
-  ) {
-    return c.json({ error: result.outcome, message: "这次保存已过期或过密，账户股数未改" }, 409);
+  if (result.outcome === "expired" || result.outcome === "malformed_key" || result.outcome === "window_full") {
+    return c.json(operationRefusal(result.outcome), 409);
   }
   if (result.outcome === "busy")
     return c.json({ error: "storage_error", message: "账户持仓暂不可用" }, 503);
@@ -276,6 +279,31 @@ function commitResponse(
       operationToken: issueOperationToken(holdings.now()),
     }),
   );
+}
+
+function operationRefusal(outcome: "expired" | "malformed_key" | "window_full"): {
+  error: string;
+  message: string;
+} {
+  if (outcome === "window_full") {
+    return {
+      error: outcome,
+      message:
+        "这 10 分钟内已有 4 次保存，清空也算一次。账户股数没有改。请等较早的一次超过 10 分钟后再保存。清空账户不会腾出次数。",
+    };
+  }
+  if (outcome === "expired") {
+    return {
+      error: outcome,
+      message:
+        "这个操作编号已超过服务器时钟上的 10 分钟。账户股数没有改。只有原来的整段编号可以重放；新的编号是另一次保存。",
+    };
+  }
+  return {
+    error: outcome,
+    message:
+      "操作编号不是 op.v1.时间戳.uuid，或时间比服务器时钟超前超过 60 秒。账户股数没有改。",
+  };
 }
 
 async function payloadHash(

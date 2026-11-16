@@ -17,10 +17,12 @@ export type AccountHoldingsResponse = {
 
 export class HoldingsRequestError extends Error {
   readonly status: number;
+  readonly code: string;
 
-  constructor(status: number) {
+  constructor(status: number, code = "") {
     super("holdings_request_failed");
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -63,6 +65,11 @@ export async function writeAccountHoldings(
       confirmEmpty: input.confirmEmpty === true,
     }),
   });
-  if (!response.ok) throw new HoldingsRequestError(response.status);
+  if (!response.ok) throw new HoldingsRequestError(response.status, await refusalCode(response));
   return (await response.json()) as AccountHoldingsResponse;
+}
+
+export async function refusalCode(response: Response): Promise<string> {
+  const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+  return typeof body?.error === "string" ? body.error : "";
 }

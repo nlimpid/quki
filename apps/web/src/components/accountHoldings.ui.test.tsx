@@ -592,6 +592,99 @@ describe("account holdings interface", () => {
     expect(host.textContent).not.toContain("甲的结果");
     expect(host.textContent).not.toContain("1200");
   });
+
+  it("keeps the form and says a full window is not cleared by emptying the account", async () => {
+    const fetchImpl = async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return json({ error: "window_full" }, 409);
+      return json({
+        items: [],
+        reference: {
+          ...reference,
+          heldCount: 0,
+          coveredCount: 0,
+          missingCount: 0,
+          partial: false,
+          totalCashCny: null,
+          asOf: null,
+        },
+        visionConfigured: false,
+        imageDisclosure: "披露",
+      });
+    };
+    render(createElement(AccountHoldings, { phase: signedIn("user-a"), userId: "user-a", fetchImpl }));
+    await settle();
+    await act(async () => {
+      setInput("[aria-label='股票代码']", "600519");
+      setInput("[aria-label='总股数']", "10");
+    });
+    await act(async () => {
+      host.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+    expect(host.textContent).toContain("4 次保存");
+    expect(host.textContent).toContain("清空账户不会腾出次数");
+    expect(host.textContent).not.toContain("请清空");
+    expect(host.querySelector<HTMLInputElement>("[aria-label='股票代码']")?.value).toBe("600519");
+    expect(host.querySelector<HTMLInputElement>("[aria-label='总股数']")?.value).toBe("10");
+  });
+
+  it("keeps the screenshot draft when another preview is over the draft cap", async () => {
+    let previews = 0;
+    const fetchImpl = async (input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/holdings/preview")) {
+        previews += 1;
+        if (previews > 1) return json({ error: "window_full" }, 409);
+        return json({
+          draftId: "88888888-8888-4888-8888-888888888888",
+          sourceRows: [{ code: "000001", name: "合成平安", totalShares: "1,200" }],
+          catalog: [{ code: "000001", name: "平安银行" }],
+        });
+      }
+      return json({
+        items: [],
+        reference: {
+          ...reference,
+          heldCount: 0,
+          coveredCount: 0,
+          missingCount: 0,
+          partial: false,
+          totalCashCny: null,
+          asOf: null,
+        },
+        visionConfigured: true,
+        imageDisclosure: "披露",
+      });
+    };
+    render(createElement(AccountHoldings, { phase: signedIn("user-a"), userId: "user-a", fetchImpl }));
+    await settle();
+    await act(async () => {
+      host.querySelector<HTMLInputElement>("[aria-label='同意把截图交给视觉服务']")?.click();
+    });
+    const file = host.querySelector<HTMLInputElement>("[aria-label='选择截图']");
+    await act(async () => {
+      Object.defineProperty(file, "files", {
+        configurable: true,
+        value: [new File([Uint8Array.from([1])], "shot.png", { type: "image/png" })],
+      });
+      file?.dispatchEvent(new Event("change", { bubbles: true }));
+      [...host.querySelectorAll("button")]
+        .find((button) => button.textContent === "生成待核对预览")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    expect(host.textContent).toContain("合成平安");
+    await act(async () => {
+      [...host.querySelectorAll("button")]
+        .find((button) => button.textContent === "生成待核对预览")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    expect(host.textContent).toContain("2 份未过期的识图草稿");
+    expect(host.textContent).toContain("清空账户不会腾出次数");
+    expect(host.textContent).toContain("合成平安");
+    expect(host.textContent).not.toContain("请清空");
+  });
 });
 
 function previewFetch(posts: string[], visionConfigured: boolean) {

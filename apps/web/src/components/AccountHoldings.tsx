@@ -22,6 +22,7 @@ import {
 import {
   fetchAccountHoldings,
   HoldingsRequestError,
+  refusalCode,
   writeAccountHoldings,
   type AccountHoldingsResponse,
 } from "../lib/holdingsAccount.js";
@@ -213,7 +214,7 @@ export function AccountHoldings({
         await refreshOperationToken(token);
       }
       if (!stillCurrent(token)) return;
-      setError("没有写入账户。本机持仓未改动。");
+      setError(refusalMessage(caught, "没有写入账户。本机持仓未改动。"));
     }
   }
 
@@ -407,7 +408,7 @@ export function AccountHoldings({
                     if (caught instanceof HoldingsRequestError && caught.status === 409) {
                       void refreshOperationToken(token);
                     }
-                    setError("没有导入。本机持仓未改动。");
+                    setError(refusalMessage(caught, "没有导入。本机持仓未改动。"));
                   });
               }}
             >
@@ -472,9 +473,13 @@ export function AccountHoldings({
                       explicit: false,
                     });
                   },
-                  () => {
+                  (caught: unknown) => {
                     if (!stillCurrent(token)) return;
-                    setError("没有生成预览。图片未保存，账户持仓未改动。");
+                    setError(
+                      caught instanceof HoldingsRequestError && caught.code === "window_full"
+                        ? DRAFT_WINDOW_FULL
+                        : "没有生成预览。图片未保存，账户持仓未改动。",
+                    );
                   },
                 );
               }}
@@ -640,8 +645,9 @@ export function AccountHoldings({
                       .then(async (response) => {
                         if (!stillCurrent(token)) return;
                         if (!response.ok) {
+                          const refusal = await refusalCode(response);
                           if (response.status === 409) await refreshOperationToken(token);
-                          throw new Error("apply_failed");
+                          throw new HoldingsRequestError(response.status, refusal);
                         }
                         setScreenshot(null);
                         setExplicit(false);
@@ -651,9 +657,9 @@ export function AccountHoldings({
                         if (fresh.operationToken) setOperationToken(fresh.operationToken);
                         setLoaded(fresh);
                       })
-                      .catch(() => {
+                      .catch((caught: unknown) => {
                         if (!stillCurrent(token)) return;
-                        setError("没有写入识别结果。本机持仓未改动。");
+                        setError(refusalMessage(caught, "没有写入识别结果。本机持仓未改动。"));
                       });
                   }}
                 >
@@ -693,6 +699,16 @@ async function previewImage(
       imageBase64: btoa(binary),
     }),
   });
-  if (!response.ok) throw new Error("preview_failed");
+  if (!response.ok) throw new HoldingsRequestError(response.status, await refusalCode(response));
   return (await response.json()) as PreviewResponse;
+}
+
+const SAVE_WINDOW_FULL =
+  "这 10 分钟内已有 4 次保存，清空也算一次。账户股数没有改，已填写的内容和识图草稿都还在。请等较早的一次超过 10 分钟后再保存。清空账户不会腾出次数。";
+const DRAFT_WINDOW_FULL =
+  "这 10 分钟内已有 2 份未过期的识图草稿。账户股数没有改，已有草稿还在。请等一份超过 10 分钟后再生成。清空账户不会腾出次数。";
+
+function refusalMessage(caught: unknown, fallback: string): string {
+  if (caught instanceof HoldingsRequestError && caught.code === "window_full") return SAVE_WINDOW_FULL;
+  return fallback;
 }

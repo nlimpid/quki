@@ -460,7 +460,9 @@ describe("account holdings", () => {
       items: [{ code: "000001", shares: 1 }],
     });
     expect(malformed.status).toBe(409);
-    expect(await malformed.json()).toMatchObject({ error: "malformed_key" });
+    const malformedBody = (await malformed.json()) as { error: string; message: string };
+    expect(malformedBody.error).toBe("malformed_key");
+    expect(malformedBody.message).toContain("60 秒");
     for (let index = 2; index <= 4; index += 1) {
       const next = await post(app, "/api/holdings", "token-a", "csrf-a", {
         idempotencyKey: opKey(`44444444-4444-4444-8444-44444444444${index}`),
@@ -474,7 +476,11 @@ describe("account holdings", () => {
       confirmEmpty: true,
     });
     expect(blocked.status).toBe(409);
-    expect(await blocked.json()).toMatchObject({ error: "window_full" });
+    const blockedBody = (await blocked.json()) as { error: string; message: string };
+    expect(blockedBody.error).toBe("window_full");
+    expect(blockedBody.message).toContain("4 次保存");
+    expect(blockedBody.message).toContain("清空账户不会腾出次数");
+    expect(blockedBody.message).not.toContain("请清空");
     expect(await holdingsStore.list("user-a")).toEqual([
       expect.objectContaining({ code: "000001", shares: 44 }),
     ]);
@@ -484,7 +490,9 @@ describe("account holdings", () => {
       items: [{ code: "000001", shares: 1 }],
     });
     expect(expired.status).toBe(409);
-    expect(await expired.json()).toMatchObject({ error: "expired" });
+    const expiredBody = (await expired.json()) as { error: string; message: string };
+    expect(expiredBody.error).toBe("expired");
+    expect(expiredBody.message).toContain("只有原来的整段编号可以重放");
     expect(await holdingsStore.list("user-a")).toEqual([
       expect.objectContaining({ code: "000001", shares: 44 }),
     ]);
