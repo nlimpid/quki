@@ -1,10 +1,12 @@
 import { portfolioDividendSummary, type HoldingsState } from "@quki/analytics";
 import type { StockListItem } from "@quki/types";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { useAuth } from "../lib/auth.js";
-import { portfolioSubtitle } from "../lib/authState.js";
+import { accountUserId, portfolioSubtitle, type AuthPhase } from "../lib/authState.js";
+import { readGuestDrawerDraft, writeGuestDrawerDraft } from "../lib/accountDraft.js";
+import { AccountHoldings } from "../components/AccountHoldings.js";
 import { deleteHolding, readHoldings, saveHolding } from "../lib/holdingsStore.js";
 import { fetchStockBatch, fetchStockList } from "../lib/stockApi.js";
 import { formatCny, formatShares, formatYield, weightLabel } from "../lib/stockFormat.js";
@@ -24,6 +26,28 @@ type Card = {
 };
 
 export function PortfolioPage() {
+  const { phase } = useAuth();
+  return (
+    <DividendShell activeNav="portfolio">
+      <PortfolioBody phase={phase} />
+    </DividendShell>
+  );
+}
+
+export function PortfolioBody({
+  phase,
+  fetchImpl,
+}: {
+  phase: AuthPhase;
+  fetchImpl?: typeof fetch;
+}) {
+  const userId = accountUserId(phase);
+  if (userId)
+    return <AccountHoldings key={userId} phase={phase} userId={userId} fetchImpl={fetchImpl} />;
+  return <LocalPortfolio phase={phase} />;
+}
+
+function LocalPortfolio({ phase }: { phase: AuthPhase }) {
   const [loaded] = useState(readHoldings);
   const [holdings, setHoldings] = useState<HoldingsState>(loaded.state);
   const storageError = loaded.error;
@@ -39,9 +63,19 @@ export function PortfolioPage() {
   }
   const loading = codeKey.length > 0 && loadedKey !== codeKey && quoteError === null;
   const shownQuotes = codeKey ? quotes : [];
-  const [drawer, setDrawer] = useState<{ code: string; shares: string } | null>(null);
+  const [drawer, setDrawer] = useState<{ code: string; shares: string } | null>(
+    readGuestDrawerDraft,
+  );
+  const drawerRef = useRef(drawer);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
-  const { phase } = useAuth();
+  useEffect(() => {
+    drawerRef.current = drawer;
+  });
+  useEffect(() => {
+    return () => {
+      writeGuestDrawerDraft(drawerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!codeKey) return;
@@ -92,7 +126,7 @@ export function PortfolioPage() {
   );
 
   return (
-    <DividendShell activeNav="portfolio">
+    <>
       <div className="page-head">
         <div>
           <h1 className="page-title">
@@ -222,13 +256,14 @@ export function PortfolioPage() {
           initialCode={drawer.code}
           initialShares={drawer.shares}
           onClose={() => setDrawer(null)}
+          onDraft={(next) => setDrawer(next)}
           onSave={(code, shares) => {
             setHoldings(saveHolding(code, shares));
             setDrawer(null);
           }}
         />
       ) : null}
-    </DividendShell>
+    </>
   );
 }
 
@@ -237,11 +272,13 @@ function HoldingDrawer({
   initialShares,
   onClose,
   onSave,
+  onDraft,
 }: {
   initialCode: string;
   initialShares: string;
   onClose: () => void;
   onSave: (code: string, shares: number) => void;
+  onDraft: (next: { code: string; shares: string }) => void;
 }) {
   const locked = /^\d{6}$/.test(initialCode);
   const [q, setQ] = useState(locked ? initialCode : "");
@@ -290,7 +327,10 @@ function HoldingDrawer({
               placeholder="搜索代码 / 名称"
               aria-label="搜索代码 / 名称"
               value={q}
-              onChange={(event) => setQ(event.target.value)}
+              onChange={(event) => {
+                setQ(event.target.value);
+                onDraft({ code, shares });
+              }}
             />
             {visibleHits.map((hit) => (
               <button
@@ -318,7 +358,11 @@ function HoldingDrawer({
           <input
             inputMode="numeric"
             value={shares}
-            onChange={(event) => setShares(event.target.value)}
+            onChange={(event) => {
+              const next = event.target.value;
+              setShares(next);
+              onDraft({ code: locked ? initialCode : code, shares: next });
+            }}
             aria-label="股数"
           />
         </label>
@@ -338,7 +382,7 @@ function HoldingDrawer({
           保存到本机
         </button>
         <p className="yield-note">
-          数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传或同步持仓。
+          数据仅保存在此浏览器，清除站点数据会丢失。登录不会自动上传或清除这些持仓。
         </p>
       </div>
     </div>

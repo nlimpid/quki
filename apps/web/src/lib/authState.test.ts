@@ -18,7 +18,9 @@ import {
   headerControl,
   loginView,
   panelTabLeaves,
+  accountUserId,
   portfolioSubtitle,
+  usesAccountHoldings,
   showExpiryBanner,
   showLoginCta,
   showRelogin,
@@ -113,9 +115,12 @@ describe("auth view state", () => {
     });
     expect(signedIn).toMatchObject({
       kind: "authenticated",
+      userId: "user-1",
       displayName: "林",
       login: { state: "unavailable", reason: "auth_not_configured" },
     });
+    expect(accountUserId(signedIn)).toBe("user-1");
+    expect(accountUserId(guest("auth_not_configured"))).toBeNull();
     expect(headerControl(signedIn)).toBe("account");
     expect(applyProbeFailure(signedIn)).toEqual(signedIn);
     const pending = beginLogout(signedIn);
@@ -129,8 +134,12 @@ describe("auth view state", () => {
       login: { state: "unavailable", reason: "auth_not_configured" },
     });
     expect(headerControl(finishLogout(pending))).toBe("none");
-    expect(portfolioSubtitle(failed)).toContain("不会因登录而同步到云端");
+    expect(portfolioSubtitle(failed)).toContain("不会自动上传");
+    expect(portfolioSubtitle(failed)).not.toContain("不会因登录而同步到云端");
     expect(portfolioSubtitle(guest("auth_not_configured"))).toContain("未登录");
+    expect(usesAccountHoldings(failed)).toBe(true);
+    expect(usesAccountHoldings(guest("auth_not_configured"))).toBe(false);
+    expect(usesAccountHoldings(initializing)).toBe(false);
   });
 
   it("accepts a late session after the probe timed out", () => {

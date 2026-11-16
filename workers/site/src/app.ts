@@ -30,6 +30,11 @@ import { Hono } from "hono";
 
 import { mountAuthRoutes } from "./auth/routes.js";
 import { unavailableAuth, type AuthRuntime } from "./auth/runtime.js";
+import {
+  mountHoldingsRoutes,
+  unconfiguredHoldings,
+  type HoldingsRuntime,
+} from "./holdings/routes.js";
 
 export type MarketSource = {
   mode: "fixture" | "tidb";
@@ -117,9 +122,14 @@ async function readOverviewTemperature(
   }
 }
 
-export function createApp(source: MarketSource, auth: AuthRuntime = unavailableAuth()) {
+export function createApp(
+  source: MarketSource,
+  auth: AuthRuntime = unavailableAuth(),
+  holdings: HoldingsRuntime = unconfiguredHoldings(),
+) {
   const app = new Hono();
   mountAuthRoutes(app, auth);
+  mountHoldingsRoutes(app, auth, holdings);
 
   app.get("/api/health", async (c) => {
     try {

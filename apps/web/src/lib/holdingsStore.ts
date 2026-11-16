@@ -7,6 +7,10 @@ import {
   type HoldingsState,
 } from "@quki/analytics";
 
+export function readLocalHoldingsForImport(): HoldingsState {
+  return readHoldings().state;
+}
+
 export function readHoldings(): { state: HoldingsState; error: string | null } {
   try {
     const raw = localStorage.getItem(HOLDINGS_STORAGE_KEY);

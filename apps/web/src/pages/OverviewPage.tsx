@@ -5,6 +5,7 @@ import { Navigate, useParams, useSearchParams } from "react-router";
 const KlineChart = lazy(() =>
   import("../components/KlineChart.js").then((mod) => ({ default: mod.KlineChart })),
 );
+import { HoldingsEstimateCard } from "../components/HoldingsEstimateCard.js";
 import { LowsTable } from "../components/LowsTable.js";
 import { PositionPanel } from "../components/PositionPanel.js";
 import { TierTable } from "../components/TierTable.js";
@@ -123,6 +124,7 @@ export function OverviewPage({
         <TierTable rows={overview.tiers} lastClose={overview.lastClose} />
       </div>
       <LowsTable rows={overview.lows} />
+      <HoldingsEstimateCard />
     </div>
   );
 }

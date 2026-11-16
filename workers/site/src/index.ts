@@ -7,7 +7,9 @@ import {
 import {
   DATABASE_URL_ENV,
   connectTiDb,
+  createHoldingsStore,
   getStockDetail,
+  lookupHoldingCash,
   instrumentId,
   listInstrumentIds,
   listStocks as queryStocks,
@@ -22,6 +24,7 @@ import { findInstrument, type InstrumentInfo } from "@quki/types";
 
 import { createApp, type MarketSource } from "./app.js";
 import { authRuntimeFromEnv } from "./auth/runtime.js";
+import { unconfiguredHoldings, type HoldingsRuntime } from "./holdings/routes.js";
 
 export interface Env {
   TIDB_QUKI_DATABASE_URL?: string;
@@ -81,6 +84,16 @@ function tidbSource(url: string): MarketSource {
   };
 }
 
+function holdingsRuntime(url: string | undefined): HoldingsRuntime {
+  if (!url) return unconfiguredHoldings();
+  return {
+    ...unconfiguredHoldings(),
+    store: createHoldingsStore(() => connectTiDb(url)),
+    quotes: (codes) => lookupHoldingCash(connectTiDb(url), codes),
+    vision: null,
+  };
+}
+
 function unconfiguredSource(): MarketSource {
   return {
     mode: "tidb",
@@ -112,7 +125,11 @@ export default {
       const source = env.TIDB_QUKI_DATABASE_URL
         ? tidbSource(env.TIDB_QUKI_DATABASE_URL)
         : unconfiguredSource();
-      return createApp(source, authRuntimeFromEnv(env, connectTiDb)).fetch(request);
+      return createApp(
+        source,
+        authRuntimeFromEnv(env, connectTiDb),
+        holdingsRuntime(env.TIDB_QUKI_DATABASE_URL),
+      ).fetch(request);
     }
     return env.ASSETS.fetch(request);
   },

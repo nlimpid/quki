@@ -27,18 +27,21 @@ export type AuthPhase =
   | { kind: "guest"; expired: boolean; login: LoginCapability }
   | {
       kind: "authenticated";
+      userId: string;
       displayName: string | null;
       csrfToken: string;
       login: LoginCapability;
     }
   | {
       kind: "logoutPending";
+      userId: string;
       displayName: string | null;
       csrfToken: string;
       login: LoginCapability;
     }
   | {
       kind: "logoutFailed";
+      userId: string;
       displayName: string | null;
       csrfToken: string;
       login: LoginCapability;
@@ -56,6 +59,7 @@ export function sessionToPhase(session: AuthSessionResponse): AuthPhase {
   if (session.status === "authenticated" && session.user && session.csrfToken) {
     return {
       kind: "authenticated",
+      userId: session.user.id,
       displayName: session.user.displayName,
       csrfToken: session.csrfToken,
       login,
@@ -90,6 +94,7 @@ export function beginLogout(phase: AuthPhase): AuthPhase {
   if (phase.kind !== "authenticated" && phase.kind !== "logoutFailed") return phase;
   return {
     kind: "logoutPending",
+    userId: phase.userId,
     displayName: phase.displayName,
     csrfToken: phase.csrfToken,
     login: phase.login,
@@ -104,6 +109,7 @@ export function failLogout(phase: AuthPhase): AuthPhase {
   if (phase.kind !== "logoutPending") return phase;
   return {
     kind: "logoutFailed",
+    userId: phase.userId,
     displayName: phase.displayName,
     csrfToken: phase.csrfToken,
     login: phase.login,
@@ -150,12 +156,27 @@ export function portfolioSubtitle(phase: AuthPhase): string {
     phase.kind === "logoutPending" ||
     phase.kind === "logoutFailed"
   ) {
-    return "本地保存。持仓仍仅保存在此浏览器，不会因登录而同步到云端。";
+    return "账户股数单独保存。本机持仓不会自动上传、覆盖、合并或清除；只有你确认导入后才会写入账户。";
   }
   if (phase.kind === "guest") {
     return "本地保存 · 未登录。数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传本地持仓。";
   }
-  return "本地保存。数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传本地持仓。";
+  return "本地保存。数据仅保存在此浏览器，清除站点数据会丢失。登录不会自动上传本地持仓。";
+}
+
+export function usesAccountHoldings(phase: AuthPhase): boolean {
+  return accountUserId(phase) != null;
+}
+
+export function accountUserId(phase: AuthPhase): string | null {
+  if (
+    phase.kind === "authenticated" ||
+    phase.kind === "logoutPending" ||
+    phase.kind === "logoutFailed"
+  ) {
+    return phase.userId;
+  }
+  return null;
 }
 
 export type LoginView = {

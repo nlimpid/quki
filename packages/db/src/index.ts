@@ -8,6 +8,15 @@ export {
 } from "./auth.js";
 export type { AuthStore, AuthUserRecord, SessionLookup, TransactionRecord } from "./auth.js";
 export {
+  createHoldingsStore,
+  issueOperationToken,
+  lookupHoldingCash,
+  OPERATION_RETENTION_MS,
+  parseBookDocument,
+  planBookChange,
+} from "./holdings.js";
+export type { BookCommit, HoldingCashQuote, HoldingLine, HoldingsStore } from "./holdings.js";
+export {
   assertDividendAuditDatabase,
   dividendAuditUpdateSql,
   writeDividendSourceAudit,

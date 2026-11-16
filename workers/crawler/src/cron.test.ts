@@ -30,6 +30,8 @@ describe("crawler cron", () => {
     expect(worker).toContain("ingestDividends");
     expect(worker).toContain("0004_dividends.sql");
     expect(worker).toContain("0005_dividend_audit.sql");
+    expect(worker).not.toContain("0006_auth.sql");
+    expect(worker).not.toContain("0007_holdings.sql");
     expect(worker).toContain('ingestDividends(connectTiDb(databaseUrl), "incremental")');
     const run = worker.slice(worker.indexOf("async function runIncremental"));
     const dividends = run.indexOf("await ingestDividends");

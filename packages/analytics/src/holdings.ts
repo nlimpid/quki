@@ -22,9 +22,16 @@ export function emptyHoldings(): HoldingsState {
   return { version: 1, items: [] };
 }
 
+/** Decimal integer only. Hex, exponents, signs, fractions, blanks, and leading zeros are rejected. */
 export function validShareCount(value: unknown): number | null {
-  const parsed = typeof value === "number" ? value : Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > HOLDINGS_MAX_SHARES) return null;
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value < 1 || value > HOLDINGS_MAX_SHARES) return null;
+    return value;
+  }
+  if (typeof value !== "string" || !/^[1-9]\d*$/.test(value)) return null;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > HOLDINGS_MAX_SHARES) return null;
+  if (String(parsed) !== value) return null;
   return parsed;
 }
 

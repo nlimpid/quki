@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { sanitizeHoldings, upsertHolding, removeHolding } from "./holdings.js";
+import { sanitizeHoldings, upsertHolding, removeHolding, validShareCount } from "./holdings.js";
 import {
   addCalendarDays,
   addCalendarMonths,
@@ -148,5 +148,24 @@ describe("holdings state", () => {
     expect(replaced.items.find((item) => item.code === "600519")?.shares).toBe(5);
     expect(removeHolding(replaced, "000725").items).toHaveLength(2);
     expect(sanitizeHoldings(null).items).toEqual([]);
+    expect(validShareCount("0x10")).toBeNull();
+    expect(validShareCount("1e2")).toBeNull();
+    expect(validShareCount(" 10")).toBeNull();
+    expect(validShareCount("10 ")).toBeNull();
+    expect(validShareCount("+10")).toBeNull();
+    expect(validShareCount("-1")).toBeNull();
+    expect(validShareCount("10.0")).toBeNull();
+    expect(validShareCount("01")).toBeNull();
+    expect(validShareCount(true)).toBeNull();
+    expect(validShareCount("10")).toBe(10);
+    expect(validShareCount(10)).toBe(10);
+    const hex = sanitizeHoldings({
+      items: [{ code: "000001", shares: "0x10", updatedAt: "x" }],
+    });
+    expect(hex.items).toEqual([]);
+    const code = sanitizeHoldings({
+      items: [{ code: "000001", shares: 10, updatedAt: "x" }],
+    });
+    expect(code.items[0]).toMatchObject({ code: "000001", shares: 10 });
   });
 });
