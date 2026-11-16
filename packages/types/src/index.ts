@@ -290,6 +290,21 @@ export type OverviewTemperature = {
   band: TemperatureBand;
 };
 
+export {
+  AUTH_OAUTH_MAX_AGE_SECONDS,
+  AUTH_PROBE_TIMEOUT_MS,
+  AUTH_SESSION_MAX_AGE_SECONDS,
+  accountLabel,
+  parseAuthSessionResponse,
+  publicDisplayName,
+  safeReturnTo,
+} from "./auth.js";
+export type {
+  AuthLoginMethod,
+  AuthSessionResponse,
+  AuthSessionUser,
+  AuthUnavailableReason,
+} from "./auth.js";
 export { DIVIDEND_DISCLAIMER, YIELD_NOTE } from "./dividends.js";
 export type {
   AshareBoard,

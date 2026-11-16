@@ -1,4 +1,12 @@
 export { DATABASE_URL_ENV, connectTiDb, dateText, numOrNull, rowsOf } from "./client.js";
+export type { SqlConn } from "./client.js";
+export {
+  createAuthStore,
+  formatSqlDateTime,
+  parseSqlDateTime,
+  sessionRecordState,
+} from "./auth.js";
+export type { AuthStore, AuthUserRecord, SessionLookup, TransactionRecord } from "./auth.js";
 export {
   assertDividendAuditDatabase,
   dividendAuditUpdateSql,
@@ -33,7 +41,6 @@ export {
   watermarkUpsertSql,
 } from "./dividendStore.js";
 export type { DividendQualitySummary } from "./dividendStore.js";
-export type { SqlConn } from "./client.js";
 export { readMarketFreshness, recordCronRun } from "./freshness.js";
 export type { MarketFreshness } from "./freshness.js";
 export { ingestAll, ingestSymbol, recordCrawl, recomputeTemperature } from "./jobs.js";

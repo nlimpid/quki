@@ -3,6 +3,8 @@ import type { StockListItem } from "@quki/types";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
+import { useAuth } from "../lib/auth.js";
+import { portfolioSubtitle } from "../lib/authState.js";
 import { deleteHolding, readHoldings, saveHolding } from "../lib/holdingsStore.js";
 import { fetchStockBatch, fetchStockList } from "../lib/stockApi.js";
 import { formatCny, formatShares, formatYield, weightLabel } from "../lib/stockFormat.js";
@@ -39,6 +41,7 @@ export function PortfolioPage() {
   const shownQuotes = codeKey ? quotes : [];
   const [drawer, setDrawer] = useState<{ code: string; shares: string } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const { phase } = useAuth();
 
   useEffect(() => {
     if (!codeKey) return;
@@ -96,7 +99,7 @@ export function PortfolioPage() {
             我的持仓
             {sample ? <span className="sample-pill">示例数据</span> : null}
           </h1>
-          <p className="page-sub">本地保存 · 未登录 · 清除站点数据会丢失 · 登录同步即将推出</p>
+          <p className="page-sub">{portfolioSubtitle(phase)}</p>
         </div>
         <button
           type="button"
@@ -334,7 +337,9 @@ function HoldingDrawer({
         >
           保存到本机
         </button>
-        <p className="yield-note">数据仅保存在此浏览器，清除站点数据会丢失。登录同步即将推出。</p>
+        <p className="yield-note">
+          数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传或同步持仓。
+        </p>
       </div>
     </div>
   );

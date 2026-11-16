@@ -8,3 +8,10 @@ TIDB_QUKI_DATABASE_URL=
 
 # Shared secret for POST /admin/ingest and POST /admin/backfill on the crawler worker.
 INGEST_TOKEN=replace-with-a-long-random-string
+
+# Login stays unavailable until all three OIDC values are set on the site Worker.
+# Names only. Do not put real values in git.
+# AUTH_OIDC_ISSUER=
+# AUTH_OIDC_CLIENT_ID=
+# AUTH_OIDC_CLIENT_SECRET=
+# AUTH_OIDC_SCOPES=openid

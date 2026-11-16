@@ -103,14 +103,6 @@ a {
   gap: 8px;
   flex: none;
 }
-.stub-login {
-  font-size: 12px;
-  color: var(--qk-text-tertiary);
-  border: 1px dashed var(--qk-border-default);
-  border-radius: 8px;
-  padding: 6px 10px;
-  white-space: nowrap;
-}
 .nav-split {
   width: 1px;
   height: 16px;
@@ -729,9 +721,6 @@ table.qk tr.unconfirmed td:first-child {
   .icon-btn {
     width: 32px;
     height: 32px;
-  }
-  .stub-login {
-    display: none;
   }
   .toolbar {
     position: sticky;

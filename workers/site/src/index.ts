@@ -21,9 +21,15 @@ import {
 import { findInstrument, type InstrumentInfo } from "@quki/types";
 
 import { createApp, type MarketSource } from "./app.js";
+import { authRuntimeFromEnv } from "./auth/runtime.js";
 
 export interface Env {
   TIDB_QUKI_DATABASE_URL?: string;
+  AUTH_OIDC_ISSUER?: string;
+  AUTH_OIDC_CLIENT_ID?: string;
+  AUTH_OIDC_CLIENT_SECRET?: string;
+  /** Must stay `openid` until the consent copy is replaced. Other scopes fail closed. */
+  AUTH_OIDC_SCOPES?: string;
   ASSETS: { fetch: (request: Request) => Promise<Response> };
 }
 
@@ -106,7 +112,7 @@ export default {
       const source = env.TIDB_QUKI_DATABASE_URL
         ? tidbSource(env.TIDB_QUKI_DATABASE_URL)
         : unconfiguredSource();
-      return createApp(source).fetch(request);
+      return createApp(source, authRuntimeFromEnv(env, connectTiDb)).fetch(request);
     }
     return env.ASSETS.fetch(request);
   },

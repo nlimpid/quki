@@ -1,1 +1,7 @@
 TIDB_QUKI_DATABASE_URL=mysql://user:password@gateway01.region.prod.aws.tidbcloud.com:4000/quki
+
+# Optional login secrets. Leave unset to keep /api/auth unavailable.
+# AUTH_OIDC_ISSUER=
+# AUTH_OIDC_CLIENT_ID=
+# AUTH_OIDC_CLIENT_SECRET=
+# AUTH_OIDC_SCOPES=openid

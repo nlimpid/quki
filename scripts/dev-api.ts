@@ -81,6 +81,7 @@ const source: MarketSource = {
   },
 };
 
+// Fixture mode stays logged out. Do not attach TiDB or an IdP here.
 const app = createApp(source);
 const port = Number(process.env.PORT ?? 8787);
 serve({ fetch: app.fetch, port }, () => {

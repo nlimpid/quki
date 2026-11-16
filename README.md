@@ -117,6 +117,10 @@ Never commit values. Names:
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TIDB_QUKI_DATABASE_URL` | Worker secret and local env. TiDB Serverless MySQL URL, for example `mysql://USER:PASSWORD@gateway01.<region>.prod.aws.tidbcloud.com:4000/quki` |
 | `INGEST_TOKEN`           | Crawler Worker secret. `Authorization: Bearer …` or `x-ingest-token` on `POST /admin/migrate` and `POST /admin/ingest`                          |
+| `AUTH_OIDC_ISSUER`       | Site Worker secret. HTTPS issuer URL of the OIDC provider the owner selects. No default provider.                                              |
+| `AUTH_OIDC_CLIENT_ID`    | Site Worker secret. OAuth client id for that issuer.                                                                                            |
+| `AUTH_OIDC_CLIENT_SECRET`| Site Worker secret. Confidential client secret. Not a session cookie.                                                                          |
+| `AUTH_OIDC_SCOPES`       | Optional site Worker secret. Must be exactly `openid` until the consent copy is replaced. Any other value keeps login unavailable.             |
 
 ```bash
 # from workers/site and workers/crawler respectively
@@ -151,7 +155,7 @@ The CSV backfill stays a Node script: the seed files are not on the edge.
 
 ## A-share dividends
 
-`/stocks`, `/stock/:code`, and `/portfolio` are Shanghai and Shenzhen A-shares (main board, ChiNext, STAR). Beijing and delisted names are excluded. The stock page has no K-line. Holdings stay in this browser under `qk.holdings.v1`. `/me` redirects to `/portfolio`. Login is not implemented.
+`/stocks`, `/stock/:code`, and `/portfolio` are Shanghai and Shenzhen A-shares (main board, ChiNext, STAR). Beijing and delisted names are excluded. The stock page has no K-line. Holdings stay in this browser under `qk.holdings.v1`. `/me` redirects to `/portfolio`. Login is a provider-neutral shell: the header links to `/login`, but the sign-in control stays inert until an OIDC issuer is chosen. See `docs/auth.md`.
 
 近12月股息率 and a holding's 平均股息率 use the same formula: trailing 12 calendar months of pretax cash per share, divided by the latest close. Cash paid before a later bonus or transfer is divided by that split so it lines up with today's share count. Bonus and transfer shares are not cash. 「最近分红」is the ex-dividend date. A close the latest crawl did not refresh stays on the card in gray.
 
