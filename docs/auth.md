@@ -41,11 +41,11 @@ Names only. Do not create the provider account in this change.
    - `AUTH_OIDC_SCOPES` — omit it, or set `openid profile` in either order. `openid` alone, `email`, and any other scope return `scopes_not_confirmed`.
 4. Apply `db/migrations/0006_auth.sql` with `pnpm migrate` after review. It creates only `auth_users`, `auth_sessions`, and `auth_oauth_transactions`. It does not modify dividend tables and does not depend on `0005_dividend_audit.sql` or `0007_holdings.sql`. It is not applied here.
 5. The button text is `使用 Google 登录`. The consent sentence is `GOOGLE_CONSENT_COPY` in `apps/web/src/lib/authState.ts`.
-6. Cookies are always `Secure`. `http://localhost` and `http://127.0.0.1` are not callback origins. A real Google test that is not production uses a separate OAuth client and a separate HTTPS hostname. On that Worker only, set `AUTH_ALLOW_NONPRODUCTION_ORIGINS=true` and `AUTH_NONPRODUCTION_HTTPS_ORIGINS` to that exact `https` origin. Do not set the flag on the production Worker. Do not add the hostname to `PRODUCTION_AUTH_ORIGINS`. The production callback list stays the two URLs above.
+6. Cookies are always `Secure`. `http://localhost` and `http://127.0.0.1` are not callback origins. A real Google test that is not production uses a separate OAuth client and a separate HTTPS hostname. On that other Worker, set `AUTH_ALLOW_NONPRODUCTION_ORIGINS=true` and `AUTH_NONPRODUCTION_HTTPS_ORIGINS` to that exact `https` origin. Do not add the hostname to `PRODUCTION_AUTH_ORIGINS`. The production callback list stays the two URLs above. The flag is not tied to the Worker name or to a production environment check. Setting it on Worker `quki` would trust those extra origins. Do not set it there. That is an operations constraint. The code does not make a misconfiguration impossible.
 
 `oauth4webapi` 3.8.8 checks discovery `issuer` with `new URL(issuer).href` against the configured issuer URL. It then requires the callback `iss` parameter and the ID token `iss` to equal the discovery document's `issuer` string. The document fetched on 2026-11-16 says `https://accounts.google.com`. A token whose `iss` is `accounts.google.com` fails that comparison and is not rewritten into the https value. `authorization_response_iss_parameter_supported` is true, so a callback without `iss` also fails closed. Audience must equal `AUTH_OIDC_CLIENT_ID`. Discovery lists `client_secret_post` and `S256`. The authorization redirect does not include the client secret.
 
-`TIDB_QUKI_DATABASE_URL` is still required for any real session read. Missing issuer, client, secret, or database leaves `login.ready: false`. A storage error during a configured request is HTTP 503 and does not describe the user as logged out.
+`login.ready` is configuration readiness only. It is true when the issuer, client id, client secret, confirmed scopes, and database URL are present. An anonymous `GET /api/auth/session` does not query the database, so `login.ready` can be true while the auth tables are missing or the database is broken. `POST /api/auth/login` then calls `insertTransaction`. If that write throws, the response is HTTP 503 and has no `Location`. A session cookie whose lookup throws is also HTTP 503. The page treats that failed probe as unknown, not as a guest. Missing issuer, client, secret, or database URL leaves `login.ready: false`.
 
 ## Cookies
 
@@ -159,7 +159,7 @@ Copy:
 
 The account panel is not a focus trap. Opening it moves focus to 退出. Escape closes it and returns focus to 账户. Tab and Shift+Tab leave the panel and close it.
 
-Google is the only configured issuer. The consent sentence is fixed in the page. `login.ready: true` means the server config and store are present, not that a person has completed a live Google callback.
+Google is the only configured issuer. The consent sentence is fixed in the page. `login.ready: true` is configuration readiness only. It is not proof that the database accepted a write, and it is not a completed Google callback.
 
 ## Tests
 
@@ -173,7 +173,7 @@ pnpm lint
 Covered in process, with no network and no database:
 
 - Anonymous `/api/health` and `/api/instruments` with and without a session cookie.
-- With no database URL and no OIDC settings, `GET /api/auth/session` is `200`, `Cache-Control: no-store`, `status: unavailable`, `login.ready: false`, and no `Set-Cookie`. `POST /api/auth/login` is `503` with no `Location`. A store error on a later request is a separate `503`.
+- With no database URL and no OIDC settings, `GET /api/auth/session` is `200`, `Cache-Control: no-store`, `status: unavailable`, `login.ready: false`, and no `Set-Cookie`. `POST /api/auth/login` is `503` with no `Location`. An anonymous `GET` with config present does not query the database, so `login.ready` can be true when the tables are missing. The following `POST` is `503` with no `Location` if `insertTransaction` throws. A session-cookie lookup that throws is `503`, and the page treats that probe as unknown rather than guest.
 - Cookie flags, CSRF on login and logout, revoked logout, 14-day expiry.
 - `401` versus `403`, ignored caller `userId`, two subjects isolated.
 - Open redirects, callback `state` mismatch, one-time OAuth transaction, PKCE challenge from `oauth4webapi`.
