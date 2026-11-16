@@ -13,6 +13,7 @@ export type ScreenshotUiDraft = {
   sourceRows: VisionRow[];
   catalog: { code: string; name: string }[];
   edits: ScreenshotEdit[];
+  /** Not restored. A previous confirmation is not permission to write again. */
   explicit: boolean;
 };
 
@@ -29,27 +30,43 @@ export type AccountUiDraft = {
 const drafts = new Map<string, AccountUiDraft>();
 let guestDrawer: { code: string; shares: string } | null = null;
 
+function withoutAuthorization(screenshot: ScreenshotUiDraft): ScreenshotUiDraft {
+  return {
+    draftId: screenshot.draftId,
+    sourceRows: screenshot.sourceRows.map((row) => ({ ...row })),
+    catalog: screenshot.catalog.map((row) => ({ ...row })),
+    explicit: false,
+    edits: screenshot.edits.map((edit) => ({
+      include: edit.include,
+      shares: edit.shares,
+      nameConfirmed: false,
+      unknownConfirmed: false,
+      sharesConfirmed: false,
+    })),
+  };
+}
+
 export function saveAccountUiDraft(draft: AccountUiDraft): void {
   if (draft.userId.length === 0) return;
   drafts.set(draft.userId, {
-    ...draft,
+    userId: draft.userId,
+    code: draft.code,
+    shares: draft.shares,
+    replacePrompt: null,
     localChanges: draft.localChanges?.map((row) => ({ ...row })) ?? null,
     preserved: draft.preserved.map((row) => ({ ...row })),
-    screenshot: draft.screenshot
-      ? {
-          ...draft.screenshot,
-          sourceRows: draft.screenshot.sourceRows.map((row) => ({ ...row })),
-          catalog: draft.screenshot.catalog.map((row) => ({ ...row })),
-          edits: draft.screenshot.edits.map((row) => ({ ...row })),
-        }
-      : null,
+    screenshot: draft.screenshot ? withoutAuthorization(draft.screenshot) : null,
   });
 }
 
 export function readAccountUiDraft(userId: string): AccountUiDraft | null {
   const found = drafts.get(userId);
   if (!found || found.userId !== userId) return null;
-  return found;
+  return {
+    ...found,
+    replacePrompt: null,
+    screenshot: found.screenshot ? withoutAuthorization(found.screenshot) : null,
+  };
 }
 
 export function accountDraftOwnedBy(draft: AccountUiDraft | null, userId: string): boolean {

@@ -137,7 +137,7 @@ describe("account holdings", () => {
     });
     expect(again.status).toBe(200);
     expect(await again.json()).toMatchObject({ replayed: true });
-    expect(holdingsStore.writes.filter((write) => write.userId === "user-a")).toHaveLength(1);
+    expect(holdingsStore.commits).toBe(1);
     const conflict = await post(app, "/api/holdings", "token-a", "csrf-a", {
       idempotencyKey: "11111111-1111-4111-8111-111111111111",
       items: [{ code: "000001", shares: 101 }],
@@ -244,9 +244,26 @@ describe("account holdings", () => {
     });
     expect(replay.status).toBe(200);
     expect(await replay.json()).toMatchObject({ replayed: true });
-    expect(holdingsStore.writes.filter((write) => write.mode === "set")).toHaveLength(1);
+    expect(holdingsStore.commits).toBe(1);
     expect(await holdingsStore.list("user-a")).toEqual([
       expect.objectContaining({ code: "000001", shares: 1200 }),
+    ]);
+    expect(
+      (
+        await post(app, "/api/holdings/import", "token-a", "csrf-a", {
+          idempotencyKey: "33333333-3333-4333-8333-333333333334",
+          items: [{ code: "000001", shares: 50 }],
+        })
+      ).status,
+    ).toBe(200);
+    const reused = await post(app, "/api/holdings/apply", "token-a", "csrf-a", {
+      draftId: previewBody.draftId,
+      idempotencyKey: "33333333-3333-4333-8333-333333333335",
+      rows: [{ code: "000001", shares: 1200, nameConfirmed: true }],
+    });
+    expect(reused.status).toBe(409);
+    expect(await holdingsStore.list("user-a")).toEqual([
+      expect.objectContaining({ code: "000001", shares: 50 }),
     ]);
     const stolen = await post(app, "/api/holdings/apply", "token-b", "csrf-b", {
       draftId: previewBody.draftId,
@@ -296,57 +313,109 @@ describe("account holdings", () => {
     });
   });
 
-  it("lets only one of two different payloads write for the same idempotency key", async () => {
+  it("does not let a paused older write overwrite a newer book", async () => {
     const { app, holdingsStore, signIn } = await harness(null);
     await signIn("user-a", "token-a", "csrf-a");
     let release: () => void = () => undefined;
-    holdingsStore.blockWrite = new Promise((resolve) => {
+    holdingsStore.gate = new Promise((resolve) => {
       release = resolve;
     });
-    const key = "66666666-6666-4666-8666-666666666666";
-    const first = post(app, "/api/holdings/import", "token-a", "csrf-a", {
-      idempotencyKey: key,
-      items: [{ code: "000001", shares: 40 }],
+    holdingsStore.pauseNext = true;
+    const oldKey = "66666666-6666-4666-8666-666666666666";
+    const paused = post(app, "/api/holdings", "token-a", "csrf-a", {
+      idempotencyKey: oldKey,
+      items: [{ code: "000001", shares: 100 }],
     });
-    await vi.waitFor(() => expect(holdingsStore.entered).toBe(1));
-    const second = await post(app, "/api/holdings/import", "token-a", "csrf-a", {
-      idempotencyKey: key,
-      items: [{ code: "000001", shares: 41 }],
-    });
-    expect(second.status).toBe(409);
-    release();
-    expect((await first).status).toBe(200);
-    expect(holdingsStore.writes).toHaveLength(1);
+    await vi.waitFor(() => expect(holdingsStore.entered).toBeGreaterThan(0));
+    expect(
+      (
+        await post(app, "/api/holdings", "token-a", "csrf-a", {
+          idempotencyKey: oldKey,
+          items: [{ code: "000001", shares: 100 }],
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await post(app, "/api/holdings", "token-a", "csrf-a", {
+          idempotencyKey: "77777777-7777-4777-8777-777777777777",
+          items: [{ code: "000001", shares: 200 }],
+        })
+      ).status,
+    ).toBe(200);
     expect(await holdingsStore.list("user-a")).toEqual([
-      expect.objectContaining({ code: "000001", shares: 40 }),
+      expect.objectContaining({ code: "000001", shares: 200 }),
+    ]);
+    release();
+    const finished = await paused;
+    expect(finished.status).toBe(200);
+    expect(await finished.json()).toMatchObject({
+      replayed: true,
+      items: [expect.objectContaining({ code: "000001", shares: 100 })],
+    });
+    expect(await holdingsStore.list("user-a")).toEqual([
+      expect.objectContaining({ code: "000001", shares: 200 }),
     ]);
   });
 
-  it("does not report success when the holdings write fails, and retries the same payload after the lease", async () => {
-    const { app, holdingsStore, signIn, setNow } = await harness(null);
+  it("returns the original idempotent result without rewriting a newer book", async () => {
+    const { app, holdingsStore, signIn } = await harness(null);
     await signIn("user-a", "token-a", "csrf-a");
+    const firstKey = "88888888-8888-4888-8888-888888888881";
+    const secondKey = "88888888-8888-4888-8888-888888888882";
+    expect(
+      (
+        await post(app, "/api/holdings", "token-a", "csrf-a", {
+          idempotencyKey: firstKey,
+          items: [{ code: "000001", shares: 100 }],
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await post(app, "/api/holdings", "token-a", "csrf-a", {
+          idempotencyKey: secondKey,
+          items: [{ code: "000001", shares: 200 }],
+        })
+      ).status,
+    ).toBe(200);
+    const replay = await post(app, "/api/holdings", "token-a", "csrf-a", {
+      idempotencyKey: firstKey,
+      items: [{ code: "000001", shares: 100 }],
+    });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({
+      replayed: true,
+      items: [expect.objectContaining({ shares: 100 })],
+    });
+    expect(await holdingsStore.list("user-a")).toEqual([
+      expect.objectContaining({ shares: 200 }),
+    ]);
+    expect(holdingsStore.commits).toBe(2);
+  });
+
+  it("does not change the book when the single document write fails", async () => {
+    const { app, holdingsStore, signIn } = await harness(null);
+    await signIn("user-a", "token-a", "csrf-a");
+    expect(
+      (
+        await post(app, "/api/holdings", "token-a", "csrf-a", {
+          idempotencyKey: "99999999-9999-4999-8999-999999999991",
+          items: [{ code: "000001", shares: 40 }],
+        })
+      ).status,
+    ).toBe(200);
     holdingsStore.failWrites = 1;
-    const key = "77777777-7777-4777-8777-777777777777";
-    const failed = await post(app, "/api/holdings/import", "token-a", "csrf-a", {
-      idempotencyKey: key,
-      items: [{ code: "600519", shares: 10 }],
+    const failed = await post(app, "/api/holdings", "token-a", "csrf-a", {
+      idempotencyKey: "99999999-9999-4999-8999-999999999992",
+      items: [
+        { code: "000001", shares: 1 },
+        { code: "600519", shares: 2 },
+      ],
     });
     expect(failed.status).toBe(503);
-    expect(await holdingsStore.list("user-a")).toEqual([]);
-    const busy = await post(app, "/api/holdings/import", "token-a", "csrf-a", {
-      idempotencyKey: key,
-      items: [{ code: "600519", shares: 10 }],
-    });
-    expect(busy.status).toBe(409);
-    expect(holdingsStore.writes).toHaveLength(0);
-    setNow(new Date("2026-11-16T00:01:01.000Z"));
-    const retried = await post(app, "/api/holdings/import", "token-a", "csrf-a", {
-      idempotencyKey: key,
-      items: [{ code: "600519", shares: 10 }],
-    });
-    expect(retried.status).toBe(200);
     expect(await holdingsStore.list("user-a")).toEqual([
-      expect.objectContaining({ code: "600519", shares: 10 }),
+      expect.objectContaining({ code: "000001", shares: 40 }),
     ]);
   });
 

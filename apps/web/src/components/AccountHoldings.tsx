@@ -41,7 +41,10 @@ function editsFor(rows: readonly ReviewedVisionRow[]): ScreenshotEdit[] {
       row.code != null &&
       row.totalShares != null &&
       !row.flags.includes("duplicate_code") &&
-      !row.flags.includes("ambiguous_shares"),
+      !row.flags.includes("ambiguous_shares") &&
+      !row.flags.includes("name_mismatch") &&
+      !row.flags.includes("unknown_code") &&
+      !row.flags.includes("bad_code"),
     shares: row.totalShares == null ? "" : String(row.totalShares),
     nameConfirmed: false,
     unknownConfirmed: false,
@@ -71,23 +74,55 @@ export function AccountHoldings({
   const [consent, setConsent] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [screenshot, setScreenshot] = useState(restored?.screenshot ?? null);
-  const [explicit, setExplicit] = useState(restored?.screenshot?.explicit ?? false);
+  const [previewRestored, setPreviewRestored] = useState(restored?.screenshot != null);
+  const [explicit, setExplicit] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [boundUser, setBoundUser] = useState(userId);
+  if (boundUser !== userId) {
+    const next = readAccountUiDraft(userId);
+    setBoundUser(userId);
+    setConsent(false);
+    setExplicit(false);
+    setFile(null);
+    setLoaded(null);
+    setError(null);
+    setPendingDelete(null);
+    setReplacePrompt(null);
+    setCode(next?.code ?? "");
+    setShares(next?.shares ?? "");
+    setLocalChanges(next?.localChanges ?? null);
+    setPreserved(next?.preserved ?? []);
+    setScreenshot(next?.screenshot ?? null);
+    setPreviewRestored(next?.screenshot != null);
+  }
   const snapshot = useRef<AccountUiDraft | null>(null);
+  const epoch = useRef(0);
+  const ownerRef = useRef(userId);
+  useEffect(() => {
+    ownerRef.current = userId;
+  });
+
+  function stillCurrent(token: { epoch: number; userId: string }): boolean {
+    return token.epoch === epoch.current && token.userId === ownerRef.current;
+  }
 
   useEffect(() => {
-    const cancelled = { current: false };
+    const owner = userId;
+    const token = { epoch: epoch.current, userId: owner };
     fetchAccountHoldings(fetchImpl)
       .then((body) => {
-        if (!cancelled.current) setLoaded(body);
+        if (token.epoch !== epoch.current || token.userId !== ownerRef.current) return;
+        setLoaded(body);
       })
       .catch(() => {
-        if (!cancelled.current) setError("账户持仓暂不可用。本机持仓未改动。");
+        if (token.epoch !== epoch.current || token.userId !== ownerRef.current) return;
+        setError("账户持仓暂不可用。本机持仓未改动。");
       });
     return () => {
-      cancelled.current = true;
-      if (snapshot.current && accountDraftOwnedBy(snapshot.current, userId)) {
-        saveAccountUiDraft(snapshot.current);
+      epoch.current += 1;
+      const snap = snapshot.current;
+      if (snap && snap.userId === owner && accountDraftOwnedBy(snap, owner)) {
+        saveAccountUiDraft(snap);
       }
     };
   }, [fetchImpl, userId]);
@@ -119,6 +154,11 @@ export function AccountHoldings({
       })
     : [];
   const decision = screenshot ? confirmImportRows(reviewed, submitted, catalog) : null;
+  const canWriteScreenshot = visionConfigured && consent && !locked;
+  const shareChanges = submitted.map((row) => {
+    const previous = items.find((item) => item.code === row.code);
+    return { code: row.code, previous: previous?.shares ?? null, next: row.shares };
+  });
 
   useEffect(() => {
     snapshot.current = {
@@ -133,8 +173,8 @@ export function AccountHoldings({
   });
 
   async function save(next: { code: string; shares: number }[], confirmEmpty = false) {
-    const current = readAccountUiDraft(userId);
-    if (current && !accountDraftOwnedBy(current, userId)) return;
+    const token = { epoch: epoch.current, userId: ownerRef.current };
+    if (!stillCurrent(token)) return;
     setError(null);
     try {
       const body = await writeAccountHoldings(
@@ -147,11 +187,13 @@ export function AccountHoldings({
         },
         fetchImpl,
       );
+      if (!stillCurrent(token)) return;
       setLoaded(body);
       setReplacePrompt(null);
       setCode("");
       setShares("");
     } catch {
+      if (!stillCurrent(token)) return;
       setError("没有写入账户。本机持仓未改动。");
     }
   }
@@ -323,8 +365,8 @@ export function AccountHoldings({
               className="btn primary"
               disabled={locked || localChanges.length === 0}
               onClick={() => {
-                const owned = readAccountUiDraft(userId);
-                if (owned && !accountDraftOwnedBy(owned, userId)) return;
+                const token = { epoch: epoch.current, userId: ownerRef.current };
+                if (!stillCurrent(token)) return;
                 void writeAccountHoldings(
                   {
                     path: "/api/holdings/import",
@@ -335,11 +377,15 @@ export function AccountHoldings({
                   fetchImpl,
                 )
                   .then((body) => {
+                    if (!stillCurrent(token)) return;
                     setLoaded(body);
                     setLocalChanges(null);
                     setPreserved([]);
                   })
-                  .catch(() => setError("没有导入。本机持仓未改动。"));
+                  .catch(() => {
+                    if (!stillCurrent(token)) return;
+                    setError("没有导入。本机持仓未改动。");
+                  });
               }}
             >
               确认导入到账户
@@ -357,7 +403,10 @@ export function AccountHoldings({
                 type="checkbox"
                 aria-label="同意把截图交给视觉服务"
                 checked={consent}
-                onChange={(event) => setConsent(event.target.checked)}
+                onChange={(event) => {
+                  setConsent(event.target.checked);
+                  if (!event.target.checked) setExplicit(false);
+                }}
               />{" "}
               我同意把这张截图交给已配置的视觉服务。本站不保存原图。
             </label>
@@ -382,13 +431,16 @@ export function AccountHoldings({
                   )?.files?.[0] ??
                   null;
                 if (!visionConfigured || !consent || !chosen) return;
+                const token = { epoch: epoch.current, userId: ownerRef.current };
                 void previewImage(chosen, fetchImpl, csrfToken).then(
                   (body) => {
+                    if (!stillCurrent(token)) return;
                     const rows = reviewVisionRows(
                       body.sourceRows,
                       new Map(body.catalog.map((row) => [row.code, row.name])),
                     );
                     setExplicit(false);
+                    setPreviewRestored(false);
                     setScreenshot({
                       draftId: body.draftId,
                       sourceRows: body.sourceRows,
@@ -397,7 +449,10 @@ export function AccountHoldings({
                       explicit: false,
                     });
                   },
-                  () => setError("没有生成预览。图片未保存，账户持仓未改动。"),
+                  () => {
+                    if (!stillCurrent(token)) return;
+                    setError("没有生成预览。图片未保存，账户持仓未改动。");
+                  },
                 );
               }}
             >
@@ -415,7 +470,14 @@ export function AccountHoldings({
         )}
         {screenshot && reviewed.length > 0 ? (
           <div>
+            <p>
+              代码和名称不能在这里修改。识别错了、对不上或无法确定的代码，请取消纳入，再用上面的表单手工输入
+              6 位代码和总股数。
+            </p>
             <p>识别文字只作核对，不会执行。可用股数不会写入。同一代码不会自动相加。</p>
+            {previewRestored ? (
+              <p>这是恢复的预览。上次的同意和确认不会沿用，需要重新核对后才会写入。</p>
+            ) : null}
             {reviewed.map((row, index) => {
               const source = screenshot.sourceRows[index];
               const edit = screenshot.edits[index];
@@ -434,8 +496,16 @@ export function AccountHoldings({
                       <li key={flag}>{visionFlagLabel(flag)}</li>
                     ))}
                   </ul>
-                  {row.code == null ? <p>这行不能写入。</p> : null}
-                  {row.code != null ? (
+                  {row.code == null ? (
+                    <p>这行代码不能使用。请不要纳入，改在上方表单手工输入。</p>
+                  ) : null}
+                  {row.flags.includes("name_mismatch") ||
+                  row.flags.includes("unknown_code") ||
+                  row.flags.includes("ambiguous_shares") ||
+                  row.flags.includes("duplicate_code") ? (
+                    <p>这行还不能直接当作已核对的代码。确认名称和代码无误后再纳入，否则请排除并用手工输入。</p>
+                  ) : null}
+                  {row.code != null && canWriteScreenshot ? (
                     <>
                       <label>
                         <input
@@ -447,7 +517,7 @@ export function AccountHoldings({
                         纳入确认
                       </label>
                       <label>
-                        确认总股数
+                        总股数
                         <input
                           aria-label={`${row.code} 总股数`}
                           value={edit.shares}
@@ -492,54 +562,78 @@ export function AccountHoldings({
                         我确认这个总股数
                       </label>
                     </>
+                  ) : row.code != null ? (
+                    <p>
+                      总股数 {edit.shares || "未填"}。当前不能修改或写入。
+                    </p>
                   ) : null}
                 </article>
               );
             })}
-            <label>
-              <input
-                type="checkbox"
-                aria-label="确认用总股数设置账户"
-                checked={explicit}
-                onChange={(event) => setExplicit(event.target.checked)}
-              />{" "}
-              我确认用这些总股数设置账户持仓。相同代码不会相加。未列入的账户代码会保留。这不会修改本机持仓。
-            </label>
-            {explicit && decision && !decision.ok ? <p>还有待核对的识别结果。</p> : null}
-            <button
-              type="button"
-              className="btn primary"
-              disabled={locked || !explicit || !decision?.ok || submitted.length === 0}
-              onClick={() => {
-                if (!screenshot || !decision?.ok) return;
-                const owned = readAccountUiDraft(userId);
-                if (owned && !accountDraftOwnedBy(owned, userId)) return;
-                void fetchImpl("/api/holdings/apply", {
-                  method: "POST",
-                  credentials: "same-origin",
-                  headers: {
-                    accept: "application/json",
-                    "content-type": "application/json",
-                    "x-csrf-token": csrfToken,
-                  },
-                  body: JSON.stringify({
-                    csrf: csrfToken,
-                    draftId: screenshot.draftId,
-                    idempotencyKey: crypto.randomUUID(),
-                    rows: submitted,
-                  }),
-                })
-                  .then(async (response) => {
-                    if (!response.ok) throw new Error("apply_failed");
-                    setScreenshot(null);
-                    setExplicit(false);
-                    setLoaded(await fetchAccountHoldings(fetchImpl));
-                  })
-                  .catch(() => setError("没有写入识别结果。本机持仓未改动。"));
-              }}
-            >
-              确认写入识别结果
-            </button>
+            {canWriteScreenshot ? (
+              <>
+                {shareChanges.map((row) => (
+                  <p key={row.code}>
+                    {row.previous == null
+                      ? `账户里还没有 ${row.code}，将设为 ${formatShares(row.next)} 股。`
+                      : `账户当前 ${row.code} ${formatShares(row.previous)} 股 → ${formatShares(row.next)} 股。不会与原股数相加。`}
+                  </p>
+                ))}
+                <label>
+                  <input
+                    type="checkbox"
+                    aria-label="确认用总股数设置账户"
+                    checked={explicit}
+                    onChange={(event) => setExplicit(event.target.checked)}
+                  />{" "}
+                  我确认用这些总股数设置账户持仓。相同代码不会相加。未列入的账户代码会保留。这不会修改本机持仓。
+                </label>
+                {explicit && decision && !decision.ok ? <p>还有待核对的识别结果。</p> : null}
+                <button
+                  type="button"
+                  className="btn primary"
+                  disabled={!explicit || !decision?.ok || submitted.length === 0}
+                  onClick={() => {
+                    if (!canWriteScreenshot || !screenshot || !decision?.ok || !consent) return;
+                    const token = { epoch: epoch.current, userId: ownerRef.current };
+                    if (!stillCurrent(token)) return;
+                    void fetchImpl("/api/holdings/apply", {
+                      method: "POST",
+                      credentials: "same-origin",
+                      headers: {
+                        accept: "application/json",
+                        "content-type": "application/json",
+                        "x-csrf-token": csrfToken,
+                      },
+                      body: JSON.stringify({
+                        csrf: csrfToken,
+                        draftId: screenshot.draftId,
+                        idempotencyKey: crypto.randomUUID(),
+                        rows: submitted,
+                      }),
+                    })
+                      .then(async (response) => {
+                        if (!stillCurrent(token)) return;
+                        if (!response.ok) throw new Error("apply_failed");
+                        setScreenshot(null);
+                        setExplicit(false);
+                        setConsent(false);
+                        const fresh = await fetchAccountHoldings(fetchImpl);
+                        if (!stillCurrent(token)) return;
+                        setLoaded(fresh);
+                      })
+                      .catch(() => {
+                        if (!stillCurrent(token)) return;
+                        setError("没有写入识别结果。本机持仓未改动。");
+                      });
+                  }}
+                >
+                  确认写入识别结果
+                </button>
+              </>
+            ) : (
+              <p>需要重新勾选同意，并在识图可用时再次确认后才会写入。上次的确认不会沿用。当前不能从这里写入。</p>
+            )}
           </div>
         ) : null}
       </section>

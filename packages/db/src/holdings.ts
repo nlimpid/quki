@@ -1,5 +1,5 @@
 import { rowsOf, type SqlConn } from "./client.js";
-import { formatSqlDateTime, parseSqlDateTime, rowsAffectedOf } from "./auth.js";
+import { formatSqlDateTime, rowsAffectedOf } from "./auth.js";
 
 export type HoldingLine = {
   code: string;
@@ -14,32 +14,45 @@ export type HoldingCashQuote = {
   yieldAsOf: string | null;
 };
 
-/** A pending claim older than this may be retried. Not a database lock timeout. */
-export const APPLY_LEASE_MS = 60_000;
+export type BookCommit =
+  | { outcome: "written" | "replay"; items: HoldingLine[] }
+  | { outcome: "conflict" | "draft_missing" | "draft_used" | "draft_expired" | "busy" };
 
-export type ApplyClaim = "claimed" | "replay" | "conflict" | "in_progress";
+type StoredApply = { hash: string; items: HoldingLine[] };
+type StoredDraft = { payload: string; expiresAt: string; consumedBy: string | null };
+type StoredAttempt = {
+  id: string;
+  at: string;
+  status: "reserved" | "finished" | "failed" | "released";
+};
+
+type BookDocument = {
+  items: HoldingLine[];
+  applies: Record<string, StoredApply>;
+  drafts: Record<string, StoredDraft>;
+  attempts: StoredAttempt[];
+};
+
+type CommitInput = {
+  userId: string;
+  key: string;
+  hash: string;
+  mode: "replace" | "set" | "apply";
+  lines: readonly HoldingLine[];
+  draftId?: string;
+  now: Date;
+};
 
 export type HoldingsStore = {
   list(userId: string): Promise<HoldingLine[]>;
-  replaceAll(userId: string, lines: readonly HoldingLine[], now: Date): Promise<void>;
-  setExact(userId: string, lines: readonly HoldingLine[], now: Date): Promise<void>;
-  /**
-   * Inserts the pending claim before any holdings write. One primary key, one statement.
-   * The loser of that insert does not write. This is not a multi-statement transaction.
-   */
-  claimApply(userId: string, key: string, hash: string, now: Date): Promise<ApplyClaim>;
-  /** Marks the claim applied only after the holdings write returned. False is not success. */
-  completeApply(userId: string, key: string, hash: string): Promise<boolean>;
-  /**
-   * Reserves one vision attempt before the provider call. Failed attempts stay counted
-   * until the window expires. Over-limit reservations are released and do not proceed.
-   */
+  /** One compare-and-swap of the whole book. Replay does not write. */
+  commit(input: CommitInput): Promise<BookCommit>;
   reserveAttempt(
     userId: string,
     now: Date,
     limit: number,
     windowMs: number,
-  ): Promise<{ id: string } | "limited">;
+  ): Promise<{ id: string } | "limited" | "busy">;
   finishAttempt(userId: string, id: string, status: "finished" | "failed"): Promise<void>;
   insertDraft(input: {
     id: string;
@@ -52,21 +65,67 @@ export type HoldingsStore = {
     userId: string,
     id: string,
     now: Date,
-  ): Promise<{ payloadJson: string; consumed: boolean } | "missing" | "expired">;
-  consumeDraft(
-    userId: string,
-    id: string,
-    now: Date,
-  ): Promise<{ payloadJson: string } | "missing" | "lost" | "expired">;
+  ): Promise<{ payloadJson: string } | "missing" | "expired" | "used">;
 };
 
-function sharesOf(value: unknown): number | null {
-  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 1) return value;
-  if (typeof value === "string" && /^[1-9]\d*$/.test(value)) {
-    const parsed = Number(value);
-    if (Number.isSafeInteger(parsed) && parsed >= 1 && String(parsed) === value) return parsed;
+function emptyDoc(): BookDocument {
+  return { items: [], applies: {}, drafts: {}, attempts: [] };
+}
+
+export function planBookChange(
+  doc: BookDocument,
+  input: Omit<CommitInput, "userId">,
+): { doc: BookDocument | null; result: BookCommit } {
+  const existing = doc.applies[input.key];
+  if (existing) {
+    if (existing.hash !== input.hash) return { doc: null, result: { outcome: "conflict" } };
+    return { doc: null, result: { outcome: "replay", items: existing.items.map((line) => ({ ...line })) } };
   }
-  return null;
+  let drafts = doc.drafts;
+  if (input.draftId) {
+    const draft = doc.drafts[input.draftId];
+    if (!draft) return { doc: null, result: { outcome: "draft_missing" } };
+    if (draft.consumedBy) return { doc: null, result: { outcome: "draft_used" } };
+    if (Date.parse(draft.expiresAt) <= input.now.getTime()) {
+      return { doc: null, result: { outcome: "draft_expired" } };
+    }
+    drafts = {
+      ...doc.drafts,
+      [input.draftId]: { ...draft, consumedBy: input.key },
+    };
+  }
+  const items =
+    input.mode === "replace" ? normalize(input.lines) : mergeItems(doc.items, input.lines);
+  return {
+    doc: {
+      ...doc,
+      items,
+      drafts,
+      applies: { ...doc.applies, [input.key]: { hash: input.hash, items } },
+    },
+    result: { outcome: "written", items },
+  };
+}
+
+function normalize(lines: readonly HoldingLine[]): HoldingLine[] {
+  return [...lines].sort((a, b) => a.code.localeCompare(b.code));
+}
+
+function mergeItems(current: readonly HoldingLine[], lines: readonly HoldingLine[]): HoldingLine[] {
+  const merged = new Map(current.map((line) => [line.code, line]));
+  for (const line of lines) merged.set(line.code, line);
+  return normalize([...merged.values()]);
+}
+
+function parseDoc(value: unknown): BookDocument {
+  if (typeof value !== "string") return emptyDoc();
+  const parsed = JSON.parse(value) as Partial<BookDocument>;
+  return {
+    items: Array.isArray(parsed.items) ? parsed.items : [],
+    applies: parsed.applies && typeof parsed.applies === "object" ? parsed.applies : {},
+    drafts: parsed.drafts && typeof parsed.drafts === "object" ? parsed.drafts : {},
+    attempts: Array.isArray(parsed.attempts) ? parsed.attempts : [],
+  };
 }
 
 export function createHoldingsStore(getConn: () => SqlConn): HoldingsStore {
@@ -74,162 +133,135 @@ export function createHoldingsStore(getConn: () => SqlConn): HoldingsStore {
   const db = () => (conn ??= getConn());
   return {
     async list(userId) {
-      const result = await db().execute(
-        "SELECT code, shares, updated_at FROM auth_holdings WHERE user_id = ? ORDER BY code",
-        [userId],
-      );
-      const lines: HoldingLine[] = [];
-      for (const row of rowsOf(result)) {
-        const code = typeof row.code === "string" ? row.code : "";
-        const shares = sharesOf(row.shares);
-        const updated = parseSqlDateTime(row.updated_at);
-        if (!/^\d{6}$/.test(code) || shares == null || !updated) continue;
-        lines.push({ code, shares, updatedAt: updated.toISOString() });
-      }
-      return lines;
+      return (await readBook(db(), userId)).doc.items;
     },
-    async replaceAll(userId, lines, now) {
-      if (lines.length === 0) {
-        await db().execute("DELETE FROM auth_holdings WHERE user_id = ?", [userId]);
-        return;
-      }
-      const marks = lines.map(() => "?").join(", ");
-      await db().execute(`DELETE FROM auth_holdings WHERE user_id = ? AND code NOT IN (${marks})`, [
-        userId,
-        ...lines.map((line) => line.code),
-      ]);
-      await upsertLines(db, userId, lines, now);
-    },
-    async setExact(userId, lines, now) {
-      await upsertLines(db, userId, lines, now);
-    },
-    async claimApply(userId, key, hash, now) {
-      const stamp = formatSqlDateTime(now);
-      try {
-        await db().execute(
-          "INSERT INTO auth_holding_applies (user_id, idempotency_key, payload_hash, status, claimed_at, created_at) VALUES (?, ?, ?, 'pending', ?, ?)",
-          [userId, key, hash, stamp, stamp],
-        );
-        return "claimed";
-      } catch (error) {
-        const result = await db().execute(
-          "SELECT payload_hash, status, claimed_at FROM auth_holding_applies WHERE user_id = ? AND idempotency_key = ? LIMIT 1",
-          [userId, key],
-        );
-        const row = rowsOf(result)[0];
-        if (!row || row.payload_hash !== hash) {
-          void error;
-          return "conflict";
-        }
-        if (row.status === "applied") return "replay";
-        const claimedAt = parseSqlDateTime(row.claimed_at);
-        if (!claimedAt || now.getTime() - claimedAt.getTime() < APPLY_LEASE_MS)
-          return "in_progress";
-        const updated = await db().execute(
-          "UPDATE auth_holding_applies SET claimed_at = ? WHERE user_id = ? AND idempotency_key = ? AND payload_hash = ? AND status = 'pending' AND claimed_at = ?",
-          [stamp, userId, key, hash, formatSqlDateTime(claimedAt)],
-        );
-        return rowsAffectedOf(updated) === 1 ? "claimed" : "in_progress";
-      }
-    },
-    async completeApply(userId, key, hash) {
-      const updated = await db().execute(
-        "UPDATE auth_holding_applies SET status = 'applied' WHERE user_id = ? AND idempotency_key = ? AND payload_hash = ? AND status = 'pending'",
-        [userId, key, hash],
-      );
-      return rowsAffectedOf(updated) === 1;
+    async commit(input) {
+      const result = await mutate(db(), input.userId, input.now, (doc) => {
+        const planned = planBookChange(doc, input);
+        return { doc: planned.doc, value: planned.result };
+      });
+      return result === "busy" ? { outcome: "busy" } : result;
     },
     async reserveAttempt(userId, now, limit, windowMs) {
-      const id = crypto.randomUUID();
-      const since = new Date(now.getTime() - windowMs);
-      await db().execute(
-        "INSERT INTO auth_import_attempts (id, user_id, status, created_at) VALUES (?, ?, 'reserved', ?)",
-        [id, userId, formatSqlDateTime(now)],
-      );
-      const counted = await db().execute(
-        "SELECT COUNT(*) AS attempt_count FROM auth_import_attempts WHERE user_id = ? AND created_at > ? AND status <> 'released'",
-        [userId, formatSqlDateTime(since)],
-      );
-      const value = rowsOf(counted)[0]?.attempt_count;
-      const parsed = typeof value === "number" ? value : Number(value);
-      if (!Number.isInteger(parsed) || parsed > limit) {
-        await db().execute(
-          "UPDATE auth_import_attempts SET status = 'released' WHERE id = ? AND user_id = ? AND status = 'reserved'",
-          [id, userId],
+      const cutoff = now.getTime() - windowMs;
+      const result = await mutate(db(), userId, now, (doc): {
+        doc: BookDocument | null;
+        value: { id: string } | "limited";
+      } => {
+        const active = doc.attempts.filter(
+          (attempt) => Date.parse(attempt.at) > cutoff && attempt.status !== "released",
         );
-        return "limited";
-      }
-      return { id };
+        if (active.length >= limit) return { doc: null, value: "limited" as const };
+        const id = crypto.randomUUID();
+        return {
+          doc: {
+            ...doc,
+            attempts: [...doc.attempts, { id, at: now.toISOString(), status: "reserved" as const }],
+          },
+          value: { id },
+        };
+      });
+      return result;
     },
     async finishAttempt(userId, id, status) {
-      await db().execute(
-        "UPDATE auth_import_attempts SET status = ? WHERE id = ? AND user_id = ? AND status = 'reserved'",
-        [status, id, userId],
-      );
+      const result = await mutate(db(), userId, new Date(), (doc) => ({
+        doc: {
+          ...doc,
+          attempts: doc.attempts.map((attempt) =>
+            attempt.id === id && attempt.status === "reserved" ? { ...attempt, status } : attempt,
+          ),
+        },
+        value: true,
+      }));
+      if (result === "busy") throw new Error("book_busy");
     },
     async insertDraft(input) {
-      await db().execute(
-        "INSERT INTO auth_import_drafts (id, user_id, payload_json, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
-        [
-          input.id,
-          input.userId,
-          input.payloadJson,
-          formatSqlDateTime(input.expiresAt),
-          formatSqlDateTime(input.now),
-        ],
-      );
+      const result = await mutate(db(), input.userId, input.now, (doc) => {
+        if (doc.drafts[input.id]) return { doc: null, value: false };
+        return {
+          doc: {
+            ...doc,
+            drafts: {
+              ...doc.drafts,
+              [input.id]: {
+                payload: input.payloadJson,
+                expiresAt: input.expiresAt.toISOString(),
+                consumedBy: null,
+              },
+            },
+          },
+          value: true,
+        };
+      });
+      if (result === "busy") throw new Error("book_busy");
     },
     async readDraft(userId, id, now) {
-      const result = await db().execute(
-        "SELECT payload_json, expires_at, consumed_at FROM auth_import_drafts WHERE id = ? AND user_id = ? LIMIT 1",
-        [id, userId],
-      );
-      const row = rowsOf(result)[0];
-      if (!row || typeof row.payload_json !== "string") return "missing";
-      const expires = parseSqlDateTime(row.expires_at);
-      if (row.consumed_at == null && (!expires || expires.getTime() <= now.getTime()))
-        return "expired";
-      return { payloadJson: row.payload_json, consumed: row.consumed_at != null };
-    },
-    async consumeDraft(userId, id, now) {
-      const updated = await db().execute(
-        "UPDATE auth_import_drafts SET consumed_at = ? WHERE id = ? AND user_id = ? AND consumed_at IS NULL AND expires_at > ?",
-        [formatSqlDateTime(now), id, userId, formatSqlDateTime(now)],
-      );
-      if (rowsAffectedOf(updated) !== 1) {
-        const existing = await db().execute(
-          "SELECT consumed_at, expires_at FROM auth_import_drafts WHERE id = ? AND user_id = ? LIMIT 1",
-          [id, userId],
-        );
-        const row = rowsOf(existing)[0];
-        if (!row) return "missing";
-        if (row.consumed_at == null) return "expired";
-        return "lost";
-      }
-      const result = await db().execute(
-        "SELECT payload_json FROM auth_import_drafts WHERE id = ? AND user_id = ? LIMIT 1",
-        [id, userId],
-      );
-      const payload = rowsOf(result)[0]?.payload_json;
-      if (typeof payload !== "string") return "lost";
-      return { payloadJson: payload };
+      const draft = (await readBook(db(), userId)).doc.drafts[id];
+      if (!draft) return "missing";
+      if (draft.consumedBy) return "used";
+      if (Date.parse(draft.expiresAt) <= now.getTime()) return "expired";
+      return { payloadJson: draft.payload };
     },
   };
 }
 
-async function upsertLines(
-  db: () => SqlConn,
+async function readBook(conn: SqlConn, userId: string): Promise<{ version: number; doc: BookDocument }> {
+  const result = await conn.execute(
+    "SELECT version, document FROM auth_user_books WHERE user_id = ? LIMIT 1",
+    [userId],
+  );
+  const row = rowsOf(result)[0];
+  if (!row) return { version: 0, doc: emptyDoc() };
+  const version = typeof row.version === "number" ? row.version : Number(row.version);
+  if (!Number.isSafeInteger(version) || version < 1) throw new Error("book_version");
+  return { version, doc: parseDoc(row.document) };
+}
+
+async function mutate<T>(
+  conn: SqlConn,
   userId: string,
-  lines: readonly HoldingLine[],
   now: Date,
-): Promise<void> {
-  const stamp = formatSqlDateTime(now);
-  for (const line of lines) {
-    await db().execute(
-      "INSERT INTO auth_holdings (user_id, code, shares, updated_at) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE shares = VALUES(shares), updated_at = VALUES(updated_at)",
-      [userId, line.code, line.shares, stamp],
-    );
+  decide: (doc: BookDocument) => { doc: BookDocument | null; value: T },
+): Promise<T | "busy"> {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const current = await readBook(conn, userId);
+    const decision = decide(current.doc);
+    if (!decision.doc) return decision.value;
+    const text = JSON.stringify(decision.doc);
+    if (text.length > 60_000) throw new Error("book_too_large");
+    const wrote =
+      current.version === 0
+        ? await insertBook(conn, userId, text, now)
+        : await updateBook(conn, userId, current.version, text, now);
+    if (wrote) return decision.value;
   }
+  return "busy";
+}
+
+async function insertBook(conn: SqlConn, userId: string, text: string, now: Date): Promise<boolean> {
+  try {
+    const inserted = await conn.execute(
+      "INSERT INTO auth_user_books (user_id, version, document, updated_at) VALUES (?, 1, ?, ?)",
+      [userId, text, formatSqlDateTime(now)],
+    );
+    return rowsAffectedOf(inserted) === 1;
+  } catch {
+    return false;
+  }
+}
+
+async function updateBook(
+  conn: SqlConn,
+  userId: string,
+  version: number,
+  text: string,
+  now: Date,
+): Promise<boolean> {
+  const updated = await conn.execute(
+    "UPDATE auth_user_books SET version = ?, document = ?, updated_at = ? WHERE user_id = ? AND version = ?",
+    [version + 1, text, formatSqlDateTime(now), userId, version],
+  );
+  return rowsAffectedOf(updated) === 1;
 }
 
 export async function lookupHoldingCash(

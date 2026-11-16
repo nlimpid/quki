@@ -8,7 +8,7 @@ export {
 } from "./auth.js";
 export type { AuthStore, AuthUserRecord, SessionLookup, TransactionRecord } from "./auth.js";
 export { createHoldingsStore, lookupHoldingCash } from "./holdings.js";
-export type { HoldingCashQuote, HoldingLine, HoldingsStore } from "./holdings.js";
+export type { BookCommit, HoldingCashQuote, HoldingLine, HoldingsStore } from "./holdings.js";
 export {
   assertDividendAuditDatabase,
   dividendAuditUpdateSql,

@@ -256,6 +256,7 @@ function LocalPortfolio({ phase }: { phase: AuthPhase }) {
           initialCode={drawer.code}
           initialShares={drawer.shares}
           onClose={() => setDrawer(null)}
+          onDraft={(next) => setDrawer(next)}
           onSave={(code, shares) => {
             setHoldings(saveHolding(code, shares));
             setDrawer(null);
@@ -271,11 +272,13 @@ function HoldingDrawer({
   initialShares,
   onClose,
   onSave,
+  onDraft,
 }: {
   initialCode: string;
   initialShares: string;
   onClose: () => void;
   onSave: (code: string, shares: number) => void;
+  onDraft: (next: { code: string; shares: string }) => void;
 }) {
   const locked = /^\d{6}$/.test(initialCode);
   const [q, setQ] = useState(locked ? initialCode : "");
@@ -324,7 +327,10 @@ function HoldingDrawer({
               placeholder="搜索代码 / 名称"
               aria-label="搜索代码 / 名称"
               value={q}
-              onChange={(event) => setQ(event.target.value)}
+              onChange={(event) => {
+                setQ(event.target.value);
+                onDraft({ code, shares });
+              }}
             />
             {visibleHits.map((hit) => (
               <button
@@ -352,7 +358,11 @@ function HoldingDrawer({
           <input
             inputMode="numeric"
             value={shares}
-            onChange={(event) => setShares(event.target.value)}
+            onChange={(event) => {
+              const next = event.target.value;
+              setShares(next);
+              onDraft({ code: locked ? initialCode : code, shares: next });
+            }}
             aria-label="股数"
           />
         </label>

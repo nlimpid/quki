@@ -1,64 +1,27 @@
--- Account share counts and screenshot-import bookkeeping.
--- NOT APPLIED. Do not run this file from a worker, a cron, or an agent.
+-- One account book per user. NOT APPLIED. Do not run this from a worker, cron, or agent.
 -- Apply only after 0006_auth.sql, with an explicit `pnpm migrate` once both are accepted.
--- Independent of 0005_dividend_audit.sql. This file does not read or alter dividend or index tables.
+-- Independent of 0005_dividend_audit.sql. This file does not read or alter market tables.
 -- No foreign keys. The app scopes every statement by the session user id.
 --
--- Rollback drops auth_holding_applies, auth_import_attempts, auth_import_drafts, and
--- auth_holdings. That deletes saved share counts and unused import rows. It does not
--- change companies, dividend_events, or qk.holdings.v1.
--- There is no online dual-write, so a failed apply leaves 0006 in place and these tables absent.
--- auth_holdings.shares is an exact integer quantity, not a sum of screenshot passes.
+-- Rollback: DROP TABLE auth_user_books. That deletes saved share counts, import drafts,
+-- and idempotency results. It does not change companies, dividend_events, or qk.holdings.v1.
+-- Nothing in this PR has applied this file. The earlier unapplied per-row shape is replaced
+-- entirely; do not apply both.
 --
--- Idempotency is one INSERT into auth_holding_applies, not a multi-statement transaction.
--- The TiDB HTTP driver does not claim a transaction here. The primary key is the atomic claim.
--- status stays 'pending' until the holdings write finishes and a later UPDATE marks 'applied'.
--- A crash leaves 'pending'. The same user and same payload may redo that absolute write after
--- the claim lease. A different payload for that key does not write. A concurrent loser does not write.
--- auth_import_attempts is inserted before a vision call. Failed and timed-out calls stay counted
--- until the window expires. Over-limit rows are marked 'released' and do not occupy a slot.
--- This file is still not applied.
+-- Atomicity: @tidbcloud/serverless 0.3.0 can open begin() on a dedicated connection, which
+-- sends BEGIN and then reuses that connection's TiDB-Session header. This store does not call
+-- begin(). A shared execute() connection is not a transaction. The book, the idempotency
+-- result, and draft consumption are one JSON document. A change is one INSERT or one
+-- UPDATE ... WHERE user_id = ? AND version = ?. rowsAffected must be the number 1.
+-- A stale writer sees 0 rows and does not change the document. This was not executed on TiDB.
 
 SET NAMES utf8mb4;
 
-CREATE TABLE IF NOT EXISTS auth_holdings (
-  user_id     CHAR(36)    NOT NULL,
-  code        CHAR(6)     NOT NULL COMMENT '6-digit code, leading zeros preserved',
-  shares      INT UNSIGNED NOT NULL COMMENT 'Total shares, 1 through 1000000000',
-  updated_at  DATETIME(3) NOT NULL,
-  PRIMARY KEY (user_id, code)
+CREATE TABLE IF NOT EXISTS auth_user_books (
+  user_id    CHAR(36)     NOT NULL,
+  version    BIGINT UNSIGNED NOT NULL,
+  document   MEDIUMTEXT   NOT NULL COMMENT 'Items, idempotency results, drafts, and vision attempts. No image bytes.',
+  updated_at DATETIME(3)  NOT NULL,
+  PRIMARY KEY (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Per-account share counts. No images and no local-browser import log.';
-
-CREATE TABLE IF NOT EXISTS auth_import_drafts (
-  id           CHAR(36)     NOT NULL,
-  user_id      CHAR(36)     NOT NULL,
-  payload_json VARCHAR(8000) NOT NULL COMMENT 'Reviewed text fields only. Never the image or a data URL.',
-  expires_at   DATETIME(3)  NOT NULL,
-  consumed_at  DATETIME(3)  NULL,
-  created_at   DATETIME(3)  NOT NULL,
-  PRIMARY KEY (id),
-  KEY idx_auth_import_user_created (user_id, created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='One-time preview of untrusted image text. Consumed before a holdings write.';
-
-CREATE TABLE IF NOT EXISTS auth_import_attempts (
-  id          CHAR(36)    NOT NULL,
-  user_id     CHAR(36)    NOT NULL,
-  status      VARCHAR(16) NOT NULL COMMENT 'reserved, finished, failed, or released',
-  created_at  DATETIME(3) NOT NULL,
-  PRIMARY KEY (id),
-  KEY idx_auth_import_attempt_user (user_id, created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='One row before each vision call. Failures count until the window expires.';
-
-CREATE TABLE IF NOT EXISTS auth_holding_applies (
-  user_id          CHAR(36) NOT NULL,
-  idempotency_key  CHAR(36) NOT NULL,
-  payload_hash     CHAR(64) NOT NULL COMMENT 'SHA-256 of mode plus the confirmed code and share list',
-  status           VARCHAR(16) NOT NULL COMMENT 'pending until the holdings write is marked applied',
-  claimed_at       DATETIME(3) NOT NULL,
-  created_at       DATETIME(3) NOT NULL,
-  PRIMARY KEY (user_id, idempotency_key)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Claim row for one user and idempotency key. Not a multi-statement transaction.';
+  COMMENT='One versioned holdings document per account. Single-statement compare-and-swap.';

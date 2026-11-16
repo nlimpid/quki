@@ -28,7 +28,7 @@ A JPEG or PNG with an EXIF orientation other than 1 is rejected. The decoder doe
 
 Before a vision call, the server inserts `auth_import_attempts`. A timeout or failed extraction stays counted until the 10 minute window expires. Requests over the limit are released and do not call the provider. `vision: null` returns 503 before that insert.
 
-`auth_holding_applies` is claimed with one INSERT before any holdings write. That is not a multi-statement transaction. The row stays `pending` until the write finishes and a later UPDATE marks it `applied`. A second payload for the same user and key does not write. A crash leaves `pending`; the same payload may redo the absolute write after 60 seconds. A failed write returns 503 and is not reported as success.
+Each account has one `auth_user_books` row. The items, the idempotency result, and draft consumption change together in a single `INSERT` or `UPDATE ... WHERE version = ?`. `@tidbcloud/serverless` 0.3.0 `begin()` exists on a dedicated connection, but this store does not call it and does not treat a shared `execute()` as a transaction. `rowsAffected` must be the number 1. A stale writer gets 0 and does not change the row. Replaying a finished key returns the items stored for that key and does not write over a newer book. A draft records the first key that committed it; another key cannot apply it again. A thrown write leaves the previous document in place. This was exercised with an in-process stand-in and a fake connection, not on TiDB.
 
 Share quantities at the API are canonical decimal integers. `0x10`, `1e2`, signs, fractions, blanks, and leading zeros are rejected. A stock code is still a 6-character string, so `000001` stays `000001`.
 
@@ -39,7 +39,7 @@ Not applied in this change. `pnpm migrate` and `POST /admin/migrate` were not ru
 | File | Depends on | Rollback |
 | --- | --- | --- |
 | `0006_auth.sql` | `0001`–`0005` already applied. No schema dependency on them. | Drop `auth_users`, `auth_sessions`, `auth_oauth_transactions`. No market rows change. |
-| `0007_holdings.sql` | Apply only after `0006`, because holdings rows point at auth user ids. No foreign key is created. | Drop `auth_holding_applies`, `auth_import_attempts`, `auth_import_drafts`, and `auth_holdings`. Saved share counts disappear. Market and dividend tables stay. |
+| `0007_holdings.sql` | Apply only after `0006`. No foreign key. One `auth_user_books` row per account. The earlier unapplied per-row shape is replaced by this file and was not applied. | `DROP TABLE auth_user_books`. Saved share counts disappear. Market and dividend tables stay. |
 
 There is no dual-write. If `0007` fails, `0006` can remain and the holdings routes return a storage error rather than a partial account book.
 

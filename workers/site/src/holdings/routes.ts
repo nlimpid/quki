@@ -9,7 +9,7 @@ import {
   type ImportConfirmation,
   type ReviewedVisionRow,
 } from "@quki/analytics";
-import type { HoldingCashQuote, HoldingsStore } from "@quki/db";
+import type { BookCommit, HoldingCashQuote, HoldingsStore } from "@quki/db";
 import type { Context, Hono } from "hono";
 
 import type { AuthRuntime } from "../auth/runtime.js";
@@ -110,6 +110,7 @@ export function mountHoldingsRoutes(app: Hono, auth: AuthRuntime, holdings: Hold
       if (reservation === "limited") {
         return c.json({ error: "rate_limited", message: "识图过于频繁，请稍后再试" }, 429);
       }
+      if (reservation === "busy") return unavailable(c);
       let extracted: Awaited<ReturnType<NonNullable<HoldingsRuntime["vision"]>["extract"]>>;
       try {
         extracted = await withTimeout(
@@ -181,42 +182,26 @@ export function mountHoldingsRoutes(app: Hono, auth: AuthRuntime, holdings: Hold
         return c.json({ error: "draft_missing", message: "没有这份预览" }, 404);
       if (draft === "expired")
         return c.json({ error: "draft_used", message: "这份预览已经用过" }, 409);
-      const reviewed = parseReviewed(draft.payloadJson);
+      const reviewed = draft === "used" ? [] : parseReviewed(draft.payloadJson);
       if (!reviewed) return c.json({ error: "draft_missing", message: "没有这份预览" }, 404);
       const quotes = await holdings.quotes(submitted.map((row) => row.code));
-      const confirmed = confirmImportRows(reviewed, submitted, catalogOf(quotes));
+      const confirmed =
+        draft === "used"
+          ? { ok: true as const, lines: submitted.map((row) => ({ code: row.code, shares: row.shares })) }
+          : confirmImportRows(reviewed, submitted, catalogOf(quotes));
       if (!confirmed.ok)
         return c.json({ error: confirmed.error, message: "还有待核对的识别结果" }, 400);
       const lines = confirmed.lines.map((line) => ({ ...line, updatedAt: now.toISOString() }));
-      const hash = await payloadHash("apply", lines);
-      const claim = await store.claimApply(user.id, key, hash, now);
-      if (claim === "conflict")
-        return c.json({ error: "idempotency_conflict", message: "重复提交的内容不一致" }, 409);
-      if (claim === "in_progress")
-        return c.json({ error: "idempotency_in_progress", message: "同一请求正在处理" }, 409);
-      if (claim === "replay") {
-        const items = await store.list(user.id);
-        return c.json({ items, replayed: true });
-      }
-      if (!draft.consumed) {
-        const consumed = await store.consumeDraft(user.id, draftId, now);
-        if (consumed === "missing" || consumed === "expired") {
-          return c.json({ error: "draft_used", message: "这份预览已经用过" }, 409);
-        }
-      }
-      await store.setExact(user.id, lines, now);
-      if (!(await store.completeApply(user.id, key, hash))) {
-        return c.json(
-          { error: "idempotency_incomplete", message: "写入未确认，请用同一请求重试" },
-          503,
-        );
-      }
-      const items = await store.list(user.id);
-      return c.json({
-        items,
-        reference: buildDividendReference(await cover(holdings, items)),
-        applied: "set",
+      const result = await store.commit({
+        userId: user.id,
+        key,
+        hash: await payloadHash("apply", lines),
+        mode: "apply",
+        lines,
+        draftId,
+        now,
       });
+      return commitResponse(c, holdings, result, "set");
     } catch (error) {
       return storageFailed(c, error);
     }
@@ -242,33 +227,44 @@ async function writeLines(
   try {
     const now = holdings.now();
     const lines = parsed.map((line) => ({ ...line, updatedAt: now.toISOString() }));
-    const hash = await payloadHash(mode, lines);
-    const claim = await store.claimApply(userId, key, hash, now);
-    if (claim === "conflict")
-      return c.json({ error: "idempotency_conflict", message: "重复提交的内容不一致" }, 409);
-    if (claim === "in_progress")
-      return c.json({ error: "idempotency_in_progress", message: "同一请求正在处理" }, 409);
-    if (claim === "replay") {
-      const items = await store.list(userId);
-      return c.json({ items, replayed: true });
-    }
-    if (mode === "replace") await store.replaceAll(userId, lines, now);
-    else await store.setExact(userId, lines, now);
-    if (!(await store.completeApply(userId, key, hash))) {
-      return c.json(
-        { error: "idempotency_incomplete", message: "写入未确认，请用同一请求重试" },
-        503,
-      );
-    }
-    const items = await store.list(userId);
-    return c.json({
-      items,
-      reference: buildDividendReference(await cover(holdings, items)),
-      applied: mode,
+    const result = await store.commit({
+      userId,
+      key,
+      hash: await payloadHash(mode, lines),
+      mode,
+      lines,
+      now,
     });
+    return commitResponse(c, holdings, result, mode);
   } catch (error) {
     return storageFailed(c, error);
   }
+}
+
+function commitResponse(
+  c: Context,
+  holdings: HoldingsRuntime,
+  result: BookCommit,
+  mode: "replace" | "set",
+): Promise<Response> | Response {
+  if (result.outcome === "conflict")
+    return c.json({ error: "idempotency_conflict", message: "重复提交的内容不一致" }, 409);
+  if (result.outcome === "draft_missing")
+    return c.json({ error: "draft_missing", message: "没有这份预览" }, 404);
+  if (result.outcome === "draft_used" || result.outcome === "draft_expired")
+    return c.json({ error: "draft_used", message: "这份预览已经用过" }, 409);
+  if (result.outcome === "busy")
+    return c.json({ error: "storage_error", message: "账户持仓暂不可用" }, 503);
+  if (result.outcome !== "written" && result.outcome !== "replay")
+    return c.json({ error: "storage_error", message: "账户持仓暂不可用" }, 503);
+  const items = result.items;
+  return cover(holdings, items).then((covered) =>
+    c.json({
+      items,
+      reference: buildDividendReference(covered),
+      ...(result.outcome === "replay" ? { replayed: true } : { applied: mode }),
+    }),
+  );
 }
 
 async function payloadHash(

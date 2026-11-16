@@ -1,165 +1,160 @@
-import {
-  APPLY_LEASE_MS,
-  type ApplyClaim,
-  type HoldingLine,
-  type HoldingsStore,
-} from "./holdings.js";
+import { planBookChange, type HoldingsStore } from "./holdings.js";
 
-/** In-process stand-in. It does not execute TiDB and does not model its locking. */
+/** In-process compare-and-swap. It does not execute TiDB and does not open a transaction. */
 
-type Draft = {
-  id: string;
-  userId: string;
-  payloadJson: string;
-  expiresAt: number;
-  consumedAt: number | null;
-  createdAt: number;
-};
+type BookDocument = Parameters<typeof planBookChange>[0];
 
-type ApplyRow = {
-  hash: string;
-  status: "pending" | "applied";
-  claimedAt: number;
-};
-
-type Attempt = {
-  id: string;
-  userId: string;
-  status: "reserved" | "finished" | "failed" | "released";
-  createdAt: number;
-};
+function emptyDoc(): BookDocument {
+  return { items: [], applies: {}, drafts: {}, attempts: [] };
+}
 
 export function createHoldingsMemory(): HoldingsStore & {
-  writes: { userId: string; mode: "replace" | "set" }[];
-  attempts: Attempt[];
-  failWrites: number;
-  failComplete: boolean;
-  blockWrite: Promise<void> | null;
+  writes: number;
+  commits: number;
   entered: number;
+  failWrites: number;
+  pauseNext: boolean;
+  gate: Promise<void> | null;
+  attempts: { id: string; status: string }[];
 } {
-  const lines = new Map<string, HoldingLine[]>();
-  const applies = new Map<string, ApplyRow>();
-  const drafts: Draft[] = [];
-  const attempts: Attempt[] = [];
-  const writes: { userId: string; mode: "replace" | "set" }[] = [];
+  const books = new Map<string, { version: number; doc: BookDocument }>();
   const gate = {
-    failWrites: 0,
-    failComplete: false,
-    blockWrite: null as Promise<void> | null,
+    writes: 0,
+    commits: 0,
     entered: 0,
+    failWrites: 0,
+    pauseNext: false,
+    block: null as Promise<void> | null,
   };
+  async function mutate<T>(
+    userId: string,
+    now: Date,
+    decide: (doc: BookDocument) => { doc: BookDocument | null; value: T },
+  ): Promise<T | "busy"> {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const current = books.get(userId) ?? { version: 0, doc: emptyDoc() };
+      const decision = decide(structuredClone(current.doc));
+      if (!decision.doc) return decision.value;
+      gate.entered += 1;
+      if (gate.pauseNext) {
+        gate.pauseNext = false;
+        await gate.block;
+      }
+      if (gate.failWrites > 0) {
+        gate.failWrites -= 1;
+        throw new Error("injected_write_failure");
+      }
+      const latest = books.get(userId)?.version ?? 0;
+      if (latest !== current.version) continue;
+      books.set(userId, { version: current.version + 1, doc: decision.doc });
+      gate.writes += 1;
+      return decision.value;
+    }
+    return "busy";
+  }
   return {
-    writes,
-    attempts,
+    get writes() {
+      return gate.writes;
+    },
+    get commits() {
+      return gate.commits;
+    },
+    get entered() {
+      return gate.entered;
+    },
     get failWrites() {
       return gate.failWrites;
     },
     set failWrites(value: number) {
       gate.failWrites = value;
     },
-    get failComplete() {
-      return gate.failComplete;
+    get pauseNext() {
+      return gate.pauseNext;
     },
-    set failComplete(value: boolean) {
-      gate.failComplete = value;
+    set pauseNext(value: boolean) {
+      gate.pauseNext = value;
     },
-    get blockWrite() {
-      return gate.blockWrite;
+    get gate() {
+      return gate.block;
     },
-    set blockWrite(value: Promise<void> | null) {
-      gate.blockWrite = value;
+    set gate(value: Promise<void> | null) {
+      gate.block = value;
     },
-    get entered() {
-      return gate.entered;
-    },
-    async list(userId) {
-      return [...(lines.get(userId) ?? [])].sort((a, b) => a.code.localeCompare(b.code));
-    },
-    async replaceAll(userId, next, now) {
-      gate.entered += 1;
-      if (gate.blockWrite) await gate.blockWrite;
-      if (gate.failWrites > 0) {
-        gate.failWrites -= 1;
-        throw new Error("injected_write_failure");
-      }
-      writes.push({ userId, mode: "replace" });
-      lines.set(
-        userId,
-        next.map((line) => ({ ...line, updatedAt: now.toISOString() })),
+    get attempts() {
+      return [...books.values()].flatMap((row) =>
+        row.doc.attempts.map((attempt) => ({ id: attempt.id, status: attempt.status })),
       );
     },
-    async setExact(userId, next, now) {
-      gate.entered += 1;
-      if (gate.blockWrite) await gate.blockWrite;
-      if (gate.failWrites > 0) {
-        gate.failWrites -= 1;
-        throw new Error("injected_write_failure");
-      }
-      writes.push({ userId, mode: "set" });
-      const current = new Map((lines.get(userId) ?? []).map((line) => [line.code, line]));
-      for (const line of next) {
-        current.set(line.code, { ...line, updatedAt: now.toISOString() });
-      }
-      lines.set(userId, [...current.values()]);
+    async list(userId) {
+      return books.get(userId)?.doc.items.map((line) => ({ ...line })) ?? [];
     },
-    async claimApply(userId, key, hash, now) {
-      const id = `${userId}:${key}`;
-      const existing = applies.get(id);
-      if (!existing) {
-        applies.set(id, { hash, status: "pending", claimedAt: now.getTime() });
-        return "claimed";
-      }
-      if (existing.hash !== hash) return "conflict";
-      if (existing.status === "applied") return "replay";
-      if (now.getTime() - existing.claimedAt < APPLY_LEASE_MS) return "in_progress";
-      existing.claimedAt = now.getTime();
-      return "claimed" satisfies ApplyClaim;
-    },
-    async completeApply(userId, key, hash) {
-      if (gate.failComplete) return false;
-      const existing = applies.get(`${userId}:${key}`);
-      if (!existing || existing.hash !== hash || existing.status !== "pending") return false;
-      existing.status = "applied";
-      return true;
+    async commit(input) {
+      const before = gate.writes;
+      const result = await mutate(input.userId, input.now, (doc) => {
+        const planned = planBookChange(doc, input);
+        return { doc: planned.doc, value: planned.result };
+      });
+      if (result !== "busy" && result.outcome === "written" && gate.writes > before) gate.commits += 1;
+      return result === "busy" ? { outcome: "busy" } : result;
     },
     async reserveAttempt(userId, now, limit, windowMs) {
       const cutoff = now.getTime() - windowMs;
-      const active = attempts.filter(
-        (attempt) =>
-          attempt.userId === userId && attempt.createdAt > cutoff && attempt.status !== "released",
-      );
-      if (active.length >= limit) return "limited";
-      const id = crypto.randomUUID();
-      attempts.push({ id, userId, status: "reserved", createdAt: now.getTime() });
-      return { id };
-    },
-    async finishAttempt(userId, id, status) {
-      const attempt = attempts.find((item) => item.id === id && item.userId === userId);
-      if (attempt && attempt.status === "reserved") attempt.status = status;
-    },
-    async insertDraft(input) {
-      drafts.push({
-        id: input.id,
-        userId: input.userId,
-        payloadJson: input.payloadJson,
-        expiresAt: input.expiresAt.getTime(),
-        consumedAt: null,
-        createdAt: input.now.getTime(),
+      return mutate(userId, now, (doc): {
+        doc: BookDocument | null;
+        value: { id: string } | "limited";
+      } => {
+        const active = doc.attempts.filter(
+          (attempt) => Date.parse(attempt.at) > cutoff && attempt.status !== "released",
+        );
+        if (active.length >= limit) return { doc: null, value: "limited" as const };
+        const id = crypto.randomUUID();
+        return {
+          doc: {
+            ...doc,
+            attempts: [...doc.attempts, { id, at: now.toISOString(), status: "reserved" as const }],
+          },
+          value: { id },
+        };
       });
     },
-    async readDraft(userId, id, now) {
-      const draft = drafts.find((item) => item.id === id && item.userId === userId);
-      if (!draft) return "missing";
-      if (draft.consumedAt == null && draft.expiresAt <= now.getTime()) return "expired";
-      return { payloadJson: draft.payloadJson, consumed: draft.consumedAt != null };
+    async finishAttempt(userId, id, status) {
+      const result = await mutate(userId, new Date(), (doc) => ({
+        doc: {
+          ...doc,
+          attempts: doc.attempts.map((attempt) =>
+            attempt.id === id && attempt.status === "reserved" ? { ...attempt, status } : attempt,
+          ),
+        },
+        value: true,
+      }));
+      if (result === "busy") throw new Error("book_busy");
     },
-    async consumeDraft(userId, id, now) {
-      const draft = drafts.find((item) => item.id === id && item.userId === userId);
+    async insertDraft(input) {
+      const result = await mutate(input.userId, input.now, (doc) => {
+        if (doc.drafts[input.id]) return { doc: null, value: false };
+        return {
+          doc: {
+            ...doc,
+            drafts: {
+              ...doc.drafts,
+              [input.id]: {
+                payload: input.payloadJson,
+                expiresAt: input.expiresAt.toISOString(),
+                consumedBy: null,
+              },
+            },
+          },
+          value: true,
+        };
+      });
+      if (result === "busy") throw new Error("book_busy");
+    },
+    async readDraft(userId, id, now) {
+      const draft = books.get(userId)?.doc.drafts[id];
       if (!draft) return "missing";
-      if (draft.expiresAt <= now.getTime() && draft.consumedAt == null) return "expired";
-      if (draft.consumedAt != null) return "lost";
-      draft.consumedAt = now.getTime();
-      return { payloadJson: draft.payloadJson };
+      if (draft.consumedBy) return "used";
+      if (Date.parse(draft.expiresAt) <= now.getTime()) return "expired";
+      return { payloadJson: draft.payload };
     },
   };
 }
