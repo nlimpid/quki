@@ -1,7 +1,7 @@
 import * as oauth from "oauth4webapi";
 import { describe, expect, it } from "vitest";
 
-import { buildAuthorizationUrl, callbackUri } from "./oidc.js";
+import { PRODUCTION_AUTH_ORIGINS, authCallbackUrl, buildAuthorizationUrl } from "./oidc.js";
 
 const as: oauth.AuthorizationServer = {
   issuer: "https://idp.example",
@@ -23,7 +23,8 @@ describe("oauth4webapi", () => {
       as,
       { clientId: "quki-web", scopes: "openid" },
       {
-        redirectUri: callbackUri(new URL("https://quki.cc/index/H30269")),
+        redirectUri:
+          authCallbackUrl(new URL("https://quki.cc/index/H30269"), PRODUCTION_AUTH_ORIGINS) ?? "",
         state: "state-1",
         nonce: "nonce-1",
         codeVerifier: verifier,

@@ -20,10 +20,8 @@ import {
 } from "./cookies.js";
 import { randomToken, secretsEqual, sha256Hex } from "./crypto.js";
 import type { OidcIdentity } from "./oidc.js";
-import { callbackUri } from "./oidc.js";
+import { authCallbackUrl } from "./oidc.js";
 import type { AuthRuntime } from "./runtime.js";
-
-const PROVIDER = "oidc";
 
 function noStore(c: Context): void {
   c.header("cache-control", "no-store");
@@ -96,6 +94,10 @@ function hasControlChar(value: string): boolean {
   return false;
 }
 
+function validIssuer(issuer: string): boolean {
+  return issuer.startsWith("https://") && issuer.length <= 255 && !hasControlChar(issuer);
+}
+
 function validSubject(subject: string): boolean {
   return subject.length > 0 && subject.length <= 255 && !hasControlChar(subject);
 }
@@ -103,8 +105,9 @@ function validSubject(subject: string): boolean {
 async function upsertUser(auth: AuthRuntime, identity: OidcIdentity) {
   const store = auth.store;
   if (!store) throw new Error("auth_storage_failed");
+  if (!validIssuer(identity.issuer)) throw new Error("issuer");
   const displayName = publicDisplayName(identity.displayName);
-  const existing = await store.findUser(PROVIDER, identity.subject);
+  const existing = await store.findUser(identity.issuer, identity.subject);
   if (existing) {
     if (displayName && displayName !== existing.displayName) {
       await store.updateDisplayName(existing.id, displayName);
@@ -116,12 +119,12 @@ async function upsertUser(auth: AuthRuntime, identity: OidcIdentity) {
   try {
     await store.insertUser({
       id: created.id,
-      provider: PROVIDER,
+      issuer: identity.issuer,
       subject: identity.subject,
       displayName,
     });
   } catch (error) {
-    const raced = await store.findUser(PROVIDER, identity.subject);
+    const raced = await store.findUser(identity.issuer, identity.subject);
     if (!raced) throw error;
     return raced;
   }
@@ -209,6 +212,9 @@ export function mountAuthRoutes(app: Hono, auth: AuthRuntime): void {
       return c.json({ error: "csrf", message: "请求未通过安全校验" }, 403);
     }
     const requestUrl = new URL(c.req.url);
+    const redirectUri = authCallbackUrl(requestUrl, auth.trustedOrigins);
+    if (!redirectUri)
+      return c.json({ error: "untrusted_origin", message: "请求未通过安全校验" }, 403);
     const returnTo = safeReturnTo(fields.returnTo, requestUrl.origin);
     const state = randomToken();
     const nonce = randomToken();
@@ -217,7 +223,7 @@ export function mountAuthRoutes(app: Hono, auth: AuthRuntime): void {
     let authorizationUrl: URL;
     try {
       authorizationUrl = await auth.oidc.authorizationUrl({
-        redirectUri: callbackUri(requestUrl),
+        redirectUri,
         state,
         nonce,
         codeVerifier,
@@ -249,25 +255,41 @@ export function mountAuthRoutes(app: Hono, auth: AuthRuntime): void {
       const params = new URLSearchParams({ error: "login_failed", returnTo });
       return c.redirect(`/login?${params.toString()}`, 302);
     };
+    const redirectUri = authCallbackUrl(requestUrl, auth.trustedOrigins);
+    if (!redirectUri)
+      return c.json({ error: "untrusted_origin", message: "请求未通过安全校验" }, 400);
     if (!auth.store || !auth.oidc || auth.unavailableReason) return fail();
     const txnToken = readCookie(c, OAUTH_COOKIE);
     if (!txnToken) return fail();
     let returnTo = "/";
     try {
-      const txn = await auth.store.takeTransaction(await sha256Hex(txnToken), auth.now());
-      if (!txn) return fail();
+      const claim = await auth.store.claimTransaction(
+        await sha256Hex(txnToken),
+        requestUrl.searchParams.get("state") ?? "",
+        auth.now(),
+      );
+      if (claim.outcome === "mismatch")
+        return fail(safeReturnTo(claim.returnTo, requestUrl.origin));
+      if (claim.outcome !== "claimed") return fail();
+      const txn = claim.record;
       returnTo = safeReturnTo(txn.returnTo, requestUrl.origin);
       const currentUrl = new URL(c.req.url);
       currentUrl.searchParams.delete("returnTo");
       const identity = await auth.oidc.complete({
         currentUrl,
-        redirectUri: callbackUri(requestUrl),
+        redirectUri,
         expectedState: txn.state,
         codeVerifier: txn.codeVerifier,
         nonce: txn.nonce,
       });
-      if (!validSubject(identity.subject)) return fail(returnTo);
+      if (!validSubject(identity.subject) || !validIssuer(identity.issuer)) return fail(returnTo);
       const user = await upsertUser(auth, identity);
+      const presented = readCookie(c, SESSION_COOKIE);
+      if (presented) {
+        const current = await auth.store.findSession(await sha256Hex(presented), auth.now());
+        if (current.state === "valid")
+          await auth.store.revokeSession(current.sessionId, auth.now());
+      }
       const sessionToken = randomToken();
       const csrfToken = randomToken();
       await auth.store.insertSession({

@@ -25,11 +25,16 @@ export type TransactionRecord = {
   expiresAt: Date;
 };
 
+export type ClaimResult =
+  | { outcome: "missing" | "expired" | "lost" }
+  | { outcome: "mismatch"; returnTo: string }
+  | { outcome: "claimed"; record: TransactionRecord };
+
 export type AuthStore = {
-  findUser(provider: string, subject: string): Promise<AuthUserRecord | null>;
+  findUser(issuer: string, subject: string): Promise<AuthUserRecord | null>;
   insertUser(input: {
     id: string;
-    provider: string;
+    issuer: string;
     subject: string;
     displayName: string | null;
   }): Promise<void>;
@@ -52,8 +57,11 @@ export type AuthStore = {
     returnTo: string;
     expiresAt: Date;
   }): Promise<void>;
-  /** Deletes the transaction. Returns it only when it was still unexpired. */
-  takeTransaction(tokenHash: string, now: Date): Promise<TransactionRecord | null>;
+  /**
+   * Reads the transaction, then deletes it only when the presented state matches.
+   * The delete is one statement whose row count decides the winner.
+   */
+  claimTransaction(tokenHash: string, presentedState: string, now: Date): Promise<ClaimResult>;
 };
 
 export function formatSqlDateTime(date: Date): string {
@@ -85,15 +93,21 @@ function text(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+export function rowsAffectedOf(result: unknown): number {
+  if (!result || typeof result !== "object" || !("rowsAffected" in result)) return 0;
+  const value = (result as { rowsAffected?: unknown }).rowsAffected;
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
 export function createAuthStore(getConn: () => SqlConn): AuthStore {
   let conn: SqlConn | null = null;
   const db = () => (conn ??= getConn());
 
   return {
-    async findUser(provider, subject) {
+    async findUser(issuer, subject) {
       const result = await db().execute(
-        "SELECT id, display_name FROM auth_users WHERE provider = ? AND provider_subject = ? LIMIT 1",
-        [provider, subject],
+        "SELECT id, display_name FROM auth_users WHERE issuer = ? AND subject = ? LIMIT 1",
+        [issuer, subject],
       );
       const row = rowsOf(result)[0];
       const id = text(row?.id);
@@ -103,8 +117,8 @@ export function createAuthStore(getConn: () => SqlConn): AuthStore {
 
     async insertUser(input) {
       await db().execute(
-        "INSERT INTO auth_users (id, provider, provider_subject, display_name) VALUES (?, ?, ?, ?)",
-        [input.id, input.provider, input.subject, input.displayName],
+        "INSERT INTO auth_users (id, issuer, subject, display_name) VALUES (?, ?, ?, ?)",
+        [input.id, input.issuer, input.subject, input.displayName],
       );
     },
 
@@ -185,7 +199,7 @@ export function createAuthStore(getConn: () => SqlConn): AuthStore {
       );
     },
 
-    async takeTransaction(tokenHash, now) {
+    async claimTransaction(tokenHash, presentedState, now) {
       const result = await db().execute(
         `SELECT id, state_secret, code_verifier, nonce, return_to, expires_at
          FROM auth_oauth_transactions
@@ -194,19 +208,27 @@ export function createAuthStore(getConn: () => SqlConn): AuthStore {
         [tokenHash],
       );
       const row = rowsOf(result)[0];
-      if (!row) return null;
+      if (!row) return { outcome: "missing" };
       const id = text(row.id);
-      if (id) {
-        await db().execute("DELETE FROM auth_oauth_transactions WHERE id = ?", [id]);
-      }
       const expiresAt = parseSqlDateTime(row.expires_at);
       const state = text(row.state_secret);
       const codeVerifier = text(row.code_verifier);
       const nonce = text(row.nonce);
       const returnTo = text(row.return_to);
-      if (!id || !expiresAt || !state || !codeVerifier || !nonce || !returnTo) return null;
-      if (expiresAt.getTime() <= now.getTime()) return null;
-      return { id, state, codeVerifier, nonce, returnTo, expiresAt };
+      if (!id || !expiresAt || !state || !codeVerifier || !nonce || !returnTo) {
+        return { outcome: "expired" };
+      }
+      if (presentedState !== state) return { outcome: "mismatch", returnTo };
+      if (expiresAt.getTime() <= now.getTime()) return { outcome: "expired" };
+      const deleted = await db().execute(
+        "DELETE FROM auth_oauth_transactions WHERE token_hash = ? AND state_secret = ? AND expires_at > ?",
+        [tokenHash, state, formatSqlDateTime(now)],
+      );
+      if (rowsAffectedOf(deleted) !== 1) return { outcome: "lost" };
+      return {
+        outcome: "claimed",
+        record: { id, state, codeVerifier, nonce, returnTo, expiresAt },
+      };
     },
   };
 }

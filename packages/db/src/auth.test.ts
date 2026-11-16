@@ -15,6 +15,8 @@ describe("0006_auth.sql", () => {
   it("is a new auth schema and does not touch the dividend audit migration", () => {
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS auth_users");
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS auth_sessions");
+    expect(sql).toContain("UNIQUE KEY uk_auth_users_identity (issuer, subject)");
+    expect(sql).not.toContain("provider_subject");
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS auth_oauth_transactions");
     expect(sql).toContain("NOT APPLIED");
     expect(sql.toLowerCase()).not.toContain("alter table");
@@ -34,19 +36,28 @@ describe("auth store", () => {
     const store = createAuthStore(() => memory);
     const now = new Date("2026-11-16T00:00:00.000Z");
     const subject = "sub' OR provider_subject = 'other";
+    const issuerA = "https://idp.example/realms/a";
+    const issuerB = "https://idp.example/realms/b";
     await store.insertUser({
       id: "user-a",
-      provider: "oidc",
+      issuer: issuerA,
       subject,
       displayName: "林",
     });
     await store.insertUser({
       id: "user-b",
-      provider: "oidc",
-      subject: "other-person",
+      issuer: issuerB,
+      subject,
       displayName: null,
     });
-    expect(await store.findUser("oidc", subject)).toEqual({ id: "user-a", displayName: "林" });
+    expect(await store.findUser(issuerA, subject)).toEqual({ id: "user-a", displayName: "林" });
+    expect(await store.findUser(issuerB, subject)).toEqual({ id: "user-b", displayName: null });
+    expect(await store.findUser("https://idp.example/realms/A", subject)).toBeNull();
+    expect(await store.findUser(`${issuerA}/`, subject)).toBeNull();
+    await expect(
+      store.insertUser({ id: "user-a2", issuer: issuerA, subject, displayName: "再次" }),
+    ).rejects.toThrow(/duplicate identity/);
+    expect(await store.findUser(issuerA, subject)).toEqual({ id: "user-a", displayName: "林" });
     expect(memory.queries.every((query) => !query.sql.includes(subject))).toBe(true);
     expect(memory.queries.some((query) => query.params.includes(subject))).toBe(true);
 
@@ -91,10 +102,20 @@ describe("auth store", () => {
       returnTo: "/portfolio",
       expiresAt: new Date(now.getTime() + 60_000),
     });
-    const first = await store.takeTransaction("txn-hash", now);
-    expect(first?.returnTo).toBe("/portfolio");
-    expect(first?.codeVerifier).toBe("verifier-secret");
-    expect(await store.takeTransaction("txn-hash", now)).toBeNull();
+    const mismatch = await store.claimTransaction("txn-hash", "wrong-state", now);
+    expect(mismatch).toEqual({ outcome: "mismatch", returnTo: "/portfolio" });
+    const [first, second] = await Promise.all([
+      store.claimTransaction("txn-hash", "state-secret", now),
+      store.claimTransaction("txn-hash", "state-secret", now),
+    ]);
+    const claimed = [first, second].filter((result) => result.outcome === "claimed");
+    expect(claimed).toHaveLength(1);
+    expect(claimed[0]).toMatchObject({
+      outcome: "claimed",
+      record: { returnTo: "/portfolio", codeVerifier: "verifier-secret" },
+    });
+    expect([first, second].some((result) => result.outcome === "lost")).toBe(true);
+    expect((await store.claimTransaction("txn-hash", "state-secret", now)).outcome).toBe("missing");
     await store.insertTransaction({
       id: "txn-2",
       tokenHash: "txn-old",
@@ -104,8 +125,8 @@ describe("auth store", () => {
       returnTo: "/portfolio",
       expiresAt: new Date(now.getTime() - 1_000),
     });
-    expect(await store.takeTransaction("txn-old", now)).toBeNull();
-    expect(await store.takeTransaction("txn-old", now)).toBeNull();
+    expect((await store.claimTransaction("txn-old", "state-secret", now)).outcome).toBe("expired");
+    expect((await store.claimTransaction("txn-old", "state-secret", now)).outcome).toBe("expired");
   });
 
   it("fails closed when a stored timestamp cannot be read", () => {

@@ -9,6 +9,12 @@ import { readOidcEnv } from "./oidc.js";
 import { authRuntimeFromEnv, type AuthRuntime } from "./runtime.js";
 
 const origin = "http://quki.test";
+const testOrigins = [
+  "http://quki.test",
+  "http://127.0.0.1:8787",
+  "https://quki.cc",
+  "https://www.quki.cc",
+];
 
 function market(): MarketSource {
   return {
@@ -48,6 +54,7 @@ function fakeOidc(): OidcClient {
       }
       issued.delete(input.expectedState);
       return {
+        issuer: input.currentUrl.searchParams.get("iss") ?? "https://idp.example",
         subject: input.currentUrl.searchParams.get("sub") ?? "",
         displayName: input.currentUrl.searchParams.get("name"),
       };
@@ -63,6 +70,7 @@ function runtime(now = new Date("2026-11-16T00:00:00.000Z")) {
     store: createAuthStore(() => memory),
     oidc: fakeOidc(),
     unavailableReason: null,
+    trustedOrigins: testOrigins,
   };
   return {
     app: createApp(market(), auth),
@@ -390,6 +398,13 @@ describe("auth routes", () => {
     expect(badState.headers.get("location")).toContain("returnTo=%2Fstocks");
     expect(badState.headers.get("location")).not.toContain("evil");
     expect(cookiesOf(badState).some((cookie) => cookie.name === "qk_session")).toBe(false);
+    const real = await mismatch.app.request(
+      `${origin}/api/auth/callback?code=from-idp&state=${open.state}&sub=person-a`,
+      { headers: { cookie: `qk_oauth=${open.oauth}` } },
+    );
+    expect(real.status).toBe(302);
+    expect(real.headers.get("location")).toBe("/stocks");
+    expect(cookiesOf(real).some((cookie) => cookie.name === "qk_session")).toBe(true);
 
     const throwing: AuthStore = {
       async findUser() {
@@ -413,7 +428,7 @@ describe("auth routes", () => {
       async insertTransaction() {
         throw new Error("down");
       },
-      async takeTransaction() {
+      async claimTransaction() {
         throw new Error("down");
       },
     };
@@ -422,6 +437,7 @@ describe("auth routes", () => {
       store: throwing,
       oidc: fakeOidc(),
       unavailableReason: null,
+      trustedOrigins: testOrigins,
     });
     const failed = await broken.request(`${origin}/api/auth/session`, {
       headers: { cookie: "qk_session=present" },

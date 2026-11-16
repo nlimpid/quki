@@ -9,16 +9,16 @@
 SET NAMES utf8mb4;
 
 CREATE TABLE IF NOT EXISTS auth_users (
-  id               CHAR(36)     NOT NULL,
-  provider         VARCHAR(64)  NOT NULL COMMENT 'oidc until a provider is selected',
-  provider_subject VARCHAR(255) NOT NULL COMMENT 'IdP sub. Never taken from the browser.',
-  display_name     VARCHAR(40)  NULL COMMENT 'Optional label. Not an email or phone fallback.',
-  created_at       DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  updated_at       DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  id           CHAR(36)     NOT NULL,
+  issuer       VARCHAR(255) NOT NULL COMMENT 'Exact OIDC iss string. Case and a trailing slash are significant.',
+  subject      VARCHAR(255) NOT NULL COMMENT 'OIDC sub. Unique only together with issuer.',
+  display_name VARCHAR(40)  NULL COMMENT 'Optional label. Not an email or phone fallback.',
+  created_at   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   PRIMARY KEY (id),
-  UNIQUE KEY uk_auth_users_identity (provider, provider_subject)
+  UNIQUE KEY uk_auth_users_identity (issuer, subject)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Authenticated accounts. No holdings and no email column.';
+  COMMENT='Accounts keyed by verified issuer and sub. No holdings and no email column.';
 
 CREATE TABLE IF NOT EXISTS auth_sessions (
   id          CHAR(36)    NOT NULL,
@@ -46,4 +46,4 @@ CREATE TABLE IF NOT EXISTS auth_oauth_transactions (
   PRIMARY KEY (id),
   UNIQUE KEY uk_auth_oauth_token (token_hash)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='One-time authorization-code transactions. Deleted on callback.';
+  COMMENT='Consumed by one conditional DELETE that also matches state_secret. A wrong state does not delete the row.';

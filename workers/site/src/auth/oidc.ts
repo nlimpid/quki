@@ -9,9 +9,25 @@ export type OidcConfig = {
 };
 
 export type OidcIdentity = {
+  /** Exact `iss` claim. Not lowercased and not rewritten with URL.href. */
+  issuer: string;
   subject: string;
   displayName: string | null;
 };
+
+/** Callback hosts the site worker is allowed to use. www is listed on its own. */
+export const PRODUCTION_AUTH_ORIGINS = ["https://quki.cc", "https://www.quki.cc"] as const;
+
+/**
+ * Build the callback from the request URL only when its origin is an exact allowlist entry.
+ * Forwarded Host headers are not an input.
+ */
+export function authCallbackUrl(requestUrl: URL, trustedOrigins: readonly string[]): string | null {
+  if (requestUrl.username || requestUrl.password) return null;
+  const origin = requestUrl.origin;
+  if (!trustedOrigins.some((allowed) => allowed === origin)) return null;
+  return `${origin}/api/auth/callback`;
+}
 
 export type OidcClient = {
   authorizationUrl(input: {
@@ -35,10 +51,6 @@ export type OidcEnv = {
   AUTH_OIDC_CLIENT_SECRET?: string;
   AUTH_OIDC_SCOPES?: string;
 };
-
-export function callbackUri(requestUrl: URL): string {
-  return new URL("/api/auth/callback", requestUrl.origin).toString();
-}
 
 export function readOidcEnv(
   env: OidcEnv,
@@ -112,9 +124,9 @@ export function createOidcClient(config: OidcConfig): OidcClient {
         requireIdToken: true,
       });
       const claims = oauth.getValidatedIdTokenClaims(result);
-      if (!claims?.sub) throw new Error("missing_sub");
+      if (!claims?.sub || typeof claims.iss !== "string") throw new Error("missing_identity");
       const claimName = claims.name ?? claims.preferred_username;
-      return { subject: claims.sub, displayName: publicDisplayName(claimName) };
+      return { issuer: claims.iss, subject: claims.sub, displayName: publicDisplayName(claimName) };
     },
   };
 }

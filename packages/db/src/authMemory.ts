@@ -2,7 +2,7 @@ import type { SqlConn } from "./client.js";
 
 /** In-process stand-in for the auth tables. Tests only. Not used by the worker. */
 
-type UserRow = { id: string; provider: string; subject: string; displayName: string | null };
+type UserRow = { id: string; issuer: string; subject: string; displayName: string | null };
 type SessionRow = {
   id: string;
   userId: string;
@@ -35,21 +35,21 @@ export function createAuthMemoryConn(): SqlConn & { queries: AuthQuery[] } {
       queries.push({ sql, params: [...params] });
       const text = sql.replace(/\s+/g, " ").trim();
       if (/^INSERT INTO auth_users /i.test(text)) {
-        const [id, provider, subject, displayName] = params;
-        if (users.some((user) => user.provider === provider && user.subject === subject)) {
+        const [id, issuer, subject, displayName] = params;
+        if (users.some((user) => user.issuer === issuer && user.subject === subject)) {
           throw new Error("duplicate identity");
         }
         users.push({
           id: String(id),
-          provider: String(provider),
+          issuer: String(issuer),
           subject: String(subject),
           displayName: displayName == null ? null : String(displayName),
         });
         return { rows: [] };
       }
       if (/^SELECT id, display_name FROM auth_users /i.test(text)) {
-        const [provider, subject] = params;
-        const user = users.find((row) => row.provider === provider && row.subject === subject);
+        const [issuer, subject] = params;
+        const user = users.find((row) => row.issuer === issuer && row.subject === subject);
         return { rows: user ? [{ id: user.id, display_name: user.displayName }] : [] };
       }
       if (/^UPDATE auth_users SET display_name/i.test(text)) {
@@ -126,10 +126,16 @@ export function createAuthMemoryConn(): SqlConn & { queries: AuthQuery[] } {
         };
       }
       if (/^DELETE FROM auth_oauth_transactions /i.test(text)) {
-        const [id] = params;
-        const index = txns.findIndex((row) => row.id === id);
-        if (index >= 0) txns.splice(index, 1);
-        return { rows: [] };
+        const [tokenHash, state, expiresAfter] = params;
+        const index = txns.findIndex(
+          (row) =>
+            row.tokenHash === tokenHash &&
+            row.state === state &&
+            row.expiresAt > String(expiresAfter),
+        );
+        if (index < 0) return { rows: [], rowsAffected: 0 };
+        txns.splice(index, 1);
+        return { rows: [], rowsAffected: 1 };
       }
       throw new Error(`unexpected auth sql: ${text}`);
     },

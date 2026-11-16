@@ -32,7 +32,7 @@ Names only. Do not create the provider account in this change.
 2. Register both callback URLs:
    - `https://quki.cc/api/auth/callback`
    - `https://www.quki.cc/api/auth/callback`
-   The callback is derived from the request host. There is no separate redirect env var.
+   The callback is `https://quki.cc/api/auth/callback` or `https://www.quki.cc/api/auth/callback`, chosen by an exact match of the request URL origin against that allowlist. `www` is its own entry. `X-Forwarded-Host` and `Forwarded` are ignored. Any other host fails closed and does not build a callback. Tests may inject extra origins; production does not.
 3. Set site Worker secrets:
    - `AUTH_OIDC_ISSUER` — `https` URL, no userinfo in the URL
    - `AUTH_OIDC_CLIENT_ID`
@@ -53,6 +53,8 @@ Names only. Do not create the provider account in this change.
 | `qk_oauth` | opaque id for one authorization attempt | same flags | 10 minutes |
 
 The session row stores `sha256(qk_session)`, not the cookie. Logout sets `revoked_at` and `Max-Age=0`. An expired or revoked cookie is treated as anonymous with `expired: true`. There is no sliding renewal.
+
+A successful callback revokes only the `qk_session` cookie presented on that request, then sets a new one. Other sessions for the same account stay valid. This is rotation of the browser's current session. It is not a claim that an attacker can fix a session by planting an unknown token.
 
 ## API
 
@@ -91,9 +93,9 @@ JSON or form body: `{ "csrf": "...", "returnTo": "/portfolio?edit=1" }`. A `user
 
 ### `GET /api/auth/callback`
 
-IdP redirect. `state` must match the stored transaction and `oauth4webapi` validates it again. The code verifier and nonce come from that transaction, not from the query. The transaction is deleted before the code is exchanged. Success sets `qk_session` and redirects to the stored same-origin path. Failure redirects to `/login?error=login_failed&returnTo=...` and does not set a session. A `returnTo` on the callback query is ignored.
+IdP redirect. The request URL origin must be `https://quki.cc` or `https://www.quki.cc` (tests may inject others). A wrong `state` does not delete the transaction. A matching `state` runs one conditional `DELETE` (`token_hash`, `state_secret`, and `expires_at`). Only `rowsAffected = 1` continues, so two overlapping valid callbacks have one winner. That statement is supported by `@tidbcloud/serverless`; this change did not run it on TiDB. `oauth4webapi` checks `state` again. Success sets `qk_session` and redirects to the stored same-origin path. A code-exchange failure after the delete does not allow replay. A `returnTo` on the callback query is ignored.
 
-The ID token `sub` is the only account key (`provider = "oidc"`). `name` / `preferred_username` is stored only after `publicDisplayName`. Access tokens and refresh tokens are not stored.
+The account key is the exact ID token `iss` plus `sub`. Two issuers that share a `sub` are two accounts. `name` / `preferred_username` is stored only after `publicDisplayName`. Access tokens and refresh tokens are not stored.
 
 ### `POST /api/auth/logout`
 
@@ -180,6 +182,16 @@ Covered in process, with no network and no database:
 
 These checks use an in-process stand-in for the auth tables. They do not open TiDB, an issuer, or a browser.
 
-Local run for the login-shell correction: `pnpm test` passed (29 files, 128 tests), `pnpm typecheck` passed, `pnpm lint` passed with three existing effect-dependency warnings in `RotationChart`, `KlineChart`, and `OverviewPage`, and `pnpm --filter @quki/web build` passed. Those tests use an in-process auth stand-in. They are not a TiDB, issuer, or browser run, and they are not a security approval.
+Local run after the auth defect fixes: `pnpm test` passed (30 files, 132 tests), `pnpm typecheck` passed, `pnpm lint` passed with three existing effect-dependency warnings in `RotationChart`, `KlineChart`, and `OverviewPage`, and `pnpm --filter @quki/web build` passed. The new regressions use an in-process stand-in. They are not a TiDB, issuer, or browser run, and they are not a security approval.
 
-Not covered: a live issuer, a real TiDB connection, applying `0006_auth.sql`, a browser click-through, or wrangler deploy. `0005_dividend_audit.sql` was not edited or rerun.
+## Still outstanding
+
+Fixed in code, still not a release:
+
+- Issuer plus `sub` is the account key. Provider choice is still open, and `LOGIN_UI_ENABLED` stays false until consent text exists.
+- Trusted callback origins are `https://quki.cc` and `https://www.quki.cc`. Secrets are not set.
+- `0006_auth.sql` is reviewed code and is not applied. The crawler `POST /admin/migrate` list still stops at `0005_dividend_audit.sql`. Do not treat this file as an instruction to migrate.
+- The conditional `DELETE` and `rowsAffected` behavior are tested in process. They are not verified against TiDB.
+- No live issuer and no browser pass.
+
+`0005_dividend_audit.sql` was not edited or rerun.

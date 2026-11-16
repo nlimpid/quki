@@ -1,13 +1,21 @@
 import { createAuthStore, type AuthStore, type SqlConn } from "@quki/db";
 import type { AuthUnavailableReason } from "@quki/types";
 
-import { createOidcClient, readOidcEnv, type OidcClient, type OidcEnv } from "./oidc.js";
+import {
+  PRODUCTION_AUTH_ORIGINS,
+  createOidcClient,
+  readOidcEnv,
+  type OidcClient,
+  type OidcEnv,
+} from "./oidc.js";
 
 export type AuthRuntime = {
   now: () => Date;
   store: AuthStore | null;
   oidc: OidcClient | null;
   unavailableReason: AuthUnavailableReason | null;
+  /** Exact request origins allowed to start login and receive the OAuth callback. */
+  trustedOrigins: readonly string[];
 };
 
 export function unavailableAuth(): AuthRuntime {
@@ -16,6 +24,7 @@ export function unavailableAuth(): AuthRuntime {
     store: null,
     oidc: null,
     unavailableReason: "auth_not_configured",
+    trustedOrigins: PRODUCTION_AUTH_ORIGINS,
   };
 }
 
@@ -32,6 +41,7 @@ export function authRuntimeFromEnv(
       store: null,
       oidc: null,
       unavailableReason: !oidcEnv.ok ? oidcEnv.reason : "storage_unconfigured",
+      trustedOrigins: PRODUCTION_AUTH_ORIGINS,
     };
   }
   return {
@@ -39,5 +49,6 @@ export function authRuntimeFromEnv(
     store: createAuthStore(() => connect(databaseUrl)),
     oidc: createClient(oidcEnv.config),
     unavailableReason: null,
+    trustedOrigins: PRODUCTION_AUTH_ORIGINS,
   };
 }
