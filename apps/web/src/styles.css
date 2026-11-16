@@ -349,7 +349,7 @@ a {
   gap: 8px;
   flex-wrap: wrap;
 }
-.hero {
+.pos .hero {
   font-size: 40px;
   font-weight: 600;
   letter-spacing: -0.03em;
@@ -777,7 +777,7 @@ table.qk tr.unconfirmed td:first-child {
     padding: 20px 16px;
     gap: 20px;
   }
-  .hero {
+  .pos .hero {
     font-size: 32px;
   }
 }
