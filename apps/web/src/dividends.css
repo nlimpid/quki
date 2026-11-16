@@ -409,3 +409,10 @@
     animation: none;
   }
 }
+
+.estimate-card {
+  margin-top: 16px;
+}
+.estimate-card .hero {
+  font-size: 28px;
+}

@@ -133,14 +133,14 @@ The header link is `/login?returnTo=` plus the current path, except on `/login` 
 
 ## Holdings
 
-Auth modules do not read or write `localStorage` or `qk.holdings.v1`. Login, logout, expiry, and a failed logout do not upload, merge, or delete holdings. The portfolio drawer is React state owned by that page; the expiry banner does not navigate or reset it.
+Auth modules do not read or write `localStorage` or `qk.holdings.v1`. Login, logout, expiry, and a failed logout do not upload, merge, or delete holdings. Account share counts are a separate explicit save, described in `docs/holdings.md`. The portfolio drawer is React state owned by the guest page; the expiry banner does not navigate or reset it.
 
 Copy:
 
 - Guest portfolio: `本地保存 · 未登录。数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传本地持仓。`
-- Signed-in portfolio, including a failed logout: `本地保存。持仓仍仅保存在此浏览器，不会因登录而同步到云端。`
-- Session still unknown: the guest sentence without `未登录`.
-- Add/edit footnote: `数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传或同步持仓。`
+- Signed-in portfolio, including a failed logout: `账户股数单独保存。本机持仓不会自动上传、覆盖、合并或清除；只有你确认导入后才会写入账户。`
+- Session still unknown: the guest sentence without `未登录`, and it says the browser copy is not uploaded automatically.
+- Add/edit footnote on the guest page: `数据仅保存在此浏览器，清除站点数据会丢失。登录不会自动上传或清除这些持仓。`
 
 ## UI states
 

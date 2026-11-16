@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
 import { useAuth } from "../lib/auth.js";
-import { portfolioSubtitle } from "../lib/authState.js";
+import { portfolioSubtitle, usesAccountHoldings, type AuthPhase } from "../lib/authState.js";
+import { AccountHoldings } from "../components/AccountHoldings.js";
 import { deleteHolding, readHoldings, saveHolding } from "../lib/holdingsStore.js";
 import { fetchStockBatch, fetchStockList } from "../lib/stockApi.js";
 import { formatCny, formatShares, formatYield, weightLabel } from "../lib/stockFormat.js";
@@ -24,6 +25,18 @@ type Card = {
 };
 
 export function PortfolioPage() {
+  const { phase } = useAuth();
+  if (usesAccountHoldings(phase)) {
+    return (
+      <DividendShell activeNav="portfolio">
+        <AccountHoldings phase={phase} />
+      </DividendShell>
+    );
+  }
+  return <LocalPortfolio phase={phase} />;
+}
+
+function LocalPortfolio({ phase }: { phase: AuthPhase }) {
   const [loaded] = useState(readHoldings);
   const [holdings, setHoldings] = useState<HoldingsState>(loaded.state);
   const storageError = loaded.error;
@@ -41,7 +54,6 @@ export function PortfolioPage() {
   const shownQuotes = codeKey ? quotes : [];
   const [drawer, setDrawer] = useState<{ code: string; shares: string } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
-  const { phase } = useAuth();
 
   useEffect(() => {
     if (!codeKey) return;
@@ -338,7 +350,7 @@ function HoldingDrawer({
           保存到本机
         </button>
         <p className="yield-note">
-          数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传或同步持仓。
+          数据仅保存在此浏览器，清除站点数据会丢失。登录不会自动上传或清除这些持仓。
         </p>
       </div>
     </div>

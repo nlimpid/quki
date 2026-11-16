@@ -121,6 +121,28 @@ export {
 } from "./holdings.js";
 export type { HoldingRecord, HoldingsState } from "./holdings.js";
 export {
+  DIVIDEND_REFERENCE_LABEL,
+  IMAGE_PROCESS_CONSENT,
+  IMAGE_PROCESS_DISCLOSURE,
+  buildDividendReference,
+  dividendReferenceNote,
+  formatCashMinor,
+  multiplyCashByShares,
+  parseCashPerShare,
+} from "./dividendReference.js";
+export type {
+  CashCoverage,
+  DividendReference,
+  DividendReferenceLine,
+} from "./dividendReference.js";
+export { confirmImportRows, localImportPlan, reviewVisionRows } from "./visionReview.js";
+export type {
+  ImportConfirmation,
+  ReviewedVisionRow,
+  VisionFlag,
+  VisionRow,
+} from "./visionReview.js";
+export {
   CRAWL_READY_MINUTES,
   SSE_CLOSED_DATES_2026,
   assessFreshness,

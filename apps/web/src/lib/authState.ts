@@ -150,12 +150,20 @@ export function portfolioSubtitle(phase: AuthPhase): string {
     phase.kind === "logoutPending" ||
     phase.kind === "logoutFailed"
   ) {
-    return "本地保存。持仓仍仅保存在此浏览器，不会因登录而同步到云端。";
+    return "账户股数单独保存。本机持仓不会自动上传、覆盖、合并或清除；只有你确认导入后才会写入账户。";
   }
   if (phase.kind === "guest") {
     return "本地保存 · 未登录。数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传本地持仓。";
   }
-  return "本地保存。数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传本地持仓。";
+  return "本地保存。数据仅保存在此浏览器，清除站点数据会丢失。登录不会自动上传本地持仓。";
+}
+
+export function usesAccountHoldings(phase: AuthPhase): boolean {
+  return (
+    phase.kind === "authenticated" ||
+    phase.kind === "logoutPending" ||
+    phase.kind === "logoutFailed"
+  );
 }
 
 export type LoginView = {
