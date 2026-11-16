@@ -467,7 +467,7 @@ describe("auth routes", () => {
     const idle = authRuntimeFromEnv(
       {
         TIDB_QUKI_DATABASE_URL: "mysql://user:secret-value@gateway.example:4000/quki",
-        AUTH_OIDC_ISSUER: "https://idp.example/realms/quki",
+        AUTH_OIDC_ISSUER: "https://accounts.google.com",
         AUTH_OIDC_CLIENT_ID: "quki-web",
         AUTH_OIDC_CLIENT_SECRET: "secret-value",
       },
@@ -483,7 +483,7 @@ describe("auth routes", () => {
 
     const missingDatabase = authRuntimeFromEnv(
       {
-        AUTH_OIDC_ISSUER: "https://idp.example",
+        AUTH_OIDC_ISSUER: "https://accounts.google.com",
         AUTH_OIDC_CLIENT_ID: "quki-web",
         AUTH_OIDC_CLIENT_SECRET: "secret-value",
       },
@@ -496,6 +496,21 @@ describe("auth routes", () => {
     expect(JSON.stringify(missingDatabase)).not.toContain("secret-value");
 
     expect(readOidcEnv({ AUTH_OIDC_SCOPES: "openid email" }).ok).toBe(false);
+    expect(
+      readOidcEnv({
+        AUTH_OIDC_ISSUER: "https://accounts.google.com",
+        AUTH_OIDC_CLIENT_ID: "quki-web",
+        AUTH_OIDC_CLIENT_SECRET: "secret-value",
+        AUTH_OIDC_SCOPES: "openid",
+      }),
+    ).toMatchObject({ ok: false, reason: "scopes_not_confirmed" });
+    expect(
+      readOidcEnv({
+        AUTH_OIDC_ISSUER: "https://idp.example/realms/quki",
+        AUTH_OIDC_CLIENT_ID: "quki-web",
+        AUTH_OIDC_CLIENT_SECRET: "secret-value",
+      }),
+    ).toEqual({ ok: false, reason: "auth_not_configured" });
     expect(
       readOidcEnv({
         AUTH_OIDC_ISSUER: "http://idp.example",

@@ -1,16 +1,16 @@
 import type { AuthSessionResponse, AuthUnavailableReason } from "@quki/types";
 
-/**
- * Server `login.ready` and the on-screen sign-in control are separate.
- * The API may be ready before a provider and a real consent sentence exist.
- * Until both are chosen, the page must not offer a login button.
- */
-export const LOGIN_UI_ENABLED = false;
-
 export const LOGIN_UNAVAILABLE_COPY = "登录暂不可用。访客仍可查看行情，并在本机管理持仓。";
 export const LOGIN_CHECK_FAILED_COPY = "无法确认登录状态，请重试。";
 export const LOGIN_PRIVACY_COPY =
   "登录不会上传或云同步你的本地持仓。持仓仍仅保存在此浏览器，清除站点数据会丢失。";
+export const GOOGLE_LOGIN_BUTTON = "使用 Google 登录";
+/** Matches the scopes the server is allowed to request. Name is not guaranteed. */
+export const GOOGLE_CONSENT_COPY =
+  "使用 Google 登录会打开 Google 的页面。本站只请求 openid 和 profile。Google 会返回账号的 sub，并可能返回姓名；姓名不是每次都有，也不能当作账号标识。本站保存 ID 令牌里的 iss 与 sub，以及可显示的姓名。不请求 email，不保存访问令牌或刷新令牌。行情页面仍公开。本机持仓不会因登录而上传、合并或清除。";
+export const GOOGLE_REJECTED_COPY = "Google 没有同意这次登录。本站没有建立会话，本机持仓未改。";
+export const GOOGLE_UNREACHABLE_COPY = "暂时联系不上 Google。登录没有完成，本机持仓未改。";
+export const LOGIN_FAILED_COPY = "登录没有完成。本站没有建立会话，本机持仓未改。";
 
 /** What the last successful session response said about starting a new login. */
 export type LoginCapability =
@@ -24,7 +24,7 @@ const unknownLogin: LoginCapability = { state: "unknown" };
 export type AuthPhase =
   | { kind: "initializing"; login: LoginCapability }
   | { kind: "unknown"; login: LoginCapability }
-  | { kind: "guest"; expired: boolean; login: LoginCapability }
+  | { kind: "guest"; expired: boolean; login: LoginCapability; csrfToken: string | null }
   | {
       kind: "authenticated";
       displayName: string | null;
@@ -61,7 +61,7 @@ export function sessionToPhase(session: AuthSessionResponse): AuthPhase {
       login,
     };
   }
-  return { kind: "guest", expired: session.expired, login };
+  return { kind: "guest", expired: session.expired, login, csrfToken: session.csrfToken };
 }
 
 export function applyProbeSuccess(phase: AuthPhase, session: AuthSessionResponse): AuthPhase {
@@ -97,7 +97,7 @@ export function beginLogout(phase: AuthPhase): AuthPhase {
 }
 
 export function finishLogout(phase: AuthPhase): AuthPhase {
-  return { kind: "guest", expired: false, login: phase.login };
+  return { kind: "guest", expired: false, login: phase.login, csrfToken: null };
 }
 
 export function failLogout(phase: AuthPhase): AuthPhase {
@@ -110,17 +110,14 @@ export function failLogout(phase: AuthPhase): AuthPhase {
   };
 }
 
-/** Header "登录" is a real sign-in link only after the product gate is on. Unknown still links to /login as a session check. */
-export function showLoginCta(phase: AuthPhase, uiEnabled = LOGIN_UI_ENABLED): boolean {
+/** Header 登录 opens /login. The Google POST is shown only when the server says it is ready. */
+export function showLoginCta(phase: AuthPhase): boolean {
   if (phase.kind === "unknown") return true;
   if (phase.kind !== "guest") return false;
-  return uiEnabled && phase.login.state === "ready";
+  return phase.login.state === "ready" && phase.csrfToken != null && phase.csrfToken.length > 0;
 }
 
-export function headerControl(
-  phase: AuthPhase,
-  uiEnabled = LOGIN_UI_ENABLED,
-): "spinner" | "login" | "account" | "none" {
+export function headerControl(phase: AuthPhase): "spinner" | "login" | "account" | "none" {
   if (phase.kind === "initializing") return "spinner";
   if (
     phase.kind === "authenticated" ||
@@ -129,19 +126,15 @@ export function headerControl(
   ) {
     return "account";
   }
-  return showLoginCta(phase, uiEnabled) ? "login" : "none";
+  return showLoginCta(phase) ? "login" : "none";
 }
 
 export function showExpiryBanner(phase: AuthPhase, dismissed: boolean): boolean {
   return phase.kind === "guest" && phase.expired && !dismissed;
 }
 
-export function showRelogin(
-  phase: AuthPhase,
-  dismissed: boolean,
-  uiEnabled = LOGIN_UI_ENABLED,
-): boolean {
-  return showExpiryBanner(phase, dismissed) && uiEnabled && phase.login.state === "ready";
+export function showRelogin(phase: AuthPhase, dismissed: boolean): boolean {
+  return showExpiryBanner(phase, dismissed) && showLoginCta(phase);
 }
 
 export function portfolioSubtitle(phase: AuthPhase): string {
@@ -158,16 +151,26 @@ export function portfolioSubtitle(phase: AuthPhase): string {
   return "本地保存。数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传本地持仓。";
 }
 
+export type LoginFailure = "none" | "login_failed" | "provider_rejected" | "provider_unreachable";
+
 export type LoginView = {
-  mode: "checking" | "returning" | "check_failed" | "unavailable";
+  mode: "checking" | "returning" | "check_failed" | "unavailable" | "google";
   status: string | null;
   alert: string | null;
   message: string | null;
   retry: boolean;
+  google: boolean;
 };
 
-/** Settled anonymous sessions stay on the unavailable card until a provider and consent exist. */
-export function loginView(phase: AuthPhase, loginFailed = false): LoginView {
+function failureAlert(failure: LoginFailure): string | null {
+  if (failure === "provider_rejected") return GOOGLE_REJECTED_COPY;
+  if (failure === "provider_unreachable") return GOOGLE_UNREACHABLE_COPY;
+  if (failure === "login_failed") return LOGIN_FAILED_COPY;
+  return null;
+}
+
+/** The Google button follows server readiness. It is not a local on/off flag. */
+export function loginView(phase: AuthPhase, failure: LoginFailure = "none"): LoginView {
   if (phase.kind === "initializing") {
     return {
       mode: "checking",
@@ -175,6 +178,7 @@ export function loginView(phase: AuthPhase, loginFailed = false): LoginView {
       alert: null,
       message: null,
       retry: false,
+      google: false,
     };
   }
   if (
@@ -188,6 +192,7 @@ export function loginView(phase: AuthPhase, loginFailed = false): LoginView {
       alert: null,
       message: null,
       retry: false,
+      google: false,
     };
   }
   if (phase.kind === "unknown") {
@@ -197,14 +202,17 @@ export function loginView(phase: AuthPhase, loginFailed = false): LoginView {
       alert: LOGIN_CHECK_FAILED_COPY,
       message: null,
       retry: true,
+      google: false,
     };
   }
+  const google = showLoginCta(phase);
   return {
-    mode: "unavailable",
+    mode: google ? "google" : "unavailable",
     status: null,
-    alert: loginFailed ? "登录失败，请重试。" : null,
-    message: LOGIN_UNAVAILABLE_COPY,
-    retry: true,
+    alert: failureAlert(failure),
+    message: google ? GOOGLE_CONSENT_COPY : LOGIN_UNAVAILABLE_COPY,
+    retry: !google,
+    google,
   };
 }
 

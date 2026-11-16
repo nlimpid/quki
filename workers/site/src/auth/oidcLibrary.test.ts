@@ -21,7 +21,7 @@ describe("oauth4webapi", () => {
     expect(challenge).not.toBe(verifier);
     const authorization = await buildAuthorizationUrl(
       as,
-      { clientId: "quki-web", scopes: "openid" },
+      { clientId: "quki-web", scopes: "openid profile" },
       {
         redirectUri:
           authCallbackUrl(new URL("https://quki.cc/index/H30269"), PRODUCTION_AUTH_ORIGINS) ?? "",
@@ -35,7 +35,7 @@ describe("oauth4webapi", () => {
     expect(authorization.searchParams.get("code_challenge_method")).toBe("S256");
     expect(authorization.searchParams.get("code_verifier")).toBeNull();
     expect(authorization.searchParams.get("client_secret")).toBeNull();
-    expect(authorization.searchParams.get("scope")).toBe("openid");
+    expect(authorization.searchParams.get("scope")).toBe("openid profile");
     expect(authorization.searchParams.get("redirect_uri")).toBe(
       "https://quki.cc/api/auth/callback",
     );
@@ -45,7 +45,7 @@ describe("oauth4webapi", () => {
     await expect(
       buildAuthorizationUrl(
         { ...as, authorization_endpoint: "http://idp.example/authorize" },
-        { clientId: "quki-web", scopes: "openid" },
+        { clientId: "quki-web", scopes: "openid profile" },
         {
           redirectUri: "https://quki.cc/api/auth/callback",
           state: "state-1",

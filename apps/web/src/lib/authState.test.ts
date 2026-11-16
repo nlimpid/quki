@@ -6,8 +6,12 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
+  GOOGLE_CONSENT_COPY,
+  GOOGLE_LOGIN_BUTTON,
+  GOOGLE_REJECTED_COPY,
+  GOOGLE_UNREACHABLE_COPY,
   LOGIN_CHECK_FAILED_COPY,
-  LOGIN_UI_ENABLED,
+  LOGIN_FAILED_COPY,
   LOGIN_UNAVAILABLE_COPY,
   applyProbeFailure,
   applyProbeSuccess,
@@ -45,13 +49,13 @@ function session(
 }
 
 function guest(reason: AuthUnavailableReason): AuthPhase {
-  return { kind: "guest", expired: false, login: { state: "unavailable", reason } };
+  return { kind: "guest", expired: false, login: { state: "unavailable", reason }, csrfToken: null };
 }
 
 describe("auth view state", () => {
   it("keeps a probe failure unknown and does not call that logged out", () => {
     expect(AUTH_PROBE_TIMEOUT_MS).toBe(4_000);
-    expect(LOGIN_UI_ENABLED).toBe(false);
+    expect(GOOGLE_LOGIN_BUTTON).toBe("使用 Google 登录");
     const unknown = applyProbeTimeout(initializing);
     expect(unknown).toEqual({ kind: "unknown", login: unknownLogin });
     expect(headerControl(unknown)).toBe("login");
@@ -74,8 +78,8 @@ describe("auth view state", () => {
       expect(phase).toMatchObject({ kind: "guest", login: { state: "unavailable", reason } });
       expect(headerControl(phase)).toBe("none");
       expect(showLoginCta(phase)).toBe(false);
-      expect(showLoginCta(phase, true)).toBe(false);
       expect(loginView(phase).message).toBe(LOGIN_UNAVAILABLE_COPY);
+      expect(loginView(phase).google).toBe(false);
       expect(loginView(phase).retry).toBe(true);
       const expired = applyProbeSuccess(
         initializing,
@@ -83,23 +87,32 @@ describe("auth view state", () => {
       );
       expect(showExpiryBanner(expired, false)).toBe(true);
       expect(showRelogin(expired, false)).toBe(false);
-      expect(showRelogin(expired, false, true)).toBe(false);
     }
   });
 
-  it("does not offer a sign-in button when the API is ready but consent is not", () => {
+  it("offers the Google POST only when the server is ready and issued a csrf token", () => {
     const phase = applyProbeSuccess(initializing, session(true, null, { status: "anonymous" }));
-    expect(phase).toMatchObject({ kind: "guest", login: { state: "ready" } });
-    expect(headerControl(phase)).toBe("none");
-    expect(showLoginCta(phase)).toBe(false);
-    expect(showLoginCta(phase, true)).toBe(true);
-    expect(loginView(phase).mode).toBe("unavailable");
-    expect(loginView(phase).message).toBe(LOGIN_UNAVAILABLE_COPY);
+    expect(phase).toMatchObject({ kind: "guest", login: { state: "ready" }, csrfToken: "csrf" });
+    expect(headerControl(phase)).toBe("login");
+    expect(showLoginCta(phase)).toBe(true);
+    expect(loginView(phase)).toMatchObject({
+      mode: "google",
+      message: GOOGLE_CONSENT_COPY,
+      google: true,
+      retry: false,
+    });
+    expect(GOOGLE_CONSENT_COPY).toContain("openid 和 profile");
+    expect(GOOGLE_CONSENT_COPY).toContain("不请求 email");
+    expect(loginView(phase, "provider_rejected").alert).toBe(GOOGLE_REJECTED_COPY);
+    expect(loginView(phase, "provider_unreachable").alert).toBe(GOOGLE_UNREACHABLE_COPY);
+    expect(loginView(phase, "login_failed").alert).toBe(LOGIN_FAILED_COPY);
     const expired = { ...phase, expired: true } as AuthPhase;
     expect(showExpiryBanner(expired, false)).toBe(true);
-    expect(showRelogin(expired, false)).toBe(false);
-    expect(showRelogin(expired, false, true)).toBe(true);
-    expect(showRelogin(expired, true, true)).toBe(false);
+    expect(showRelogin(expired, false)).toBe(true);
+    expect(showRelogin(expired, true)).toBe(false);
+    const noCsrf = { ...phase, csrfToken: null } as AuthPhase;
+    expect(showLoginCta(noCsrf)).toBe(false);
+    expect(loginView(noCsrf).google).toBe(false);
   });
 
   it("keeps an existing account usable when new login is unavailable", () => {
