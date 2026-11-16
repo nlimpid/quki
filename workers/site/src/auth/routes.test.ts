@@ -232,8 +232,18 @@ describe("auth routes", () => {
     expect(body.user.displayName).toBe("林");
     expect(body.user.id).not.toBe("attacker");
     expect(JSON.stringify(body)).not.toContain(sessionCookie?.value ?? "missing-token");
+    const subjectBytes = new TextEncoder().encode("person-a");
     expect(memory.queries.every((query) => !query.sql.includes("person-a"))).toBe(true);
-    expect(memory.queries.some((query) => query.params.includes("person-a"))).toBe(true);
+    expect(
+      memory.queries.some((query) =>
+        query.params.some(
+          (param) =>
+            param instanceof Uint8Array &&
+            param.byteLength === subjectBytes.byteLength &&
+            param.every((byte, index) => byte === subjectBytes[index]),
+        ),
+      ),
+    ).toBe(true);
 
     const loopback = await login(runtime().app, {
       sub: "local-user",

@@ -95,11 +95,14 @@ function hasControlChar(value: string): boolean {
 }
 
 function validIssuer(issuer: string): boolean {
-  return issuer.startsWith("https://") && issuer.length <= 255 && !hasControlChar(issuer);
+  if (!issuer.startsWith("https://") || hasControlChar(issuer)) return false;
+  const size = new TextEncoder().encode(issuer).byteLength;
+  return size <= 512;
 }
 
 function validSubject(subject: string): boolean {
-  return subject.length > 0 && subject.length <= 255 && !hasControlChar(subject);
+  if (subject.length === 0 || hasControlChar(subject)) return false;
+  return new TextEncoder().encode(subject).byteLength <= 512;
 }
 
 async function upsertUser(auth: AuthRuntime, identity: OidcIdentity) {

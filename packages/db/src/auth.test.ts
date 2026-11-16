@@ -16,6 +16,10 @@ describe("0006_auth.sql", () => {
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS auth_users");
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS auth_sessions");
     expect(sql).toContain("UNIQUE KEY uk_auth_users_identity (issuer, subject)");
+    expect(sql).toMatch(/issuer\s+VARBINARY\(512\)\s+NOT NULL/);
+    expect(sql).toMatch(/subject\s+VARBINARY\(512\)\s+NOT NULL/);
+    expect(sql).not.toMatch(/issuer\s+VARCHAR/i);
+    expect(sql).not.toMatch(/subject\s+VARCHAR/i);
     expect(sql).not.toContain("provider_subject");
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS auth_oauth_transactions");
     expect(sql).toContain("NOT APPLIED");
@@ -54,12 +58,45 @@ describe("auth store", () => {
     expect(await store.findUser(issuerB, subject)).toEqual({ id: "user-b", displayName: null });
     expect(await store.findUser("https://idp.example/realms/A", subject)).toBeNull();
     expect(await store.findUser(`${issuerA}/`, subject)).toBeNull();
+    expect(await store.findUser(`${issuerA} `, subject)).toBeNull();
+    expect(await store.findUser(issuerA, `${subject} `)).toBeNull();
+    expect(await store.findUser(issuerA, subject.toUpperCase())).toBeNull();
+    await store.insertUser({
+      id: "user-accent",
+      issuer: issuerA,
+      subject: "André",
+      displayName: null,
+    });
+    expect(await store.findUser(issuerA, "André")).toEqual({
+      id: "user-accent",
+      displayName: null,
+    });
+    expect(await store.findUser(issuerA, "Andre\u0301")).toBeNull();
+    await expect(
+      store.insertUser({
+        id: "user-long",
+        issuer: issuerA,
+        subject: "x".repeat(513),
+        displayName: null,
+      }),
+    ).rejects.toThrow(/identity_length/);
+    expect(await store.findUser(issuerA, "x".repeat(513))).toBeNull();
     await expect(
       store.insertUser({ id: "user-a2", issuer: issuerA, subject, displayName: "再次" }),
     ).rejects.toThrow(/duplicate identity/);
     expect(await store.findUser(issuerA, subject)).toEqual({ id: "user-a", displayName: "林" });
+    const subjectBytes = new TextEncoder().encode(subject);
     expect(memory.queries.every((query) => !query.sql.includes(subject))).toBe(true);
-    expect(memory.queries.some((query) => query.params.includes(subject))).toBe(true);
+    expect(
+      memory.queries.some((query) =>
+        query.params.some(
+          (param) =>
+            param instanceof Uint8Array &&
+            param.byteLength === subjectBytes.byteLength &&
+            param.every((byte, index) => byte === subjectBytes[index]),
+        ),
+      ),
+    ).toBe(true);
 
     const token = "raw-session-token";
     await store.insertSession({

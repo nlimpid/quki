@@ -95,7 +95,7 @@ JSON or form body: `{ "csrf": "...", "returnTo": "/portfolio?edit=1" }`. A `user
 
 IdP redirect. The request URL origin must be `https://quki.cc` or `https://www.quki.cc` (tests may inject others). A wrong `state` does not delete the transaction. A matching `state` runs one conditional `DELETE` (`token_hash`, `state_secret`, and `expires_at`). Only `rowsAffected = 1` continues, so two overlapping valid callbacks have one winner. That statement is supported by `@tidbcloud/serverless`; this change did not run it on TiDB. `oauth4webapi` checks `state` again. Success sets `qk_session` and redirects to the stored same-origin path. A code-exchange failure after the delete does not allow replay. A `returnTo` on the callback query is ignored.
 
-The account key is the exact ID token `iss` plus `sub`. Two issuers that share a `sub` are two accounts. `name` / `preferred_username` is stored only after `publicDisplayName`. Access tokens and refresh tokens are not stored.
+The account key is the UTF-8 bytes of the ID token `iss` plus the UTF-8 bytes of `sub`, stored in `VARBINARY(512)` columns. `utf8mb4_unicode_ci` would fold case. `utf8mb4_bin` distinguishes case but uses PAD SPACE, so a trailing space would compare equal. `VARBINARY` keeps both. The HTTP driver sends those bytes as a `0x` hex literal. Values longer than 512 bytes are rejected instead of truncated. Two issuers that share a `sub` are two accounts. This DDL has not been executed on TiDB. `name` / `preferred_username` is stored only after `publicDisplayName`. Access tokens and refresh tokens are not stored.
 
 ### `POST /api/auth/logout`
 
@@ -170,7 +170,7 @@ pnpm lint
 Covered in process, with no network and no database:
 
 - Anonymous `/api/health` and `/api/instruments` with and without a session cookie.
-- Unavailable login (`503`, no session cookie) when OIDC env is absent.
+- With no database URL and no OIDC settings, `GET /api/auth/session` is `200`, `Cache-Control: no-store`, `status: unavailable`, `login.ready: false`, and no `Set-Cookie`. `POST /api/auth/login` is `503` with no `Location`. A store error on a later request is a separate `503`.
 - Cookie flags, CSRF on login and logout, revoked logout, 14-day expiry.
 - `401` versus `403`, ignored caller `userId`, two subjects isolated.
 - Open redirects, callback `state` mismatch, one-time OAuth transaction, PKCE challenge from `oauth4webapi`.
@@ -182,16 +182,16 @@ Covered in process, with no network and no database:
 
 These checks use an in-process stand-in for the auth tables. They do not open TiDB, an issuer, or a browser.
 
-Local run after the auth defect fixes: `pnpm test` passed (30 files, 132 tests), `pnpm typecheck` passed, `pnpm lint` passed with three existing effect-dependency warnings in `RotationChart`, `KlineChart`, and `OverviewPage`, and `pnpm --filter @quki/web build` passed. The new regressions use an in-process stand-in. They are not a TiDB, issuer, or browser run, and they are not a security approval.
+Local run after the identity-column change: `pnpm test` passed (32 files, 136 tests), `pnpm typecheck` passed, `pnpm lint` passed with three existing effect-dependency warnings in `RotationChart`, `KlineChart`, and `OverviewPage`, and `pnpm --filter @quki/web build` passed. The new regressions use an in-process stand-in and a fake HTTP response. They are not a TiDB, issuer, or browser run, and they are not a security approval.
 
 ## Still outstanding
 
 Fixed in code, still not a release:
 
-- Issuer plus `sub` is the account key. Provider choice is still open, and `LOGIN_UI_ENABLED` stays false until consent text exists.
+- Issuer and subject are `VARBINARY(512)` identity columns. The in-process byte compare and the driver's hex literal are not a TiDB execution of that unique key. Provider choice is still open, and `LOGIN_UI_ENABLED` stays false until consent text exists.
 - Trusted callback origins are `https://quki.cc` and `https://www.quki.cc`. Secrets are not set.
 - `0006_auth.sql` is reviewed code and is not applied. The crawler `POST /admin/migrate` list still stops at `0005_dividend_audit.sql`. Do not treat this file as an instruction to migrate.
-- The conditional `DELETE` and `rowsAffected` behavior are tested in process. They are not verified against TiDB.
+- The conditional `DELETE` is tested with an in-process stand-in and with the driver decoding a fake HTTP JSON body. A numeric `rowsAffected` of `1` wins; `0`, `null`, and the string `"1"` fail closed. Concurrent `DELETE` on a real TiDB cluster, and the JSON type that cluster returns, were not run.
 - No live issuer and no browser pass.
 
 `0005_dividend_audit.sql` was not edited or rerun.

@@ -93,6 +93,22 @@ function text(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+/** Max UTF-8 length stored for issuer and subject. Longer values are rejected, not truncated. */
+export const IDENTITY_BYTE_LIMIT = 512;
+
+/**
+ * Exact UTF-8 bytes of an identity string. Does not trim, lowercase, or normalize.
+ * The serverless driver sends a Uint8Array as a 0x hex literal, so the server
+ * compares these bytes to the VARBINARY column.
+ */
+export function identityKey(value: string): Uint8Array {
+  const bytes = new TextEncoder().encode(value);
+  if (bytes.byteLength === 0 || bytes.byteLength > IDENTITY_BYTE_LIMIT) {
+    throw new Error("identity_length");
+  }
+  return bytes;
+}
+
 export function rowsAffectedOf(result: unknown): number {
   if (!result || typeof result !== "object" || !("rowsAffected" in result)) return 0;
   const value = (result as { rowsAffected?: unknown }).rowsAffected;
@@ -105,9 +121,17 @@ export function createAuthStore(getConn: () => SqlConn): AuthStore {
 
   return {
     async findUser(issuer, subject) {
+      let issuerKey: Uint8Array;
+      let subjectKey: Uint8Array;
+      try {
+        issuerKey = identityKey(issuer);
+        subjectKey = identityKey(subject);
+      } catch {
+        return null;
+      }
       const result = await db().execute(
         "SELECT id, display_name FROM auth_users WHERE issuer = ? AND subject = ? LIMIT 1",
-        [issuer, subject],
+        [issuerKey, subjectKey],
       );
       const row = rowsOf(result)[0];
       const id = text(row?.id);
@@ -118,7 +142,7 @@ export function createAuthStore(getConn: () => SqlConn): AuthStore {
     async insertUser(input) {
       await db().execute(
         "INSERT INTO auth_users (id, issuer, subject, display_name) VALUES (?, ?, ?, ?)",
-        [input.id, input.issuer, input.subject, input.displayName],
+        [input.id, identityKey(input.issuer), identityKey(input.subject), input.displayName],
       );
     },
 

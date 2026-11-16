@@ -2,7 +2,20 @@ import type { SqlConn } from "./client.js";
 
 /** In-process stand-in for the auth tables. Tests only. Not used by the worker. */
 
-type UserRow = { id: string; issuer: string; subject: string; displayName: string | null };
+type UserRow = { id: string; issuer: Uint8Array; subject: Uint8Array; displayName: string | null };
+
+function asBytes(value: unknown): Uint8Array {
+  if (!(value instanceof Uint8Array)) throw new Error("identity parameter must be bytes");
+  return value;
+}
+
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false;
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
 type SessionRow = {
   id: string;
   userId: string;
@@ -36,20 +49,30 @@ export function createAuthMemoryConn(): SqlConn & { queries: AuthQuery[] } {
       const text = sql.replace(/\s+/g, " ").trim();
       if (/^INSERT INTO auth_users /i.test(text)) {
         const [id, issuer, subject, displayName] = params;
-        if (users.some((user) => user.issuer === issuer && user.subject === subject)) {
+        const issuerBytes = asBytes(issuer);
+        const subjectBytes = asBytes(subject);
+        if (
+          users.some(
+            (user) => sameBytes(user.issuer, issuerBytes) && sameBytes(user.subject, subjectBytes),
+          )
+        ) {
           throw new Error("duplicate identity");
         }
         users.push({
           id: String(id),
-          issuer: String(issuer),
-          subject: String(subject),
+          issuer: issuerBytes,
+          subject: subjectBytes,
           displayName: displayName == null ? null : String(displayName),
         });
         return { rows: [] };
       }
       if (/^SELECT id, display_name FROM auth_users /i.test(text)) {
         const [issuer, subject] = params;
-        const user = users.find((row) => row.issuer === issuer && row.subject === subject);
+        const issuerBytes = asBytes(issuer);
+        const subjectBytes = asBytes(subject);
+        const user = users.find(
+          (row) => sameBytes(row.issuer, issuerBytes) && sameBytes(row.subject, subjectBytes),
+        );
         return { rows: user ? [{ id: user.id, display_name: user.displayName }] : [] };
       }
       if (/^UPDATE auth_users SET display_name/i.test(text)) {

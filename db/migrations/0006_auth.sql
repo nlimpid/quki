@@ -5,13 +5,21 @@
 -- No foreign keys: the rest of the schema enforces relationships in the app.
 -- Session tokens, OAuth state, PKCE verifiers, and nonces are server-side.
 -- The browser receives only an opaque session cookie and a CSRF token.
+--
+-- issuer and subject are VARBINARY, not VARCHAR.
+-- utf8mb4_unicode_ci folds letter case. utf8mb4_bin distinguishes case but is
+-- PAD SPACE, so trailing spaces compare equal. VARBINARY compares the stored
+-- bytes and keeps trailing bytes. The table default collation does not apply
+-- to these two columns. 512 + 512 is under the 3072-byte index limit.
+-- The HTTP driver binds a Uint8Array parameter as a 0x hex literal.
+-- This file is not executed by tests or by the crawler migrate list.
 
 SET NAMES utf8mb4;
 
 CREATE TABLE IF NOT EXISTS auth_users (
   id           CHAR(36)     NOT NULL,
-  issuer       VARCHAR(255) NOT NULL COMMENT 'Exact OIDC iss string. Case and a trailing slash are significant.',
-  subject      VARCHAR(255) NOT NULL COMMENT 'OIDC sub. Unique only together with issuer.',
+  issuer       VARBINARY(512) NOT NULL COMMENT 'UTF-8 bytes of the OIDC iss claim. Case and trailing bytes count.',
+  subject      VARBINARY(512) NOT NULL COMMENT 'UTF-8 bytes of sub. Case and trailing bytes count.',
   display_name VARCHAR(40)  NULL COMMENT 'Optional label. Not an email or phone fallback.',
   created_at   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
