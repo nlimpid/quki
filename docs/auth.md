@@ -20,7 +20,7 @@ These alternatives do not fit this app:
 | Auth.js MySQL adapter | Same TCP driver problem as `mysql2`, unless a custom adapter is written on top of `@tidbcloud/serverless`. That is more glue than calling the driver directly. |
 | Email, password, SMS, WeChat, GitHub, or Google | Each one is an owner decision. The audience is a Chinese market page with no mailer and no user table. This change does not pick one. |
 
-Tradeoff: the OIDC callback is implemented and tested with an in-process stand-in. `login.ready` on `GET /api/auth/session` only means the Worker has a database URL and an `openid` issuer configured. The page does not treat that as a working sign-in. `LOGIN_UI_ENABLED` in `apps/web/src/lib/authState.ts` stays `false` until a provider is chosen and a real consent sentence replaces the empty one. Until then the header and the expiry banner do not offer 登录 or 重新登录, and `/login` says `登录暂不可用`. There is no 继续登录 button.
+The provider in this candidate is Google. `login.ready` is true only when the Worker has `TIDB_QUKI_DATABASE_URL`, `AUTH_OIDC_ISSUER` for `https://accounts.google.com`, `AUTH_OIDC_CLIENT_ID`, `AUTH_OIDC_CLIENT_SECRET`, and scopes that are exactly `openid` plus `profile`. The page posts `使用 Google 登录` only in that case. There is no separate `LOGIN_UI_ENABLED` flag. Missing config stays `login.ready: false` and `/login` says login is unavailable. This repository does not set those variables, so deploying the code does not by itself turn production login on.
 
 `pnpm dev` keeps using seed CSVs. It does not open TiDB for login.
 
@@ -28,19 +28,22 @@ Tradeoff: the OIDC callback is implemented and tested with an in-process stand-i
 
 Names only. Do not create the provider account in this change.
 
-1. Choose an OIDC issuer that supports authorization code, PKCE `S256`, a confidential client secret, and a discovery document.
+1. In Google Cloud Console, create a separate OAuth client of type Web application. Token endpoint authentication is `client_secret_post`. Do not put the secret in wrangler.jsonc or in the browser.
 2. Register both callback URLs:
    - `https://quki.cc/api/auth/callback`
    - `https://www.quki.cc/api/auth/callback`
    The callback is `https://quki.cc/api/auth/callback` or `https://www.quki.cc/api/auth/callback`, chosen by an exact match of the request URL origin against that allowlist. `www` is its own entry. `X-Forwarded-Host` and `Forwarded` are ignored. Any other host fails closed and does not build a callback. Tests may inject extra origins; production does not.
-3. Set site Worker secrets:
-   - `AUTH_OIDC_ISSUER` — `https` URL, no userinfo in the URL
+3. On the site Worker `quki`, set secrets only when sign-in should become available. This change does not set them.
+   - `TIDB_QUKI_DATABASE_URL`
+   - `AUTH_OIDC_ISSUER` = `https://accounts.google.com`
    - `AUTH_OIDC_CLIENT_ID`
    - `AUTH_OIDC_CLIENT_SECRET`
-   - `AUTH_OIDC_SCOPES` — omit it, or set exactly `openid`. `email`, `profile`, or `phone` keep login unavailable so the consent placeholder is not a lie.
-4. Apply `db/migrations/0006_auth.sql` with `pnpm migrate` after review. It is not applied here. It does not modify dividend tables and does not depend on `0005_dividend_audit.sql`.
-5. Choose the provider, write the real consent sentence, then set `LOGIN_UI_ENABLED` and add the unbranded 继续登录 control that posts to `POST /api/auth/login`. Do not flip the flag while the consent text is still missing. `login.ready: true` alone does not show that button.
-6. Local `http://127.0.0.1` will not keep the session cookie, because `Secure` is always set. Exercise login on HTTPS.
+   - `AUTH_OIDC_SCOPES` — omit it, or set `openid profile` in either order. `openid` alone, `email`, and any other scope return `scopes_not_confirmed`.
+4. Apply `db/migrations/0006_auth.sql` with `pnpm migrate` after review. It creates only `auth_users`, `auth_sessions`, and `auth_oauth_transactions`. It does not modify dividend tables and does not depend on `0005_dividend_audit.sql` or `0007_holdings.sql`. It is not applied here.
+5. The button text is `使用 Google 登录`. The consent sentence is `GOOGLE_CONSENT_COPY` in `apps/web/src/lib/authState.ts`.
+6. Cookies are always `Secure`. `http://localhost` and `http://127.0.0.1` are not callback origins. A real Google test that is not production uses a separate OAuth client and a separate HTTPS hostname. On that Worker only, set `AUTH_ALLOW_NONPRODUCTION_ORIGINS=true` and `AUTH_NONPRODUCTION_HTTPS_ORIGINS` to that exact `https` origin. Do not set the flag on the production Worker. Do not add the hostname to `PRODUCTION_AUTH_ORIGINS`. The production callback list stays the two URLs above.
+
+`oauth4webapi` 3.8.8 checks discovery `issuer` with `new URL(issuer).href` against the configured issuer URL. It then requires the callback `iss` parameter and the ID token `iss` to equal the discovery document's `issuer` string. The document fetched on 2026-11-16 says `https://accounts.google.com`. A token whose `iss` is `accounts.google.com` fails that comparison and is not rewritten into the https value. `authorization_response_iss_parameter_supported` is true, so a callback without `iss` also fails closed. Audience must equal `AUTH_OIDC_CLIENT_ID`. Discovery lists `client_secret_post` and `S256`. The authorization redirect does not include the client secret.
 
 `TIDB_QUKI_DATABASE_URL` is still required for any real session read. Missing issuer, client, secret, or database leaves `login.ready: false`. A storage error during a configured request is HTTP 503 and does not describe the user as logged out.
 
@@ -148,7 +151,7 @@ Copy:
 | --- | --- | --- |
 | `initializing` | 16px spinner, at most 4 seconds | Probe in flight. Pages stay usable. |
 | `unknown` | `登录` as a session check | Timeout, network error, or HTTP 503. Not logged out. `/login` says `无法确认登录状态，请重试。` A late `200` still updates the header. |
-| `guest` and login not offered | no 登录 link | Includes `login.ready: false` (`auth_not_configured`, `storage_unconfigured`, `scopes_not_confirmed`) and `login.ready: true` while `LOGIN_UI_ENABLED` is false. `/login` says `登录暂不可用。访客仍可查看行情，并在本机管理持仓。` 重试 only probes the session again. |
+| `guest` and login not offered | no 登录 link | `login.ready: false` (`auth_not_configured`, `storage_unconfigured`, `scopes_not_confirmed`). `/login` says `登录暂不可用。访客仍可查看行情，并在本机管理持仓。` 重试 only probes the session again. |
 | `guest` + `expired` | dismissible banner, no 重新登录 while login is not offered | Previous cookie is dead. Unsaved holdings edits stay. |
 | `authenticated` | `账户` | Still shown when `login.ready` is false. Menu label is `displayName` or `已登录`. |
 | `logoutPending` | `账户`, menu says `正在退出…` | Second submit disabled. |
@@ -156,7 +159,7 @@ Copy:
 
 The account panel is not a focus trap. Opening it moves focus to 退出. Escape closes it and returns focus to 账户. Tab and Shift+Tab leave the panel and close it.
 
-Unresolved: which OIDC provider to use, and the consent sentence for what that provider collects. Those two choices gate `LOGIN_UI_ENABLED`. The API can report `login.ready: true` before either choice is made.
+Google is the only configured issuer. The consent sentence is fixed in the page. `login.ready: true` means the server config and store are present, not that a person has completed a live Google callback.
 
 ## Tests
 
@@ -177,7 +180,7 @@ Covered in process, with no network and no database:
 - Storage errors do not echo the driver URL.
 - `authRuntimeFromEnv` does not call `connect` until a query runs.
 - Display-name filter, `returnTo`, and the 4 second unknown state.
-- Header and relogin stay hidden for `auth_not_configured`, `storage_unconfigured`, `scopes_not_confirmed`, and for `login.ready: true` while `LOGIN_UI_ENABLED` is false. An existing session still shows 账户.
+- Header and relogin stay hidden for `auth_not_configured`, `storage_unconfigured`, and `scopes_not_confirmed`. They appear when `login.ready` is true. An existing session still shows 账户.
 - Auth client and auth modules do not touch `qk.holdings.v1`.
 
 These checks use an in-process stand-in for the auth tables. They do not open TiDB, an issuer, or a browser.
@@ -188,7 +191,7 @@ Local run after the identity-column change: `pnpm test` passed (32 files, 136 te
 
 Fixed in code, still not a release:
 
-- Issuer and subject are `VARBINARY(512)` identity columns. The in-process byte compare and the driver's hex literal are not a TiDB execution of that unique key. Provider choice is still open, and `LOGIN_UI_ENABLED` stays false until consent text exists.
+- Issuer and subject are `VARBINARY(512)` identity columns. The in-process byte compare and the driver's hex literal are not a TiDB execution of that unique key. A scheme-less `iss` is not stored. Live Google sign-in still needs the Console client, the secrets, and an applied `0006`.
 - Trusted callback origins are `https://quki.cc` and `https://www.quki.cc`. Secrets are not set.
 - `0006_auth.sql` is reviewed code and is not applied. The crawler `POST /admin/migrate` list still stops at `0005_dividend_audit.sql`. Do not treat this file as an instruction to migrate.
 - The conditional `DELETE` is tested with an in-process stand-in and with the driver decoding a fake HTTP JSON body. A numeric `rowsAffected` of `1` wins; `0`, `null`, and the string `"1"` fail closed. Concurrent `DELETE` on a real TiDB cluster, and the JSON type that cluster returns, were not run.

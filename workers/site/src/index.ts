@@ -28,8 +28,15 @@ export interface Env {
   AUTH_OIDC_ISSUER?: string;
   AUTH_OIDC_CLIENT_ID?: string;
   AUTH_OIDC_CLIENT_SECRET?: string;
-  /** Must stay `openid` until the consent copy is replaced. Other scopes fail closed. */
+  /**
+   * Omit, or set to `openid profile` in either order.
+   * `email` and every other scope fail closed.
+   */
   AUTH_OIDC_SCOPES?: string;
+  /** Nonproduction only. The production Worker must leave this unset. */
+  AUTH_ALLOW_NONPRODUCTION_ORIGINS?: string;
+  /** Comma-separated https origins used only when the flag above is `true`. */
+  AUTH_NONPRODUCTION_HTTPS_ORIGINS?: string;
   ASSETS: { fetch: (request: Request) => Promise<Response> };
 }
 

@@ -155,7 +155,7 @@ The CSV backfill stays a Node script: the seed files are not on the edge.
 
 ## A-share dividends
 
-`/stocks`, `/stock/:code`, and `/portfolio` are Shanghai and Shenzhen A-shares (main board, ChiNext, STAR). Beijing and delisted names are excluded. The stock page has no K-line. Holdings stay in this browser under `qk.holdings.v1`. `/me` redirects to `/portfolio`. Login is a provider-neutral shell: the header links to `/login`, but the sign-in control stays inert until an OIDC issuer is chosen. See `docs/auth.md`.
+`/stocks`, `/stock/:code`, and `/portfolio` are Shanghai and Shenzhen A-shares (main board, ChiNext, STAR). Beijing and delisted names are excluded. The stock page has no K-line. Holdings stay in this browser under `qk.holdings.v1`. `/me` redirects to `/portfolio`. Login posts to Google only when the site Worker has the Google issuer, client, secret, and database URL. See `docs/auth.md`. Holdings stay in this browser.
 
 近12月股息率 and a holding's 平均股息率 use the same formula: trailing 12 calendar months of pretax cash per share, divided by the latest close. Cash paid before a later bonus or transfer is divided by that split so it lines up with today's share count. Bonus and transfer shares are not cash. 「最近分红」is the ex-dividend date. A close the latest crawl did not refresh stays on the card in gray.
 
