@@ -21,6 +21,7 @@ import {
 } from "../lib/accountDraft.js";
 import {
   fetchAccountHoldings,
+  HoldingsRequestError,
   writeAccountHoldings,
   type AccountHoldingsResponse,
 } from "../lib/holdingsAccount.js";
@@ -76,6 +77,7 @@ export function AccountHoldings({
   const [screenshot, setScreenshot] = useState(restored?.screenshot ?? null);
   const [previewRestored, setPreviewRestored] = useState(restored?.screenshot != null);
   const [explicit, setExplicit] = useState(false);
+  const [operationToken, setOperationToken] = useState("");
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [boundUser, setBoundUser] = useState(userId);
   if (boundUser !== userId) {
@@ -84,6 +86,7 @@ export function AccountHoldings({
     setConsent(false);
     setExplicit(false);
     setFile(null);
+    setOperationToken("");
     setLoaded(null);
     setError(null);
     setPendingDelete(null);
@@ -113,6 +116,7 @@ export function AccountHoldings({
       .then((body) => {
         if (token.epoch !== epoch.current || token.userId !== ownerRef.current) return;
         setLoaded(body);
+        if (body.operationToken) setOperationToken(body.operationToken);
       })
       .catch(() => {
         if (token.epoch !== epoch.current || token.userId !== ownerRef.current) return;
@@ -172,16 +176,26 @@ export function AccountHoldings({
     };
   });
 
+  async function refreshOperationToken(token: { epoch: number; userId: string }) {
+    try {
+      const fresh = await fetchAccountHoldings(fetchImpl);
+      if (!stillCurrent(token) || !fresh.operationToken) return;
+      setOperationToken(fresh.operationToken);
+    } catch {
+      // A rejected save does not reload the book.
+    }
+  }
+
   async function save(next: { code: string; shares: number }[], confirmEmpty = false) {
     const token = { epoch: epoch.current, userId: ownerRef.current };
-    if (!stillCurrent(token)) return;
+    if (!stillCurrent(token) || operationToken.length === 0) return;
     setError(null);
     try {
       const body = await writeAccountHoldings(
         {
           path: "/api/holdings",
           csrfToken,
-          idempotencyKey: crypto.randomUUID(),
+          idempotencyKey: operationToken,
           items: next,
           confirmEmpty,
         },
@@ -189,10 +203,15 @@ export function AccountHoldings({
       );
       if (!stillCurrent(token)) return;
       setLoaded(body);
+      if (body.operationToken) setOperationToken(body.operationToken);
       setReplacePrompt(null);
       setCode("");
       setShares("");
-    } catch {
+    } catch (caught) {
+      if (!stillCurrent(token)) return;
+      if (caught instanceof HoldingsRequestError && caught.status === 409) {
+        await refreshOperationToken(token);
+      }
       if (!stillCurrent(token)) return;
       setError("没有写入账户。本机持仓未改动。");
     }
@@ -366,12 +385,12 @@ export function AccountHoldings({
               disabled={locked || localChanges.length === 0}
               onClick={() => {
                 const token = { epoch: epoch.current, userId: ownerRef.current };
-                if (!stillCurrent(token)) return;
+                if (!stillCurrent(token) || operationToken.length === 0) return;
                 void writeAccountHoldings(
                   {
                     path: "/api/holdings/import",
                     csrfToken,
-                    idempotencyKey: crypto.randomUUID(),
+                    idempotencyKey: operationToken,
                     items: localChanges.map((row) => ({ code: row.code, shares: row.shares })),
                   },
                   fetchImpl,
@@ -379,11 +398,15 @@ export function AccountHoldings({
                   .then((body) => {
                     if (!stillCurrent(token)) return;
                     setLoaded(body);
+                    if (body.operationToken) setOperationToken(body.operationToken);
                     setLocalChanges(null);
                     setPreserved([]);
                   })
-                  .catch(() => {
+                  .catch((caught: unknown) => {
                     if (!stillCurrent(token)) return;
+                    if (caught instanceof HoldingsRequestError && caught.status === 409) {
+                      void refreshOperationToken(token);
+                    }
                     setError("没有导入。本机持仓未改动。");
                   });
               }}
@@ -594,7 +617,9 @@ export function AccountHoldings({
                   className="btn primary"
                   disabled={!explicit || !decision?.ok || submitted.length === 0}
                   onClick={() => {
-                    if (!canWriteScreenshot || !screenshot || !decision?.ok || !consent) return;
+                    if (!canWriteScreenshot || !screenshot || !decision?.ok || !consent || operationToken.length === 0) {
+                      return;
+                    }
                     const token = { epoch: epoch.current, userId: ownerRef.current };
                     if (!stillCurrent(token)) return;
                     void fetchImpl("/api/holdings/apply", {
@@ -608,18 +633,22 @@ export function AccountHoldings({
                       body: JSON.stringify({
                         csrf: csrfToken,
                         draftId: screenshot.draftId,
-                        idempotencyKey: crypto.randomUUID(),
+                        idempotencyKey: operationToken,
                         rows: submitted,
                       }),
                     })
                       .then(async (response) => {
                         if (!stillCurrent(token)) return;
-                        if (!response.ok) throw new Error("apply_failed");
+                        if (!response.ok) {
+                          if (response.status === 409) await refreshOperationToken(token);
+                          throw new Error("apply_failed");
+                        }
                         setScreenshot(null);
                         setExplicit(false);
                         setConsent(false);
                         const fresh = await fetchAccountHoldings(fetchImpl);
                         if (!stillCurrent(token)) return;
+                        if (fresh.operationToken) setOperationToken(fresh.operationToken);
                         setLoaded(fresh);
                       })
                       .catch(() => {

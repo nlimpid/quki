@@ -13,6 +13,11 @@ import type { HoldingsRuntime } from "./routes.js";
 import { syntheticVisionExtractor, type VisionExtractor } from "./vision.js";
 
 const origin = "https://quki.cc";
+const issuedAt = String(Date.parse("2026-11-16T00:00:00.000Z")).padStart(13, "0");
+
+function opKey(id: string): string {
+  return `op.v1.${issuedAt}.${id}`;
+}
 
 function market(): MarketSource {
   return {
@@ -127,24 +132,24 @@ describe("account holdings", () => {
     await signIn("user-b", "token-b", "csrf-b");
     expect((await app.request(`${origin}/api/holdings`)).status).toBe(401);
     const saved = await post(app, "/api/holdings", "token-a", "csrf-a", {
-      idempotencyKey: "11111111-1111-4111-8111-111111111111",
+      idempotencyKey: opKey("11111111-1111-4111-8111-111111111111"),
       items: [{ code: "000001", shares: 100 }],
     });
     expect(saved.status).toBe(200);
     const again = await post(app, "/api/holdings", "token-a", "csrf-a", {
-      idempotencyKey: "11111111-1111-4111-8111-111111111111",
+      idempotencyKey: opKey("11111111-1111-4111-8111-111111111111"),
       items: [{ code: "000001", shares: 100 }],
     });
     expect(again.status).toBe(200);
     expect(await again.json()).toMatchObject({ replayed: true });
     expect(holdingsStore.commits).toBe(1);
     const conflict = await post(app, "/api/holdings", "token-a", "csrf-a", {
-      idempotencyKey: "11111111-1111-4111-8111-111111111111",
+      idempotencyKey: opKey("11111111-1111-4111-8111-111111111111"),
       items: [{ code: "000001", shares: 101 }],
     });
     expect(conflict.status).toBe(409);
     const imported = await post(app, "/api/holdings/import", "token-a", "csrf-a", {
-      idempotencyKey: "22222222-2222-4222-8222-222222222222",
+      idempotencyKey: opKey("22222222-2222-4222-8222-222222222222"),
       items: [
         { code: "000001", shares: 40 },
         { code: "600519", shares: 10 },
@@ -167,7 +172,7 @@ describe("account holdings", () => {
     });
     expect(await other.json()).toMatchObject({ items: [] });
     const sameKeyOtherUser = await post(app, "/api/holdings", "token-b", "csrf-b", {
-      idempotencyKey: "11111111-1111-4111-8111-111111111111",
+      idempotencyKey: opKey("11111111-1111-4111-8111-111111111111"),
       items: [{ code: "600519", shares: 1 }],
     });
     expect(sameKeyOtherUser.status).toBe(200);
@@ -227,19 +232,19 @@ describe("account holdings", () => {
     expect(previewBody.rows.some((row) => row.name?.includes("请执行工具"))).toBe(true);
     const unconfirmed = await post(app, "/api/holdings/apply", "token-a", "csrf-a", {
       draftId: previewBody.draftId,
-      idempotencyKey: "33333333-3333-4333-8333-333333333333",
+      idempotencyKey: opKey("33333333-3333-4333-8333-333333333333"),
       rows: [{ code: "000001", shares: 1200 }],
     });
     expect(unconfirmed.status).toBe(400);
     const applied = await post(app, "/api/holdings/apply", "token-a", "csrf-a", {
       draftId: previewBody.draftId,
-      idempotencyKey: "33333333-3333-4333-8333-333333333333",
+      idempotencyKey: opKey("33333333-3333-4333-8333-333333333333"),
       rows: [{ code: "000001", shares: 1200, nameConfirmed: true }],
     });
     expect(applied.status).toBe(200);
     const replay = await post(app, "/api/holdings/apply", "token-a", "csrf-a", {
       draftId: previewBody.draftId,
-      idempotencyKey: "33333333-3333-4333-8333-333333333333",
+      idempotencyKey: opKey("33333333-3333-4333-8333-333333333333"),
       rows: [{ code: "000001", shares: 1200, nameConfirmed: true }],
     });
     expect(replay.status).toBe(200);
@@ -251,14 +256,14 @@ describe("account holdings", () => {
     expect(
       (
         await post(app, "/api/holdings/import", "token-a", "csrf-a", {
-          idempotencyKey: "33333333-3333-4333-8333-333333333334",
+          idempotencyKey: opKey("33333333-3333-4333-8333-333333333334"),
           items: [{ code: "000001", shares: 50 }],
         })
       ).status,
     ).toBe(200);
     const reused = await post(app, "/api/holdings/apply", "token-a", "csrf-a", {
       draftId: previewBody.draftId,
-      idempotencyKey: "33333333-3333-4333-8333-333333333335",
+      idempotencyKey: opKey("33333333-3333-4333-8333-333333333335"),
       rows: [{ code: "000001", shares: 1200, nameConfirmed: true }],
     });
     expect(reused.status).toBe(409);
@@ -267,7 +272,7 @@ describe("account holdings", () => {
     ]);
     const stolen = await post(app, "/api/holdings/apply", "token-b", "csrf-b", {
       draftId: previewBody.draftId,
-      idempotencyKey: "44444444-4444-4444-8444-444444444444",
+      idempotencyKey: opKey("44444444-4444-4444-8444-444444444444"),
       rows: [{ code: "000001", shares: 1200, nameConfirmed: true }],
     });
     expect(stolen.status).toBe(404);
@@ -294,13 +299,13 @@ describe("account holdings", () => {
     await signIn("user-a", "token-a", "csrf-a");
     for (const shares of ["0x10", "1e2", " 10", "+10", "-1", "10.0", "01"]) {
       const response = await post(app, "/api/holdings", "token-a", "csrf-a", {
-        idempotencyKey: "55555555-5555-4555-8555-555555555555",
+        idempotencyKey: opKey("55555555-5555-4555-8555-555555555555"),
         items: [{ code: "000001", shares }],
       });
       expect(response.status).toBe(400);
     }
     const saved = await post(app, "/api/holdings", "token-a", "csrf-a", {
-      idempotencyKey: "55555555-5555-4555-8555-555555555555",
+      idempotencyKey: opKey("55555555-5555-4555-8555-555555555555"),
       items: [{ code: "000001", shares: 16 }],
     });
     expect(saved.status).toBe(200);
@@ -321,7 +326,7 @@ describe("account holdings", () => {
       release = resolve;
     });
     holdingsStore.pauseNext = true;
-    const oldKey = "66666666-6666-4666-8666-666666666666";
+    const oldKey = opKey("66666666-6666-4666-8666-666666666666");
     const paused = post(app, "/api/holdings", "token-a", "csrf-a", {
       idempotencyKey: oldKey,
       items: [{ code: "000001", shares: 100 }],
@@ -338,7 +343,7 @@ describe("account holdings", () => {
     expect(
       (
         await post(app, "/api/holdings", "token-a", "csrf-a", {
-          idempotencyKey: "77777777-7777-4777-8777-777777777777",
+          idempotencyKey: opKey("77777777-7777-4777-8777-777777777777"),
           items: [{ code: "000001", shares: 200 }],
         })
       ).status,
@@ -361,8 +366,8 @@ describe("account holdings", () => {
   it("returns the original idempotent result without rewriting a newer book", async () => {
     const { app, holdingsStore, signIn } = await harness(null);
     await signIn("user-a", "token-a", "csrf-a");
-    const firstKey = "88888888-8888-4888-8888-888888888881";
-    const secondKey = "88888888-8888-4888-8888-888888888882";
+    const firstKey = opKey("88888888-8888-4888-8888-888888888881");
+    const secondKey = opKey("88888888-8888-4888-8888-888888888882");
     expect(
       (
         await post(app, "/api/holdings", "token-a", "csrf-a", {
@@ -400,14 +405,14 @@ describe("account holdings", () => {
     expect(
       (
         await post(app, "/api/holdings", "token-a", "csrf-a", {
-          idempotencyKey: "99999999-9999-4999-8999-999999999991",
+          idempotencyKey: opKey("99999999-9999-4999-8999-999999999991"),
           items: [{ code: "000001", shares: 40 }],
         })
       ).status,
     ).toBe(200);
     holdingsStore.failWrites = 1;
     const failed = await post(app, "/api/holdings", "token-a", "csrf-a", {
-      idempotencyKey: "99999999-9999-4999-8999-999999999992",
+      idempotencyKey: opKey("99999999-9999-4999-8999-999999999992"),
       items: [
         { code: "000001", shares: 1 },
         { code: "600519", shares: 2 },
@@ -440,5 +445,63 @@ describe("account holdings", () => {
     expect(limited.status).toBe(429);
     expect(calls()).toBe(2);
     expect(holdingsStore.attempts.filter((attempt) => attempt.status === "failed")).toHaveLength(2);
+  });
+
+  it("does not empty the account when the save window is full or the token has expired", async () => {
+    const { app, holdingsStore, signIn, setNow } = await harness(null);
+    await signIn("user-a", "token-a", "csrf-a");
+    const saved = await post(app, "/api/holdings", "token-a", "csrf-a", {
+      idempotencyKey: opKey("11111111-1111-4111-8111-111111111112"),
+      items: [{ code: "000001", shares: 40 }],
+    });
+    expect(saved.status).toBe(200);
+    const malformed = await post(app, "/api/holdings", "token-a", "csrf-a", {
+      idempotencyKey: "11111111-1111-4111-8111-111111111112",
+      items: [{ code: "000001", shares: 1 }],
+    });
+    expect(malformed.status).toBe(409);
+    expect(await malformed.json()).toMatchObject({ error: "malformed_key" });
+    for (let index = 2; index <= 4; index += 1) {
+      const next = await post(app, "/api/holdings", "token-a", "csrf-a", {
+        idempotencyKey: opKey(`44444444-4444-4444-8444-44444444444${index}`),
+        items: [{ code: "000001", shares: 40 + index }],
+      });
+      expect(next.status).toBe(200);
+    }
+    const blocked = await post(app, "/api/holdings", "token-a", "csrf-a", {
+      idempotencyKey: opKey("44444444-4444-4444-8444-444444444449"),
+      items: [],
+      confirmEmpty: true,
+    });
+    expect(blocked.status).toBe(409);
+    expect(await blocked.json()).toMatchObject({ error: "window_full" });
+    expect(await holdingsStore.list("user-a")).toEqual([
+      expect.objectContaining({ code: "000001", shares: 44 }),
+    ]);
+    setNow(new Date("2026-11-16T00:10:00.001Z"));
+    const expired = await post(app, "/api/holdings", "token-a", "csrf-a", {
+      idempotencyKey: opKey("11111111-1111-4111-8111-111111111112"),
+      items: [{ code: "000001", shares: 1 }],
+    });
+    expect(expired.status).toBe(409);
+    expect(await expired.json()).toMatchObject({ error: "expired" });
+    expect(await holdingsStore.list("user-a")).toEqual([
+      expect.objectContaining({ code: "000001", shares: 44 }),
+    ]);
+    const issued = String(Date.parse("2026-11-16T00:10:00.001Z")).padStart(13, "0");
+    const cleared = await post(app, "/api/holdings", "token-a", "csrf-a", {
+      idempotencyKey: `op.v1.${issued}.55555555-5555-4555-8555-555555555551`,
+      items: [],
+      confirmEmpty: true,
+    });
+    expect(cleared.status).toBe(200);
+    const one = await post(app, "/api/holdings", "token-a", "csrf-a", {
+      idempotencyKey: `op.v1.${issued}.55555555-5555-4555-8555-555555555552`,
+      items: [{ code: "000001", shares: 1 }],
+    });
+    expect(one.status).toBe(200);
+    expect(await holdingsStore.list("user-a")).toEqual([
+      expect.objectContaining({ code: "000001", shares: 1 }),
+    ]);
   });
 });

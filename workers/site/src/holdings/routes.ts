@@ -9,7 +9,7 @@ import {
   type ImportConfirmation,
   type ReviewedVisionRow,
 } from "@quki/analytics";
-import type { BookCommit, HoldingCashQuote, HoldingsStore } from "@quki/db";
+import { issueOperationToken, type BookCommit, type HoldingCashQuote, type HoldingsStore } from "@quki/db";
 import type { Context, Hono } from "hono";
 
 import type { AuthRuntime } from "../auth/runtime.js";
@@ -61,6 +61,7 @@ export function mountHoldingsRoutes(app: Hono, auth: AuthRuntime, holdings: Hold
         reference,
         visionConfigured: holdings.vision != null,
         imageDisclosure: IMAGE_PROCESS_DISCLOSURE,
+        operationToken: issueOperationToken(holdings.now()),
       });
     } catch (error) {
       return storageFailed(c, error);
@@ -159,6 +160,8 @@ export function mountHoldingsRoutes(app: Hono, auth: AuthRuntime, holdings: Hold
         return c.json({ error: code, message: "无法确认这是一张合格的图片" }, 400);
       if (code === "vision_timeout")
         return c.json({ error: "vision_timeout", message: "识图超时，图片未保存" }, 504);
+      if (code === "window_full")
+        return c.json({ error: "window_full", message: "这次保存已过期或过密，账户股数未改" }, 409);
       return storageFailed(c, error);
     }
   });
@@ -172,7 +175,7 @@ export function mountHoldingsRoutes(app: Hono, auth: AuthRuntime, holdings: Hold
     const draftId = typeof fields.draftId === "string" ? fields.draftId : "";
     const key = typeof fields.idempotencyKey === "string" ? fields.idempotencyKey : "";
     const submitted = parseConfirmations(fields.rows);
-    if (!UUID_RE.test(draftId) || !UUID_RE.test(key) || !submitted) {
+    if (!UUID_RE.test(draftId) || key.length === 0 || !submitted) {
       return c.json({ error: "bad_request", message: "确认内容无效" }, 400);
     }
     try {
@@ -219,7 +222,7 @@ async function writeLines(
   const fields = await readJson(c);
   const key = typeof fields.idempotencyKey === "string" ? fields.idempotencyKey : "";
   const parsed = parseLines(fields.items);
-  if (!UUID_RE.test(key) || !parsed)
+  if (key.length === 0 || !parsed)
     return c.json({ error: "bad_request", message: "持仓内容无效" }, 400);
   if (mode === "replace" && parsed.length === 0 && fields.confirmEmpty !== true) {
     return c.json({ error: "confirm_empty", message: "清空账户持仓需要明确确认" }, 400);
@@ -253,6 +256,13 @@ function commitResponse(
     return c.json({ error: "draft_missing", message: "没有这份预览" }, 404);
   if (result.outcome === "draft_used" || result.outcome === "draft_expired")
     return c.json({ error: "draft_used", message: "这份预览已经用过" }, 409);
+  if (
+    result.outcome === "expired" ||
+    result.outcome === "malformed_key" ||
+    result.outcome === "window_full"
+  ) {
+    return c.json({ error: result.outcome, message: "这次保存已过期或过密，账户股数未改" }, 409);
+  }
   if (result.outcome === "busy")
     return c.json({ error: "storage_error", message: "账户持仓暂不可用" }, 503);
   if (result.outcome !== "written" && result.outcome !== "replay")
@@ -263,6 +273,7 @@ function commitResponse(
       items,
       reference: buildDividendReference(covered),
       ...(result.outcome === "replay" ? { replayed: true } : { applied: mode }),
+      operationToken: issueOperationToken(holdings.now()),
     }),
   );
 }

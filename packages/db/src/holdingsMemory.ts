@@ -1,4 +1,4 @@
-import { planBookChange, type HoldingsStore } from "./holdings.js";
+import { planBookChange, reclaimBook, MAX_LIVE_DRAFTS, type HoldingsStore } from "./holdings.js";
 
 /** In-process compare-and-swap. It does not execute TiDB and does not open a transaction. */
 
@@ -103,15 +103,17 @@ export function createHoldingsMemory(): HoldingsStore & {
         doc: BookDocument | null;
         value: { id: string } | "limited";
       } => {
-        const active = doc.attempts.filter(
+        const pruned = reclaimBook(doc, now);
+        const changed = JSON.stringify(pruned) !== JSON.stringify(doc);
+        const active = pruned.attempts.filter(
           (attempt) => Date.parse(attempt.at) > cutoff && attempt.status !== "released",
         );
-        if (active.length >= limit) return { doc: null, value: "limited" as const };
+        if (active.length >= limit) return { doc: changed ? pruned : null, value: "limited" as const };
         const id = crypto.randomUUID();
         return {
           doc: {
-            ...doc,
-            attempts: [...doc.attempts, { id, at: now.toISOString(), status: "reserved" as const }],
+            ...pruned,
+            attempts: [...pruned.attempts, { id, at: now.toISOString(), status: "reserved" as const }],
           },
           value: { id },
         };
@@ -131,23 +133,27 @@ export function createHoldingsMemory(): HoldingsStore & {
     },
     async insertDraft(input) {
       const result = await mutate(input.userId, input.now, (doc) => {
-        if (doc.drafts[input.id]) return { doc: null, value: false };
-        return {
-          doc: {
-            ...doc,
-            drafts: {
-              ...doc.drafts,
-              [input.id]: {
-                payload: input.payloadJson,
-                expiresAt: input.expiresAt.toISOString(),
-                consumedBy: null,
-              },
+        const pruned = reclaimBook(doc, input.now);
+        const changed = JSON.stringify(pruned) !== JSON.stringify(doc);
+        if (pruned.drafts[input.id]) return { doc: changed ? pruned : null, value: "duplicate" as const };
+        const next: BookDocument = {
+          ...pruned,
+          drafts: {
+            ...pruned.drafts,
+            [input.id]: {
+              payload: input.payloadJson,
+              expiresAt: input.expiresAt.toISOString(),
+              consumedBy: null,
             },
           },
-          value: true,
         };
+        if (Object.keys(pruned.drafts).length >= MAX_LIVE_DRAFTS || JSON.stringify(next).length > 48_000) {
+          return { doc: changed ? pruned : null, value: "full" as const };
+        }
+        return { doc: next, value: "inserted" as const };
       });
       if (result === "busy") throw new Error("book_busy");
+      if (result === "full") throw new Error("window_full");
     },
     async readDraft(userId, id, now) {
       const draft = books.get(userId)?.doc.drafts[id];

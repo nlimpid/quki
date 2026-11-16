@@ -3,9 +3,9 @@ import { createElement, type ReactNode } from "react";
 import { MemoryRouter } from "react-router";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { HOLDINGS_STORAGE_KEY } from "@quki/analytics";
+import { HOLDINGS_STORAGE_KEY, IMAGE_PROCESS_CONSENT } from "@quki/analytics";
 
 import { clearUiDraftsForTests } from "../lib/accountDraft.js";
 import { writeHoldings } from "../lib/holdingsStore.js";
@@ -44,7 +44,14 @@ const reference = {
 };
 
 function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
+  const payload =
+    body && typeof body === "object" && !Array.isArray(body)
+      ? {
+          operationToken: "op.v1.1763251200000.00000000-0000-4000-8000-000000000099",
+          ...(body as Record<string, unknown>),
+        }
+      : body;
+  return new Response(JSON.stringify(payload), {
     status,
     headers: { "content-type": "application/json" },
   });
@@ -63,12 +70,31 @@ describe("account holdings interface", () => {
   const host = document.createElement("div");
   document.body.append(host);
 
+  const unhandled: string[] = [];
+
+  beforeEach(() => {
+    unhandled.length = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/stocks/batch")) {
+          return json({ items: [], isSample: false });
+        }
+        unhandled.push(url);
+        throw new Error(`unhandled fetch ${url}`);
+      }),
+    );
+  });
+
   afterEach(() => {
     act(() => root?.unmount());
     root = null;
     host.replaceChildren();
     clearUiDraftsForTests();
     localStorage.clear();
+    if (unhandled.length > 0) throw new Error(`unhandled fetch ${unhandled.join(", ")}`);
+    vi.unstubAllGlobals();
   });
 
   function render(node: ReactNode) {
@@ -231,6 +257,9 @@ describe("account holdings interface", () => {
       preview?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await settle();
+    expect(calls.find((call) => call.url.endsWith("/api/holdings/preview"))?.body?.consent).toBe(
+      IMAGE_PROCESS_CONSENT,
+    );
     expect(host.textContent).toContain("已忽略可用股数，只采用总股数");
     expect(host.textContent).toContain("总股数无法确定，需要你填写");
     expect(host.textContent).toContain("原文总股数 1,200，可用股数 300");
@@ -301,6 +330,16 @@ describe("account holdings interface", () => {
     expect(localStorage.getItem(HOLDINGS_STORAGE_KEY)).toBe(stored);
     render(createElement(PortfolioBody, { phase: signedIn("user-a"), fetchImpl }));
     await settle();
+    await act(async () => {
+      host.querySelector<HTMLInputElement>("[aria-label='同意把截图交给视觉服务']")?.click();
+    });
+    await act(async () => {
+      setInput("[aria-label='000001 总股数']", "77");
+    });
+    render(createElement(PortfolioBody, { phase: guest, fetchImpl }));
+    expect(localStorage.getItem(HOLDINGS_STORAGE_KEY)).toBe(stored);
+    render(createElement(PortfolioBody, { phase: signedIn("user-a"), fetchImpl }));
+    await settle();
     expect(host.textContent).toContain("这是恢复的预览");
     expect(host.textContent).toContain("1,200");
     expect(host.textContent).toContain("设为 40 股");
@@ -313,6 +352,7 @@ describe("account holdings interface", () => {
     await act(async () => {
       host.querySelector<HTMLInputElement>("[aria-label='同意把截图交给视觉服务']")?.click();
     });
+    expect(host.querySelector<HTMLInputElement>("[aria-label='000001 总股数']")?.value).toBe("77");
     const explicit = host.querySelector<HTMLInputElement>("[aria-label='确认用总股数设置账户']");
     expect(explicit?.checked).toBe(false);
     const apply = [...host.querySelectorAll("button")].find(
@@ -454,6 +494,103 @@ describe("account holdings interface", () => {
     expect(host.textContent).not.toContain("甲的结果");
     expect(host.textContent).toContain("账户里还没有股数");
     expect(host.textContent).not.toContain("600519");
+  });
+
+  it("ignores a late preview and a late apply after the account changes", async () => {
+    const pending: { release: ((url: string) => void) | null } = { release: null };
+    const fetchImpl = async (input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/holdings/preview") || url.endsWith("/api/holdings/apply")) {
+        return new Promise<Response>((resolve) => {
+          pending.release = (finished) => {
+            if (finished !== url) return;
+            resolve(
+              url.endsWith("/preview")
+                ? json({
+                    draftId: "88888888-8888-4888-8888-888888888888",
+                    sourceRows: [{ code: "000001", name: "合成平安", totalShares: "1,200" }],
+                    catalog: [{ code: "000001", name: "平安银行" }],
+                  })
+                : json({
+                    items: [{ code: "000001", shares: 1200, updatedAt: "2026-11-16T00:00:00.000Z" }],
+                    reference,
+                    visionConfigured: true,
+                    imageDisclosure: "甲的结果",
+                  }),
+            );
+          };
+        });
+      }
+      return json({
+        items: [],
+        reference: {
+          ...reference,
+          heldCount: 0,
+          coveredCount: 0,
+          missingCount: 0,
+          partial: false,
+          totalCashCny: null,
+          asOf: null,
+        },
+        visionConfigured: true,
+        imageDisclosure: "乙的披露",
+      });
+    };
+    render(createElement(AccountHoldings, { phase: signedIn("user-a"), userId: "user-a", fetchImpl }));
+    await settle();
+    await act(async () => {
+      host.querySelector<HTMLInputElement>("[aria-label='同意把截图交给视觉服务']")?.click();
+    });
+    await act(async () => {
+      const file = host.querySelector<HTMLInputElement>("[aria-label='选择截图']");
+      Object.defineProperty(file, "files", {
+        configurable: true,
+        value: [new File([Uint8Array.from([1])], "shot.png", { type: "image/png" })],
+      });
+      [...host.querySelectorAll("button")]
+        .find((button) => button.textContent === "生成待核对预览")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    render(createElement(AccountHoldings, { phase: signedIn("user-b"), userId: "user-b", fetchImpl }));
+    await settle();
+    pending.release?.("/api/holdings/preview");
+    await settle();
+    expect(host.textContent).toContain("乙的披露");
+    expect(host.textContent).not.toContain("合成平安");
+    render(createElement(AccountHoldings, { phase: signedIn("user-a"), userId: "user-a", fetchImpl }));
+    await settle();
+    await act(async () => {
+      host.querySelector<HTMLInputElement>("[aria-label='同意把截图交给视觉服务']")?.click();
+    });
+    await act(async () => {
+      const file = host.querySelector<HTMLInputElement>("[aria-label='选择截图']");
+      Object.defineProperty(file, "files", {
+        configurable: true,
+        value: [new File([Uint8Array.from([1])], "shot.png", { type: "image/png" })],
+      });
+      [...host.querySelectorAll("button")]
+        .find((button) => button.textContent === "生成待核对预览")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    pending.release?.("/api/holdings/preview");
+    await settle();
+    await act(async () => {
+      host.querySelector<HTMLInputElement>("[aria-label='纳入 000001']")?.click();
+      host.querySelector<HTMLInputElement>("[aria-label='核对名称 000001']")?.click();
+      host.querySelector<HTMLInputElement>("[aria-label='确认用总股数设置账户']")?.click();
+    });
+    await act(async () => {
+      [...host.querySelectorAll("button")]
+        .find((button) => button.textContent === "确认写入识别结果")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    render(createElement(AccountHoldings, { phase: signedIn("user-b"), userId: "user-b", fetchImpl }));
+    await settle();
+    pending.release?.("/api/holdings/apply");
+    await settle();
+    expect(host.textContent).toContain("乙的披露");
+    expect(host.textContent).not.toContain("甲的结果");
+    expect(host.textContent).not.toContain("1200");
   });
 });
 

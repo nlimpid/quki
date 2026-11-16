@@ -11,6 +11,7 @@ export type AccountHoldingsResponse = {
   reference: DividendReference;
   visionConfigured: boolean;
   imageDisclosure: string;
+  operationToken?: string;
   replayed?: boolean;
 };
 
