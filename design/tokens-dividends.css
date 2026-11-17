@@ -4,8 +4,8 @@
 
 .dividends-app,
 .auth-app {
-  --qk-font-sans: "IBM Plex Sans SC", "IBM Plex Sans", system-ui, sans-serif;
-  --qk-font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --qk-font-sans: "Source Han Sans SC", "Noto Sans SC", "Source Han Sans CN", sans-serif;
+  --qk-font-mono: "Source Code Pro", ui-monospace, monospace;
   --qk-canvas: #eef1f4;
   --qk-surface: #f7f8fa;
   --qk-surface-muted: #e7ebf0;

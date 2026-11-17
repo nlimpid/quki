@@ -1,4 +1,5 @@
 import { ToggleButton, ToggleButtonGroup } from "@heroui/react";
+import type { ReactNode } from "react";
 
 /** Single-choice filter. Selection stays in the URL; this only renders the control. */
 export function FilterGroup<T extends string>({
@@ -6,17 +7,20 @@ export function FilterGroup<T extends string>({
   value,
   options,
   onChange,
+  appearance = "segment",
 }: {
   label: string;
   value: T;
-  options: readonly { id: T; label: string }[];
+  options: readonly { id: T; label: ReactNode }[];
   onChange: (value: T) => void;
+  appearance?: "segment" | "underline" | "chip";
 }) {
-  return (
+  const group = (
     <ToggleButtonGroup
       aria-label={label}
       selectionMode="single"
       disallowEmptySelection
+      isDetached={appearance !== "segment"}
       selectedKeys={new Set([value])}
       size="sm"
       onSelectionChange={(keys) => {
@@ -31,4 +35,6 @@ export function FilterGroup<T extends string>({
       ))}
     </ToggleButtonGroup>
   );
+  if (appearance === "segment") return group;
+  return <div className={`filter-${appearance}`}>{group}</div>;
 }

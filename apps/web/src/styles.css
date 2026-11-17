@@ -21,6 +21,7 @@
 @import "@heroui/styles/components/table.css";
 @import "../../../design/tokens.css";
 @import "./fonts.css";
+@import "./index-page.css";
 
 :root {
   --z-index-overlay: 100000;
@@ -43,6 +44,7 @@ body,
 body {
   margin: 0;
   font-family: var(--qk-font-sans);
+  font-synthesis: none;
   background: var(--qk-bg-canvas);
   color: var(--qk-text-primary);
   font-size: var(--qk-fs-md);
@@ -60,10 +62,12 @@ a {
   color: inherit;
 }
 
-.qk-tabular {
+.qk-tabular,
+.qk-num {
   font-family: var(--qk-font-tabular);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
+  letter-spacing: 0;
 }
 
 .app-header {
@@ -392,10 +396,10 @@ a {
   overflow: visible;
 }
 .range-control[data-tight="true"] .range-thumb-start {
-  margin-inline-start: -18px;
+  margin-inline-start: -8px;
 }
 .range-control[data-tight="true"] .range-thumb-end {
-  margin-inline-start: 18px;
+  margin-inline-start: 8px;
 }
 .range-readout {
   font-size: 14px;

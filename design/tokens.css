@@ -262,9 +262,9 @@
 
 :root {
   /* Typography */
-  --qk-font-sans: "IBM Plex Sans SC", "IBM Plex Sans", system-ui, sans-serif;
-  --qk-font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
-  --qk-font-tabular: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --qk-font-sans: "Source Han Sans SC", "Noto Sans SC", "Source Han Sans CN", sans-serif;
+  --qk-font-mono: "Source Code Pro", ui-monospace, monospace;
+  --qk-font-tabular: "Source Code Pro", ui-monospace, monospace;
 
   --qk-fs-xs: 11px;
   --qk-lh-xs: 16px;

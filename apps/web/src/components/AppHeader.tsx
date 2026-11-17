@@ -65,11 +65,30 @@ export function AppHeader({
         <div className="header-right">
           <Button
             isIconOnly
+            className="theme-toggle"
             variant="ghost"
             onPress={toggle}
             aria-label={theme === "dark" ? "切换浅色模式" : "切换深色模式"}
           >
-            {theme === "dark" ? "☀" : "☾"}
+            {theme === "dark" ? (
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                <path
+                  d="M8 1.4v1.7M8 12.9v1.7M1.4 8h1.7M12.9 8h1.7M3.3 3.3l1.2 1.2M11.5 11.5l1.2 1.2M3.3 12.7l1.2-1.2M11.5 4.5l1.2-1.2"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinecap="round"
+                />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M9.2 2.1a5.4 5.4 0 1 0 4.6 8.1A4.3 4.3 0 1 1 9.2 2.1z"
+                />
+              </svg>
+            )}
           </Button>
           {control === "spinner" ? (
             <div className="auth-slot" aria-busy="true">
