@@ -20,7 +20,7 @@ These alternatives do not fit this app:
 | Auth.js MySQL adapter | Same TCP driver problem as `mysql2`, unless a custom adapter is written on top of `@tidbcloud/serverless`. That is more glue than calling the driver directly. |
 | Email, password, SMS, WeChat, GitHub, or Google | Each one is an owner decision. The audience is a Chinese market page with no mailer and no user table. This change does not pick one. |
 
-Tradeoff: the OIDC callback is implemented and tested with an in-process stand-in. `login.ready` on `GET /api/auth/session` only means the Worker has a database URL and an `openid` issuer configured. The page does not treat that as a working sign-in. `LOGIN_UI_ENABLED` in `apps/web/src/lib/authState.ts` stays `false` until a provider is chosen and a real consent sentence replaces the empty one. Until then the header and the expiry banner do not offer 登录 or 重新登录, and `/login` says `登录暂不可用`. There is no 继续登录 button.
+Tradeoff: the OIDC callback is implemented and tested with an in-process stand-in. That stand-in is a labelled fixture, not a Google login. `login.ready` on `GET /api/auth/session` only means the Worker has a database URL and `https://accounts.google.com` with scope `openid profile`. The page does not treat that as a working sign-in. `LOGIN_UI_ENABLED` in `apps/web/src/lib/authState.ts` stays `false` until the consent sentence is real. Until then the header and the expiry banner do not offer 登录 or 重新登录, and `/login` says `登录暂不可用`. There is no 继续登录 button.
 
 `pnpm dev` keeps using seed CSVs. It does not open TiDB for login.
 
@@ -28,16 +28,16 @@ Tradeoff: the OIDC callback is implemented and tested with an in-process stand-i
 
 Names only. Do not create the provider account in this change.
 
-1. Choose an OIDC issuer that supports authorization code, PKCE `S256`, a confidential client secret, and a discovery document.
+1. Use Google as the issuer. The Worker accepts only `https://accounts.google.com`, authorization code, PKCE `S256`, a confidential client secret, and Google's discovery document.
 2. Register both callback URLs:
    - `https://quki.cc/api/auth/callback`
    - `https://www.quki.cc/api/auth/callback`
    The callback is `https://quki.cc/api/auth/callback` or `https://www.quki.cc/api/auth/callback`, chosen by an exact match of the request URL origin against that allowlist. `www` is its own entry. `X-Forwarded-Host` and `Forwarded` are ignored. Any other host fails closed and does not build a callback. Tests may inject extra origins; production does not.
 3. Set site Worker secrets:
-   - `AUTH_OIDC_ISSUER` — `https` URL, no userinfo in the URL
+   - `AUTH_OIDC_ISSUER` — `https://accounts.google.com`
    - `AUTH_OIDC_CLIENT_ID`
    - `AUTH_OIDC_CLIENT_SECRET`
-   - `AUTH_OIDC_SCOPES` — omit it, or set exactly `openid`. `email`, `profile`, or `phone` keep login unavailable so the consent placeholder is not a lie.
+   - `AUTH_OIDC_SCOPES` — omit it, or set `openid profile`. `email`, `phone`, or `openid` alone keep login unavailable.
 4. Apply `db/migrations/0006_auth.sql` with `pnpm migrate` after review. It is not applied here. It does not modify dividend tables and does not depend on `0005_dividend_audit.sql`.
 5. Choose the provider, write the real consent sentence, then set `LOGIN_UI_ENABLED` and add the unbranded 继续登录 control that posts to `POST /api/auth/login`. Do not flip the flag while the consent text is still missing. `login.ready: true` alone does not show that button.
 6. Local `http://127.0.0.1` will not keep the session cookie, because `Secure` is always set. Exercise login on HTTPS.
@@ -148,7 +148,7 @@ Copy:
 | --- | --- | --- |
 | `initializing` | 16px spinner, at most 4 seconds | Probe in flight. Pages stay usable. |
 | `unknown` | `登录` as a session check | Timeout, network error, or HTTP 503. Not logged out. `/login` says `无法确认登录状态，请重试。` A late `200` still updates the header. |
-| `guest` and login not offered | no 登录 link | Includes `login.ready: false` (`auth_not_configured`, `storage_unconfigured`, `scopes_not_confirmed`) and `login.ready: true` while `LOGIN_UI_ENABLED` is false. `/login` says `登录暂不可用。访客仍可查看行情，并在本机管理持仓。` 重试 only probes the session again. |
+| `guest` and login not offered | no 登录 link | Includes `login.ready: false` (`auth_not_configured`, `storage_unconfigured`, `scopes_not_confirmed`) and `login.ready: true` while `LOGIN_UI_ENABLED` is false. `/login` says `登录暂不可用。访客仍可查看行情。此浏览器里的旧持仓只供查看。` 重试 only probes the session again. |
 | `guest` + `expired` | dismissible banner, no 重新登录 while login is not offered | Previous cookie is dead. Unsaved holdings edits stay. |
 | `authenticated` | `账户` | Still shown when `login.ready` is false. Menu label is `displayName` or `已登录`. |
 | `logoutPending` | `账户`, menu says `正在退出…` | Second submit disabled. |

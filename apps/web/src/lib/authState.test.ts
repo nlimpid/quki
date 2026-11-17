@@ -78,6 +78,8 @@ describe("auth view state", () => {
       expect(showLoginCta(phase, true)).toBe(false);
       expect(loginView(phase).message).toBe(LOGIN_UNAVAILABLE_COPY);
       expect(loginView(phase).retry).toBe(true);
+      expect(loginView(phase, "provider_unreachable").alert).toContain("Google");
+      expect(loginView(phase, "login_failed").alert).toBe("登录失败，请重试。");
       const expired = applyProbeSuccess(
         initializing,
         session(false, reason, { expired: true, status: "anonymous" }),

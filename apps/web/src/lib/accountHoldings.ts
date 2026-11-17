@@ -21,24 +21,33 @@ export async function readAccountHoldings(): Promise<AccountHolding[]> {
 }
 
 export async function writeAccountHoldings(
-  item: AccountHolding,
+  item: AccountHolding & { expectedVersion: number | null },
   csrfToken: string,
 ): Promise<void> {
   const response = await fetch("/api/holdings", {
     method: "PUT",
     credentials: "same-origin",
     headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-    body: JSON.stringify({ csrf: csrfToken, code: item.code, shares: item.shares }),
+    body: JSON.stringify({
+      csrf: csrfToken,
+      code: item.code,
+      shares: item.shares,
+      expectedVersion: item.expectedVersion,
+    }),
   });
   if (!response.ok) throw new AccountHoldingsError(await readError(response));
 }
 
-export async function deleteAccountHolding(code: string, csrfToken: string): Promise<void> {
+export async function deleteAccountHolding(
+  code: string,
+  expectedVersion: number,
+  csrfToken: string,
+): Promise<void> {
   const response = await fetch(`/api/holdings/${encodeURIComponent(code)}`, {
     method: "DELETE",
     credentials: "same-origin",
     headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-    body: JSON.stringify({ csrf: csrfToken }),
+    body: JSON.stringify({ csrf: csrfToken, expectedVersion }),
   });
   if (!response.ok) throw new AccountHoldingsError(await readError(response));
 }

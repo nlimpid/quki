@@ -5,6 +5,7 @@ import {
   PRODUCTION_AUTH_ORIGINS,
   createOidcClient,
   readOidcEnv,
+  trustedAuthOrigins,
   type OidcClient,
   type OidcEnv,
 } from "./oidc.js";
@@ -41,7 +42,7 @@ export function authRuntimeFromEnv(
       store: null,
       oidc: null,
       unavailableReason: !oidcEnv.ok ? oidcEnv.reason : "storage_unconfigured",
-      trustedOrigins: PRODUCTION_AUTH_ORIGINS,
+      trustedOrigins: trustedAuthOrigins(env),
     };
   }
   return {
@@ -49,6 +50,6 @@ export function authRuntimeFromEnv(
     store: createAuthStore(() => connect(databaseUrl)),
     oidc: createClient(oidcEnv.config),
     unavailableReason: null,
-    trustedOrigins: PRODUCTION_AUTH_ORIGINS,
+    trustedOrigins: trustedAuthOrigins(env),
   };
 }

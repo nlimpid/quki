@@ -176,7 +176,10 @@ export type LoginView = {
 };
 
 /** Settled anonymous sessions stay on the unavailable card until a provider and consent exist. */
-export function loginView(phase: AuthPhase, loginFailed = false): LoginView {
+export function loginView(
+  phase: AuthPhase,
+  loginFailed: boolean | string | null = false,
+): LoginView {
   if (phase.kind === "initializing") {
     return {
       mode: "checking",
@@ -211,7 +214,11 @@ export function loginView(phase: AuthPhase, loginFailed = false): LoginView {
   return {
     mode: "unavailable",
     status: null,
-    alert: loginFailed ? "登录失败，请重试。" : null,
+    alert: loginFailed
+      ? loginFailed === "provider_unreachable"
+        ? "暂时联系不上 Google，请重试。"
+        : "登录失败，请重试。"
+      : null,
     message: LOGIN_UNAVAILABLE_COPY,
     retry: true,
   };

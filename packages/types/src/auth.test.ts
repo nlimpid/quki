@@ -30,6 +30,15 @@ describe("safeReturnTo", () => {
     expect(safeReturnTo("/%2Fevil.example", origin)).toBe("/");
     expect(safeReturnTo("%2Fportfolio", origin)).toBe("/portfolio");
     expect(safeReturnTo(" /portfolio", origin)).toBe("/");
+    expect(safeReturnTo("//evil.example/phish", origin)).toBe("/");
+    expect(safeReturnTo("/%5Cevil.example", origin)).toBe("/");
+    expect(safeReturnTo("%5Cevil.example", origin)).toBe("/");
+    expect(safeReturnTo("https://evil.example/stock/000001?add=1", origin)).toBe("/");
+    expect(safeReturnTo("/stock/000001?add=1&next=/portfolio", origin)).toBe(
+      "/stock/000001?add=1&next=/portfolio",
+    );
+    expect(safeReturnTo("/stock/000001?add=1&next=https://evil.example", origin)).toBe("/");
+    expect(safeReturnTo("/login?returnTo=/stock/000001?add=1", origin)).toBe("/");
   });
 });
 

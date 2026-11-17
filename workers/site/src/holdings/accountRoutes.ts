@@ -38,11 +38,42 @@ async function refuse(c: Context, auth: AuthRuntime): Promise<Response> {
   if (!token || !auth.store) return c.json({ error: "unauthorized", message: "需要登录" }, 401);
   try {
     const lookup = await auth.store.findSession(await sha256Hex(token), auth.now());
-    if (lookup.state !== "valid") return c.json({ error: "unauthorized", message: "需要登录" }, 401);
+    if (lookup.state !== "valid")
+      return c.json({ error: "unauthorized", message: "需要登录" }, 401);
     if (c.req.method !== "GET") {
       const header = c.req.header("x-csrf-token") ?? "";
       if (!header || !(await secretsEqual(header, lookup.csrfToken))) {
         return c.json({ error: "csrf", message: "请求未通过安全校验" }, 403);
+      }
+      const fields = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+      if (!fields || Array.isArray(fields) || "items" in fields) {
+        return c.json({ error: "invalid_holding", message: "不能用整表替换账户持仓。" }, 400);
+      }
+      const version = fields.expectedVersion;
+      const rowVersion =
+        typeof version === "number" && Number.isSafeInteger(version) && version >= 1;
+      if (c.req.method === "DELETE" && !rowVersion) {
+        return c.json({ error: "invalid_holding", message: "缺少持仓版本。" }, 400);
+      }
+      if (c.req.method === "PUT" && version !== null && !rowVersion) {
+        return c.json({ error: "invalid_holding", message: "缺少持仓版本。" }, 400);
+      }
+      if (c.req.method === "PUT") {
+        const shares = fields.shares;
+        if (typeof fields.code !== "string" || !/^\d{6}$/.test(fields.code)) {
+          return c.json({ error: "invalid_holding", message: "股票代码不正确。" }, 400);
+        }
+        if (
+          typeof shares !== "number" ||
+          !Number.isInteger(shares) ||
+          shares < 1 ||
+          shares > 1_000_000_000
+        ) {
+          return c.json(
+            { error: "invalid_holding", message: "股数必须是 1 到 1000000000 的整数。" },
+            400,
+          );
+        }
       }
     }
   } catch {

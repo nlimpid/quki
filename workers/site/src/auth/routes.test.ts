@@ -1,6 +1,7 @@
 import { createAuthStore, type AuthStore } from "@quki/db";
 import { createAuthMemoryConn } from "../../../../packages/db/src/authMemory.js";
 import { PHASE1_INSTRUMENTS } from "@quki/types";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { createApp, type MarketSource } from "../app.js";
@@ -467,9 +468,10 @@ describe("auth routes", () => {
     const idle = authRuntimeFromEnv(
       {
         TIDB_QUKI_DATABASE_URL: "mysql://user:secret-value@gateway.example:4000/quki",
-        AUTH_OIDC_ISSUER: "https://idp.example/realms/quki",
+        AUTH_OIDC_ISSUER: "https://accounts.google.com",
         AUTH_OIDC_CLIENT_ID: "quki-web",
         AUTH_OIDC_CLIENT_SECRET: "secret-value",
+        AUTH_OIDC_SCOPES: "openid profile",
       },
       () => {
         connections += 1;
@@ -483,9 +485,10 @@ describe("auth routes", () => {
 
     const missingDatabase = authRuntimeFromEnv(
       {
-        AUTH_OIDC_ISSUER: "https://idp.example",
+        AUTH_OIDC_ISSUER: "https://accounts.google.com",
         AUTH_OIDC_CLIENT_ID: "quki-web",
         AUTH_OIDC_CLIENT_SECRET: "secret-value",
+        AUTH_OIDC_SCOPES: "openid profile",
       },
       () => {
         throw new Error("should not connect");
@@ -496,6 +499,13 @@ describe("auth routes", () => {
     expect(JSON.stringify(missingDatabase)).not.toContain("secret-value");
 
     expect(readOidcEnv({ AUTH_OIDC_SCOPES: "openid email" }).ok).toBe(false);
+    expect(
+      readOidcEnv({
+        AUTH_OIDC_ISSUER: "https://idp.example",
+        AUTH_OIDC_CLIENT_ID: "quki-web",
+        AUTH_OIDC_CLIENT_SECRET: "labelled-fixture-not-google",
+      }).ok,
+    ).toBe(false);
     expect(
       readOidcEnv({
         AUTH_OIDC_ISSUER: "http://idp.example",
@@ -513,6 +523,18 @@ describe("auth routes", () => {
         AUTH_OIDC_CLIENT_SECRET: "b",
       }),
     ).toEqual({ ok: false, reason: "auth_not_configured" });
+  });
+
+  it("keeps a stock add intent through the labelled callback", async () => {
+    const { app } = runtime();
+    const { callback } = await login(app, {
+      sub: "person-a",
+      name: "样例",
+      returnTo: "/stock/000001?add=1",
+    });
+    if (!callback) throw new Error("missing callback");
+    expect(callback.headers.get("location")).toBe("/stock/000001?add=1");
+    expect(callback.headers.get("location")).not.toContain("accounts.google.com");
   });
 
   it("does not store holdings while the account book is absent", async () => {
@@ -537,12 +559,60 @@ describe("auth routes", () => {
         "content-type": "application/json",
         "x-csrf-token": csrf,
       },
-      body: JSON.stringify({ csrf, code: "000001", shares: 100 }),
+      body: JSON.stringify({ csrf, code: "000001", shares: 100, expectedVersion: null }),
     });
     expect(denied.status).toBe(503);
     expect(await denied.json()).toEqual({
       error: "holdings_unavailable",
       message: "账户持仓尚未开通，没有写入任何持仓。",
     });
+    const replaced = await app.request(`${origin}/api/holdings`, {
+      method: "PUT",
+      headers: {
+        origin,
+        cookie: `qk_session=${sessionCookie}`,
+        "content-type": "application/json",
+        "x-csrf-token": csrf,
+      },
+      body: JSON.stringify({ csrf, items: [{ code: "000001", shares: 100 }] }),
+    });
+    expect(replaced.status).toBe(400);
+    const missingVersion = await app.request(`${origin}/api/holdings/000001`, {
+      method: "DELETE",
+      headers: {
+        origin,
+        cookie: `qk_session=${sessionCookie}`,
+        "content-type": "application/json",
+        "x-csrf-token": csrf,
+      },
+      body: JSON.stringify({ csrf, expectedVersion: null }),
+    });
+    expect(missingVersion.status).toBe(400);
+    const account = await app.request(`${origin}/api/holdings`, {
+      headers: { cookie: `qk_session=${sessionCookie}` },
+    });
+    expect(account.status).toBe(503);
+    expect(await account.json()).toEqual({
+      error: "holdings_unavailable",
+      message: "账户持仓尚未开通，没有写入任何持仓。",
+    });
+  });
+
+  it("does not call the local holdings writer from add, edit, or delete", () => {
+    const portfolio = readFileSync(
+      new URL("../../../../apps/web/src/pages/PortfolioPage.tsx", import.meta.url),
+      "utf8",
+    );
+    const stock = readFileSync(
+      new URL("../../../../apps/web/src/pages/StockPage.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(portfolio).not.toContain("saveHolding");
+    expect(portfolio).not.toContain("deleteHolding");
+    expect(portfolio).not.toContain("writeHoldings");
+    expect(stock).not.toContain("saveHolding");
+    expect(stock).not.toContain("writeHoldings");
+    expect(portfolio).toContain("账户持仓");
+    expect(portfolio).toContain("此浏览器里的旧持仓");
   });
 });

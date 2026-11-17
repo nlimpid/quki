@@ -14,7 +14,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const returnTo = safeReturnTo(params.get("returnTo"), window.location.origin);
-  const view = loginView(phase, params.get("error") === "login_failed");
+  const view = loginView(phase, params.get("error"));
   usePageTitle("登录 · quki");
   const busy = retrying || phase.kind === "initializing";
 

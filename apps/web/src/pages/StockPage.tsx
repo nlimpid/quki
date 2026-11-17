@@ -42,9 +42,7 @@ export function StockPage() {
     setError(null);
   }
   const loading = valid && loadedKey !== request && error === null;
-  const [heldCodes] = useState(
-    () => new Set(readHoldings().state.items.map((item) => item.code)),
-  );
+  const [heldCodes] = useState(() => new Set(readHoldings().state.items.map((item) => item.code)));
   const held = heldCodes.has(code);
   const [shares, setShares] = useState("100");
   const [saved, setSaved] = useState<string | null>(null);
@@ -157,6 +155,7 @@ export function StockPage() {
                         code: company.code,
                         shares: Number(shares),
                         updatedAt: new Date().toISOString(),
+                        expectedVersion: null,
                       },
                       phase.csrfToken,
                     )

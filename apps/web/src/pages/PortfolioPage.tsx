@@ -7,7 +7,11 @@ import { Link, useSearchParams } from "react-router";
 import { useAuth } from "../lib/auth.js";
 import { usePageTitle } from "../lib/pageTitle.js";
 import { portfolioSubtitle } from "../lib/authState.js";
-import { deleteAccountHolding, writeAccountHoldings } from "../lib/accountHoldings.js";
+import {
+  readAccountHoldings,
+  writeAccountHoldings,
+  type AccountHolding,
+} from "../lib/accountHoldings.js";
 import { useHoldingIntent } from "../lib/holdingIntent.js";
 import { readHoldings } from "../lib/holdingsStore.js";
 import { fetchStockBatch, fetchStockList } from "../lib/stockApi.js";
@@ -57,6 +61,8 @@ export function PortfolioPage() {
     window.setTimeout(() => target?.focus(), 0);
   }
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [accountItems, setAccountItems] = useState<AccountHolding[] | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
   const { phase, retry } = useAuth();
   const { notice, request } = useHoldingIntent();
   const [params, setParams] = useSearchParams();
@@ -77,6 +83,23 @@ export function PortfolioPage() {
     next.delete("edit");
     setParams(next, { replace: true });
   }
+
+  useEffect(() => {
+    if (phase.kind !== "authenticated") return;
+    let cancel = false;
+    readAccountHoldings()
+      .then((items) => {
+        if (cancel) return;
+        setAccountItems(items);
+      })
+      .catch((reason: unknown) => {
+        if (cancel) return;
+        setAccountError(reason instanceof Error ? reason.message : "账户持仓没有读取成功");
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [phase.kind]);
 
   useEffect(() => {
     if (!codeKey) return;
@@ -158,23 +181,50 @@ export function PortfolioPage() {
         </p>
       ) : null}
       {phase.kind === "authenticated" ? (
-        <p className="yield-note">下面是此浏览器里的旧持仓，只供查看。保存会请求账户接口，失败时不会改这份旧列表。</p>
+        <section className="div-card" aria-label="账户持仓">
+          <h2 style={{ margin: "0 0 8px" }}>账户持仓</h2>
+          {accountError ? <p className="page-sub">{accountError}</p> : null}
+          {!accountError && accountItems == null ? (
+            <p className="page-sub">正在读取账户持仓…</p>
+          ) : null}
+          {!accountError && accountItems?.length === 0 ? (
+            <p className="page-sub">账户里还没有持仓。</p>
+          ) : null}
+          {!accountError && accountItems && accountItems.length > 0 ? (
+            <ul>
+              {accountItems.map((item) => (
+                <li key={item.code}>
+                  <span className="mono">{item.code}</span> · {formatShares(item.shares)} 股
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
       ) : null}
       {quoteError ? <p className="yield-note">{quoteError}</p> : null}
+      {holdings.items.length > 0 && phase.kind === "authenticated" ? (
+        <h2 className="page-title" style={{ fontSize: 18 }}>
+          此浏览器里的旧持仓
+        </h2>
+      ) : null}
       {holdings.items.length === 0 ? (
-        <section className="div-card hero">
-          <h2 style={{ margin: "0 0 8px" }}>尚未添加持仓</h2>
-          <p className="page-sub">添加股票后，这里显示平均股息率和预估全年分红。</p>
-          <Button
-            variant="primary"
-            onPress={(event) => {
-              if (!request("/portfolio?add=1")) return;
-              openDrawer({ code: "", shares: "" }, event.target);
-            }}
-          >
-            添加股票
-          </Button>
-        </section>
+        phase.kind === "authenticated" ? (
+          <p className="yield-note">此浏览器里没有旧持仓。</p>
+        ) : (
+          <section className="div-card hero">
+            <h2 style={{ margin: "0 0 8px" }}>尚未添加持仓</h2>
+            <p className="page-sub">添加股票后，这里显示平均股息率和预估全年分红。</p>
+            <Button
+              variant="primary"
+              onPress={(event) => {
+                if (!request("/portfolio?add=1")) return;
+                openDrawer({ code: "", shares: "" }, event.target);
+              }}
+            >
+              添加股票
+            </Button>
+          </section>
+        )
       ) : (
         <>
           <div className="summary-strip">
@@ -206,41 +256,39 @@ export function PortfolioPage() {
                       {card.exchange ? `${card.code}.${card.exchange}` : card.code}
                     </div>
                   </div>
-                  <div>
-                    <button
-                      type="button"
-                      className="icon-text"
-                      aria-label="编辑"
-                      onClick={(event) => {
-                        if (!request(`/portfolio?edit=${card.code}`)) return;
-                        openDrawer(
-                          { code: card.code, shares: String(card.shares) },
-                          event.currentTarget,
-                        );
-                      }}
-                    >
-                      ✎
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-text"
-                      aria-label={pendingDelete === card.code ? "确认删除" : "删除"}
-                      onClick={() => {
-                        if (!request("/portfolio")) return;
-                        if (pendingDelete !== card.code) {
-                          setPendingDelete(card.code);
-                          return;
-                        }
-                        if (phase.kind !== "authenticated") return;
-                        void deleteAccountHolding(card.code, phase.csrfToken).catch((reason: unknown) => {
-                          setQuoteError(reason instanceof Error ? reason.message : "账户持仓没有删除");
-                        });
-                        setPendingDelete(null);
-                      }}
-                    >
-                      {pendingDelete === card.code ? "确认" : "×"}
-                    </button>
-                  </div>
+                  {phase.kind === "authenticated" ? null : (
+                    <div>
+                      <button
+                        type="button"
+                        className="icon-text"
+                        aria-label="编辑"
+                        onClick={(event) => {
+                          if (!request(`/portfolio?edit=${card.code}`)) return;
+                          openDrawer(
+                            { code: card.code, shares: String(card.shares) },
+                            event.currentTarget,
+                          );
+                        }}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-text"
+                        aria-label={pendingDelete === card.code ? "确认删除" : "删除"}
+                        onClick={() => {
+                          if (!request("/portfolio")) return;
+                          if (pendingDelete !== card.code) {
+                            setPendingDelete(card.code);
+                            return;
+                          }
+                          setPendingDelete(null);
+                        }}
+                      >
+                        {pendingDelete === card.code ? "确认" : "×"}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="hold-shares">
                   持股 <span className="mono">{formatShares(card.shares)}</span> 股
@@ -288,7 +336,7 @@ export function PortfolioPage() {
             if (!request("/portfolio")) return;
             if (phase.kind !== "authenticated") return;
             void writeAccountHoldings(
-              { code, shares, updatedAt: new Date().toISOString() },
+              { code, shares, updatedAt: new Date().toISOString(), expectedVersion: null },
               phase.csrfToken,
             )
               .then(() => closeDrawer())

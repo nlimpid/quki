@@ -20,7 +20,7 @@ import {
 } from "./cookies.js";
 import { randomToken, secretsEqual, sha256Hex } from "./crypto.js";
 import type { OidcIdentity } from "./oidc.js";
-import { authCallbackUrl } from "./oidc.js";
+import { authCallbackUrl, classifyOidcFailure } from "./oidc.js";
 import type { AuthRuntime } from "./runtime.js";
 
 function noStore(c: Context): void {
@@ -242,8 +242,11 @@ export function mountAuthRoutes(app: Hono, auth: AuthRuntime): void {
         returnTo,
         expiresAt: new Date(auth.now().getTime() + AUTH_OAUTH_MAX_AGE_SECONDS * 1000),
       });
-    } catch {
+    } catch (error) {
       console.error("auth_login_start_failed");
+      if (classifyOidcFailure(error) === "provider_unreachable") {
+        return c.json({ error: "provider_unreachable", message: "暂时联系不上 Google" }, 503);
+      }
       return c.json({ error: "auth_unavailable", message: "登录暂不可用" }, 503);
     }
     writeOauthCookie(c, txnToken);
@@ -253,9 +256,9 @@ export function mountAuthRoutes(app: Hono, auth: AuthRuntime): void {
   app.get("/api/auth/callback", async (c) => {
     noStore(c);
     const requestUrl = new URL(c.req.url);
-    const fail = (returnTo = "/") => {
+    const fail = (returnTo = "/", code = "login_failed") => {
       clearAuthCookie(c, OAUTH_COOKIE);
-      const params = new URLSearchParams({ error: "login_failed", returnTo });
+      const params = new URLSearchParams({ error: code, returnTo });
       return c.redirect(`/login?${params.toString()}`, 302);
     };
     const redirectUri = authCallbackUrl(requestUrl, auth.trustedOrigins);
@@ -305,9 +308,9 @@ export function mountAuthRoutes(app: Hono, auth: AuthRuntime): void {
       clearAuthCookie(c, OAUTH_COOKIE);
       writeSessionCookie(c, sessionToken);
       return c.redirect(returnTo, 302);
-    } catch {
+    } catch (error) {
       console.error("auth_callback_failed");
-      return fail(returnTo);
+      return fail(returnTo, classifyOidcFailure(error));
     }
   });
 
