@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { nextVisibleWindow, rangeNeedsApply } from "./VisibleRangeControl.js";
+import { boundedRange, nextVisibleWindow, rangeNeedsApply } from "./VisibleRangeControl.js";
 
 describe("visible range sync", () => {
   it("keeps the same state when the chart echoes the current window", () => {
@@ -18,5 +18,14 @@ describe("visible range sync", () => {
     });
     expect(rangeNeedsApply({ from: 20, to: 80 }, 30, 90)).toBe(true);
     expect(rangeNeedsApply(null, 30, 90)).toBe(true);
+  });
+
+  it("keeps a one-step window when a dense drag stacks the thumbs", () => {
+    const previous = { start: 1184, end: 1211 };
+    expect(boundedRange([1184, 1184], previous, 1211)).toEqual([1184, 1185]);
+    expect(boundedRange([1211, 1211], previous, 1211)).toEqual([1210, 1211]);
+    expect(boundedRange([900, 1100], previous, 1211)).toEqual([900, 1100]);
+    expect(boundedRange([Number.NaN, 10], previous, 1211)).toBeNull();
+    expect(boundedRange([1, 0], previous, 1211)).toEqual([0, 1]);
   });
 });

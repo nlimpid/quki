@@ -388,6 +388,15 @@ a {
   flex: 1;
   min-width: 180px;
 }
+.range-control[data-tight="true"] .range-slider {
+  overflow: visible;
+}
+.range-control[data-tight="true"] .range-thumb-start {
+  margin-inline-start: -18px;
+}
+.range-control[data-tight="true"] .range-thumb-end {
+  margin-inline-start: 18px;
+}
 .range-readout {
   font-size: 14px;
   color: var(--qk-text-primary);

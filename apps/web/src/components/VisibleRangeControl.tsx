@@ -1,6 +1,29 @@
 import { Button, Slider } from "@heroui/react";
+import { useEffect, useRef, useState } from "react";
 
 const THUMB_LABELS = ["可见区间起点", "可见区间终点"] as const;
+const THUMB_HIT = 40;
+
+/** Keep a one-step window when a drag parks both thumbs on the same bar. */
+export function boundedRange(
+  next: readonly [number, number],
+  previous: { start: number; end: number },
+  max: number,
+): [number, number] | null {
+  const [rawStart, rawEnd] = next;
+  if (!Number.isFinite(rawStart) || !Number.isFinite(rawEnd) || !Number.isFinite(max) || max < 1) {
+    return null;
+  }
+  const start = clamp(Math.round(rawStart), 0, max);
+  const end = clamp(Math.round(rawEnd), 0, max);
+  if (end > start) return [start, end];
+  if (start === previous.start) {
+    const edge = Math.min(max, start + 1);
+    return [edge - 1, edge];
+  }
+  const edge = Math.max(1, Math.min(max, end));
+  return [edge - 1, edge];
+}
 
 /** Ignore sub-step chart echoes so a slider drag and a wheel/pan do not chase each other. */
 export function nextVisibleWindow(
@@ -45,8 +68,22 @@ export function VisibleRangeControl({
   const max = Math.max(1, last);
   const start = clamp(Math.round(from), 0, max);
   const end = clamp(Math.round(to), start + 1, max);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [trackWidth, setTrackWidth] = useState(0);
+  useEffect(() => {
+    const root = rootRef.current;
+    const track = root?.querySelector(".slider__track");
+    if (!track) return;
+    const measure = () => setTrackWidth(track.getBoundingClientRect().width);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(track);
+    return () => observer.disconnect();
+  }, []);
+  const gapPx = trackWidth > 0 ? ((end - start) / max) * trackWidth : Number.POSITIVE_INFINITY;
+  const tight = gapPx < THUMB_HIT;
   return (
-    <div className="range-control">
+    <div className="range-control" data-tight={tight ? "true" : undefined} ref={rootRef}>
       <Slider
         aria-label="可见区间"
         className="range-slider"
@@ -55,10 +92,10 @@ export function VisibleRangeControl({
         step={1}
         value={[start, end]}
         onChange={(next) => {
-          if (!Array.isArray(next) || next.length < 2) return;
-          const [fromValue, toValue] = next;
-          if (fromValue == null || toValue == null || toValue <= fromValue) return;
-          onChange(fromValue, toValue);
+          if (!Array.isArray(next) || next[0] == null || next[1] == null) return;
+          const bounded = boundedRange([next[0], next[1]], { start, end }, max);
+          if (!bounded) return;
+          onChange(bounded[0], bounded[1]);
         }}
       >
         <Slider.Track>
@@ -69,6 +106,7 @@ export function VisibleRangeControl({
                 <Slider.Thumb
                   key={index}
                   aria-label={THUMB_LABELS[index] ?? `可见区间 ${index + 1}`}
+                  className={index === 0 ? "range-thumb-start" : "range-thumb-end"}
                   index={index}
                 />
               ))}
