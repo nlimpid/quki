@@ -11,7 +11,8 @@
  *
  * Claim rules match packages/backend/src/jwt/assertions.ts and jwtCategories.ts
  * at tag @clerk/backend@3.30.0. Session tokens must carry header cat
- * `cl_B7d4PD111AAA`. A missing category is not a session token.
+ * `cl_B7d4PD111AAA`. If Clerk changes that category, verification must fail
+ * closed. A missing or different category is not a session token.
  */
 
 const SESSION_CATEGORY = "cl_B7d4PD111AAA";

@@ -1,4 +1,5 @@
 -- CANDIDATE. NOT APPLIED. Do not run this file from a worker, a cron, or an agent.
+-- This file is in db/review, not db/migrations, so `pnpm migrate` does not apply it.
 --
 -- Filename: 0008_auth_holdings.sql.
 -- Master already contains 0006_auth.sql. This file does not edit 0006 or any
@@ -8,10 +9,10 @@
 -- workers/crawler/src/index.ts hardcodes 0001 through 0005 only. Do not add
 -- 0006 or 0008 to that list.
 --
--- pnpm migrate risk: packages/db/src/migrate.ts applies every *.sql in
--- db/migrations whose filename is missing from schema_migrations, in filename
--- order. We do not execute that command. Whether production has applied
--- 0006_auth.sql was NOT CHECKED. Do not describe 0006 as unapplied.
+-- pnpm migrate applies every *.sql in db/migrations whose filename is missing
+-- from schema_migrations. This file is outside that directory. We do not
+-- execute that command. Whether production has applied 0006_auth.sql was NOT
+-- CHECKED. Do not describe 0006 as unapplied.
 -- user_id is the internal UUID from auth_identities, not a Clerk user id.
 --
 -- Columns are the primary key (user_id, code) plus shares, version, updated_at.

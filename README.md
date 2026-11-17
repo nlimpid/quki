@@ -113,13 +113,13 @@ Lint and format are oxlint and oxfmt. The web bundler is `rolldown-vite`. Librar
 
 Never commit values. Names:
 
-| Name                     | Where                                                                                                                                           |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TIDB_QUKI_DATABASE_URL` | Worker secret and local env. TiDB Serverless MySQL URL, for example `mysql://USER:PASSWORD@gateway01.<region>.prod.aws.tidbcloud.com:4000/quki` |
-| `INGEST_TOKEN`           | Crawler Worker secret. `Authorization: Bearer …` or `x-ingest-token` on `POST /admin/migrate` and `POST /admin/ingest`                          |
-| `VITE_CLERK_PUBLISHABLE_KEY` | Web env. Clerk publishable key only. Not a Worker secret.                                                                                     |
-| `CLERK_JWT_ISSUER`       | Site Worker. Exact https origin of the Clerk Frontend API. JWKS is fetched only from that origin.                                              |
-| `CLERK_AUTHORIZED_PARTIES` | Optional site Worker. Comma-separated `azp` origins. Defaults to `https://quki.cc,https://www.quki.cc`.                                     |
+| Name                         | Where                                                                                                                                           |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TIDB_QUKI_DATABASE_URL`     | Worker secret and local env. TiDB Serverless MySQL URL, for example `mysql://USER:PASSWORD@gateway01.<region>.prod.aws.tidbcloud.com:4000/quki` |
+| `INGEST_TOKEN`               | Crawler Worker secret. `Authorization: Bearer …` or `x-ingest-token` on `POST /admin/migrate` and `POST /admin/ingest`                          |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Web env. Clerk publishable key only. Not a Worker secret.                                                                                       |
+| `CLERK_JWT_ISSUER`           | Site Worker. Exact https origin of the Clerk Frontend API. JWKS is fetched only from that origin.                                               |
+| `CLERK_AUTHORIZED_PARTIES`   | Optional site Worker. Comma-separated `azp` origins. Defaults to `https://quki.cc,https://www.quki.cc`.                                         |
 
 ```bash
 # from workers/site and workers/crawler respectively
@@ -154,7 +154,7 @@ The CSV backfill stays a Node script: the seed files are not on the edge.
 
 ## A-share dividends
 
-`/stocks`, `/stock/:code`, and `/portfolio` are Shanghai and Shenzhen A-shares (main board, ChiNext, STAR). Beijing and delisted names are excluded. The stock page has no K-line. Holdings stay in this browser under `qk.holdings.v1`. `/me` redirects to `/portfolio`. Login is a provider-neutral shell: the header links to `/login`, but the sign-in control stays inert until an OIDC issuer is chosen. See `docs/auth.md`.
+`/stocks`, `/stock/:code`, and `/portfolio` are Shanghai and Shenzhen A-shares (main board, ChiNext, STAR). Beijing and delisted names are excluded. The stock page has no K-line. Holdings stay in this browser under `qk.holdings.v1`. `/me` redirects to `/portfolio`. Login is Clerk email. The header shows 登录 when the Worker session is ready, and `/login` shows the sign-in form only when the publishable key and that ready flag are both present. See `docs/auth.md`.
 
 近12月股息率 and a holding's 平均股息率 use the same formula: trailing 12 calendar months of pretax cash per share, divided by the latest close. Cash paid before a later bonus or transfer is divided by that split so it lines up with today's share count. Bonus and transfer shares are not cash. 「最近分红」is the ex-dividend date. A close the latest crawl did not refresh stays on the card in gray.
 

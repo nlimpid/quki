@@ -1,5 +1,4 @@
 import {
-  createAuthStore,
   createHoldingStore,
   createIdentityStore,
   type AuthStore,
@@ -11,8 +10,6 @@ import type { AuthUnavailableReason } from "@quki/types";
 
 import {
   PRODUCTION_AUTH_ORIGINS,
-  createOidcClient,
-  readOidcEnv,
   trustedAuthOrigins,
   type OidcClient,
   type OidcEnv,
@@ -54,30 +51,24 @@ export function authRuntimeFromEnv(
     CLERK_AUTHORIZED_PARTIES?: string;
   },
   connect: (url: string) => SqlConn,
-  createClient: typeof createOidcClient = createOidcClient,
 ): AuthRuntime {
   const databaseUrl = env.TIDB_QUKI_DATABASE_URL?.trim() ?? "";
-  const oidcEnv = readOidcEnv(env);
-  if (!oidcEnv.ok || !databaseUrl) {
-    return {
-      now: () => new Date(),
-      store: null,
-      holdings: databaseUrl ? createHoldingStore(() => connect(databaseUrl)) : null,
-      clerk: readClerkEnv(env),
-      identities: databaseUrl ? createIdentityStore(() => connect(databaseUrl)) : null,
-      oidc: null,
-      unavailableReason: !oidcEnv.ok ? oidcEnv.reason : "storage_unconfigured",
-      trustedOrigins: trustedAuthOrigins(env),
-    };
-  }
+  const clerk = readClerkEnv(env);
+  const identities = databaseUrl ? createIdentityStore(() => connect(databaseUrl)) : null;
   return {
     now: () => new Date(),
-    store: createAuthStore(() => connect(databaseUrl)),
-    holdings: createHoldingStore(() => connect(databaseUrl)),
-    clerk: readClerkEnv(env),
-    identities: createIdentityStore(() => connect(databaseUrl)),
-    oidc: createClient(oidcEnv.config),
-    unavailableReason: null,
+    store: null,
+    holdings: databaseUrl ? createHoldingStore(() => connect(databaseUrl)) : null,
+    clerk,
+    identities,
+    oidc: null,
+    unavailableReason:
+      clerk && identities ? null : clerk ? "storage_unconfigured" : "auth_not_configured",
     trustedOrigins: trustedAuthOrigins(env),
   };
+}
+
+/** Guest login.ready. OIDC env and the old auth store do not count. */
+export function clerkLoginReady(auth: AuthRuntime): boolean {
+  return auth.clerk != null && auth.identities != null;
 }

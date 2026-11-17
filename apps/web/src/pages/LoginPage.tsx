@@ -7,7 +7,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { AppHeader } from "../components/AppHeader.js";
 import { useAuth } from "../lib/auth.js";
 import { usePageTitle } from "../lib/pageTitle.js";
-import { LOGIN_PRIVACY_COPY, loginView } from "../lib/authState.js";
+import { LOGIN_PRIVACY_COPY, LOGIN_UNAVAILABLE_COPY, loginView } from "../lib/authState.js";
 
 export function LoginPage() {
   const { phase, retry, retrying } = useAuth();
@@ -15,8 +15,10 @@ export function LoginPage() {
   const navigate = useNavigate();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const returnTo = safeReturnTo(params.get("returnTo"), window.location.origin);
-  const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+  const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY?.trim() ?? "";
   const view = loginView(phase, params.get("error"));
+  const showSignIn = publishableKey.length > 0 && view.mode === "ready";
+  const showUnavailable = view.mode === "unavailable" || (view.mode === "ready" && !showSignIn);
   usePageTitle("登录 · quki");
   const busy = retrying || phase.kind === "initializing";
 
@@ -46,7 +48,7 @@ export function LoginPage() {
           <h1 ref={headingRef} tabIndex={-1}>
             登录
           </h1>
-          {publishableKey && phase.kind !== "authenticated" ? (
+          {showSignIn ? (
             <SignIn
               path="/login"
               routing="path"
@@ -54,7 +56,10 @@ export function LoginPage() {
               fallbackRedirectUrl={returnTo}
             />
           ) : null}
-          {view.message ? <p className="auth-lead">{view.message}</p> : null}
+          {showUnavailable ? <p className="auth-lead">{LOGIN_UNAVAILABLE_COPY}</p> : null}
+          {view.mode !== "unavailable" && view.mode !== "ready" && view.message ? (
+            <p className="auth-lead">{view.message}</p>
+          ) : null}
           {view.status ? (
             <p className="auth-status" aria-live="polite">
               {view.status}

@@ -2,7 +2,6 @@ import { parseAuthSessionResponse } from "@quki/types";
 import { describe, expect, it } from "vitest";
 
 import {
-  LOGIN_UI_ENABLED,
   LOGIN_UNAVAILABLE_COPY,
   applyProbeFailure,
   applyProbeSuccess,
@@ -46,7 +45,6 @@ describe("unconfigured worker session", () => {
       expired: false,
       login: { state: "unavailable", reason: "auth_not_configured" },
     });
-    expect(LOGIN_UI_ENABLED).toBe(false);
     expect(headerControl(phase)).toBe("none");
     expect(showLoginCta(phase)).toBe(false);
     expect(loginView(phase)).toMatchObject({
@@ -60,9 +58,10 @@ describe("unconfigured worker session", () => {
       new Request("https://quki.cc/api/auth/login", { method: "POST" }),
       env,
     );
-    expect(login.status).toBe(503);
-    expect(await login.json()).toEqual({ error: "auth_unavailable", message: "登录尚未配置" });
+    expect(login.status).toBe(404);
+    expect(await login.json()).toEqual({ error: "not_found", message: "登录入口已关闭" });
     expect(login.headers.get("location")).toBeNull();
+    expect(login.headers.get("set-cookie")).toBeNull();
   });
 
   it("maps an HTTP 503 probe to unknown rather than login unavailable", async () => {
@@ -74,7 +73,7 @@ describe("unconfigured worker session", () => {
     const phase = applyProbeFailure(initializing());
     expect(phase.kind).toBe("unknown");
     expect(headerControl(phase)).toBe("login");
-    expect(showLoginCta(phase, false)).toBe(true);
+    expect(showLoginCta(phase)).toBe(true);
     expect(loginView(phase).mode).toBe("check_failed");
     expect(loginView(phase).message).toBeNull();
   });

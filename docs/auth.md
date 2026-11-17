@@ -1,194 +1,91 @@
-# Login MVP
+# Login
 
-Provider-neutral session shell for quki.cc. No identity provider is selected. The `/login` card does not collect credentials and does not offer a branded or placeholder sign-in button. Anonymous market routes stay public. Holdings remain in `qk.holdings.v1` on this browser.
+Account login is Clerk email on `@clerk/react`. The Worker accepts one session path: `Authorization: Bearer` with a Clerk session JWT. `POST /api/auth/login`, `GET /api/auth/callback`, and the `qk_session` cookie do not authenticate. The browser does not copy `Cookie` or `__session` into the Worker check.
 
-This file is the contract for review. It does not apply the migration, set secrets, or deploy.
+This file is the contract for review. It does not set secrets, run `pnpm migrate`, or deploy.
 
-## Recommendation
+## Configuration
 
-Use opaque server sessions in the existing TiDB database, and use `oauth4webapi` for the OIDC authorization-code flow when the owner names an issuer.
+Names only. No values are in this repository.
 
-`oauth4webapi` 3.8.8 is the OAuth/OIDC client inside Auth.js. It runs on Cloudflare Workers, generates PKCE (`S256`) and `state`, and checks the authorization response and ID token with Web Crypto. The site Worker already has `nodejs_compat` and talks to TiDB through `@tidbcloud/serverless` over HTTP. Session rows use that same parameterized `execute(sql, params)` client. The browser receives an opaque cookie. The database stores only the SHA-256 of that cookie.
+| Name                         | Where                 | Rule                                                                                                                                                                                                               |
+| ---------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Web build             | Clerk publishable key. Never a secret. The sign-in form renders only when this key is present and the Worker session is ready.                                                                                     |
+| `CLERK_JWT_ISSUER`           | Site Worker           | Exact `https` origin of the Clerk Frontend API. No user, password, query, or hash. The JWKS URL is `{that origin}/.well-known/jwks.json`. The token `iss` is checked against this origin and is never a fetch URL. |
+| `CLERK_AUTHORIZED_PARTIES`   | Site Worker, optional | Comma-separated `azp` allowlist. The code default is `https://quki.cc,https://www.quki.cc`. A token without `azp`, or with an `azp` outside the list, is rejected.                                                 |
+| `CLERK_SECRET_KEY`           | unused                | Session verification does not call the Clerk Backend API.                                                                                                                                                          |
 
-These alternatives do not fit this app:
+`TIDB_QUKI_DATABASE_URL` is required for the identity store. A missing or invalid issuer leaves `login.ready: false` with `auth_not_configured`. A valid issuer with no database URL leaves `login.ready: false` with `storage_unconfigured`. Leftover `AUTH_OIDC_*` variables do not change that.
 
-| Option | Why it is not the default |
-| --- | --- |
-| Better Auth + `mysql2` | The maintained MySQL adapter expects a TCP pool. Workers cannot hold that pool, and TiDB Serverless from this Worker uses the HTTP driver, not Hyperdrive. Adding Hyperdrive would be a production network change. |
-| Better Auth + `@tidbcloud/kysely` | Better Auth lists the TiDB Kysely dialect, but the published dialect is 0.0.4 from 2023 (about 200 weekly downloads) against Kysely 0.26. That is not a current Workers path. |
-| Lucia / Arctic / Oslo | Arctic is deprecated. Oslo's maintained package is `@oslojs/encoding` only. Copying their old session guide would mean maintaining the crypto ourselves. |
-| Auth.js MySQL adapter | Same TCP driver problem as `mysql2`, unless a custom adapter is written on top of `@tidbcloud/serverless`. That is more glue than calling the driver directly. |
-| Email, password, SMS, WeChat, GitHub, or Google | Each one is an owner decision. The audience is a Chinese market page with no mailer and no user table. This change does not pick one. |
+## Session JWT
 
-Tradeoff: the OIDC callback is implemented and tested with an in-process stand-in. That stand-in is a labelled fixture, not a Google login. `login.ready` on `GET /api/auth/session` only means the Worker has a database URL and `https://accounts.google.com` with scope `openid profile`. The page does not treat that as a working sign-in. `LOGIN_UI_ENABLED` in `apps/web/src/lib/authState.ts` stays `false` until the consent sentence is real. Until then the header and the expiry banner do not offer 登录 or 重新登录, and `/login` says `登录暂不可用`. There is no 继续登录 button.
+The Worker verifies the bearer with WebCrypto against the issuer JWKS. Algorithms are RS256, RS384, and RS512. Clock skew is 5 seconds. The JWKS cache is 10 minutes and is refetched when `kid` is unknown.
 
-`pnpm dev` keeps using seed CSVs. It does not open TiDB for login.
+The header `cat` must be exactly `cl_B7d4PD111AAA` (the session category pinned from `@clerk/backend@3.30.0`). If Clerk changes that category, verification must fail closed. A missing or different category is not a session token. `aud` is not required.
 
-## Owner checklist
+`isSignedIn` in the browser does not authorize a route. `getToken()` may be null; the client omits `Authorization` in that case. An account page opens only after `GET /api/auth/session` returns 200 with `authenticated: true`.
 
-Names only. Do not create the provider account in this change.
+## Identity
 
-1. Account login is Clerk email on the current `@clerk/react` package. Google OIDC is not the account path. Do not import existing users by email.
-2. Names only. No values are in this repository.
-   - `VITE_CLERK_PUBLISHABLE_KEY` — client publishable key. Never a secret.
-   - `CLERK_JWT_ISSUER` — Worker. Exact `https` origin of the Clerk Frontend API. The JWKS URL is that origin plus `/.well-known/jwks.json`. The token cannot choose another host.
-   - `CLERK_AUTHORIZED_PARTIES` — Worker. Comma-separated `azp` allowlist. Default in code is `https://quki.cc,https://www.quki.cc`.
-   - `CLERK_SECRET_KEY` is not required for session verification.
-3. The Worker verifies the bearer session JWT itself. `isSignedIn` in the browser does not authorize a route. A missing issuer or a missing identity table is HTTP 503 and is not an authenticated success.
-4. Do not run `pnpm migrate`. That command applies every `db/migrations/*.sql` whose filename is missing from `schema_migrations`, including `0006_auth.sql`. We do not execute it. Whether production has applied `0006_auth.sql` was NOT CHECKED. The crawler list stays `0001` through `0005`. Account identity SQL for review is `db/review/0009_auth_identities.sql`, outside that directory. `scripts/apply-reviewed-auth-sql.ts` prints two explicit paths and refuses `--execute`. It is not `pnpm migrate`.
-5. Choose the provider, write the real consent sentence, then set `LOGIN_UI_ENABLED` and add the unbranded 继续登录 control that posts to `POST /api/auth/login`. Do not flip the flag while the consent text is still missing. `login.ready: true` alone does not show that button.
-6. Local `http://127.0.0.1` will not keep the session cookie, because `Secure` is always set. Exercise login on HTTPS.
-
-`TIDB_QUKI_DATABASE_URL` is still required for any real session read. Missing issuer, client, secret, or database leaves `login.ready: false`. A storage error during a configured request is HTTP 503 and does not describe the user as logged out.
-
-## Cookies
-
-| Cookie | Value | Flags | Lifetime |
-| --- | --- | --- | --- |
-| `qk_session` | 32 random bytes, base64url | `Secure`; `HttpOnly`; `SameSite=Lax`; `Path=/`; no `Domain` | 14 days (`Max-Age=1209600`). Also enforced with `expires_at`. |
-| `qk_csrf` | CSRF token for `POST /api/auth/login` | same flags | 1 hour |
-| `qk_oauth` | opaque id for one authorization attempt | same flags | 10 minutes |
-
-The session row stores `sha256(qk_session)`, not the cookie. Logout sets `revoked_at` and `Max-Age=0`. An expired or revoked cookie is treated as anonymous with `expired: true`. There is no sliding renewal.
-
-A successful callback revokes only the `qk_session` cookie presented on that request, then sets a new one. Other sessions for the same account stay valid. This is rotation of the browser's current session. It is not a claim that an attacker can fix a session by planting an unknown token.
+The verified `iss` and `sub` are stored as exact `VARBINARY(512)` bytes and mapped to an internal UUID `CHAR(36)`. That UUID is `user.id` and `auth_holdings.user_id`. A unique-key race reads the same pair back and returns the existing UUID. There is no email column and no email merge. Clerk user ids are not stored in `CHAR(36)`.
 
 ## API
 
-All `/api/auth/*` responses send `Cache-Control: no-store`.
+`/api/auth/*` responses send `Cache-Control: no-store`.
 
 ### `GET /api/auth/session`
 
-`200` when the process can answer. `503` `{ "error": "auth_unavailable", "message": "登录暂不可用" }` when the store throws. A 503 is a probe failure, not a logout.
+Anonymous, no `Authorization` header:
 
-```json
-{
-  "status": "anonymous",
-  "authenticated": false,
-  "expired": false,
-  "user": null,
-  "csrfToken": "string or null",
-  "login": { "ready": false, "method": null, "reason": "auth_not_configured" }
-}
-```
+- `200`, `authenticated: false`.
+- `login.ready: true` and `login.method: "clerk"` only when `CLERK_JWT_ISSUER` passes `readClerkEnv` and the identity store exists.
+- Otherwise `login.ready: false`, `login.method: null`, and `reason` is `auth_not_configured` or `storage_unconfigured`.
 
-`status` is `anonymous`, `authenticated`, or `unavailable`.
+With `Authorization: Bearer`:
 
-`user` is `{ "id", "displayName" }` or `null`. `displayName` is omitted from the label when it is empty, an email address, or a phone number. The menu then shows `已登录`. Email and phone are not stored and are not returned.
+- `401` when the token is malformed or the signature, issuer, `azp`, time, or session category fails.
+- `503` when Clerk or the identity table is unavailable. `authenticated` stays false.
+- `200` with the internal UUID when verification and the identity read succeed.
 
-`login.reason` is `auth_not_configured`, `storage_unconfigured`, `scopes_not_confirmed`, or `null`. `login.method` is `oidc` only when `ready` is true.
+A `qk_session` or `__session` cookie is ignored.
 
-`expired: true` means a session cookie was sent and the row is missing, expired, or revoked.
+### Closed OIDC routes
 
-### `POST /api/auth/login`
-
-JSON or form body: `{ "csrf": "...", "returnTo": "/portfolio?edit=1" }`. A `userId` field is ignored.
-
-- `403` `{ "error": "csrf" }` when `Origin` is missing or not this host, `Sec-Fetch-Site` is `cross-site`, or `csrf` does not match `qk_csrf`.
-- `503` when login is not configured or the issuer cannot be reached. No `Location`, no session cookie.
-- `302` to the discovered HTTPS authorization endpoint. Sets `qk_oauth`. PKCE and `state` stay on the server. The URL is not the `returnTo` value.
-
-### `GET /api/auth/callback`
-
-IdP redirect. The request URL origin must be `https://quki.cc` or `https://www.quki.cc` (tests may inject others). A wrong `state` does not delete the transaction. A matching `state` runs one conditional `DELETE` (`token_hash`, `state_secret`, and `expires_at`). Only `rowsAffected = 1` continues, so two overlapping valid callbacks have one winner. That statement is supported by `@tidbcloud/serverless`; this change did not run it on TiDB. `oauth4webapi` checks `state` again. Success sets `qk_session` and redirects to the stored same-origin path. A code-exchange failure after the delete does not allow replay. A `returnTo` on the callback query is ignored.
-
-The account key is the UTF-8 bytes of the ID token `iss` plus the UTF-8 bytes of `sub`, stored in `VARBINARY(512)` columns. `utf8mb4_unicode_ci` would fold case. `utf8mb4_bin` distinguishes case but uses PAD SPACE, so a trailing space would compare equal. `VARBINARY` keeps both. The HTTP driver sends those bytes as a `0x` hex literal. Values longer than 512 bytes are rejected instead of truncated. Two issuers that share a `sub` are two accounts. This DDL has not been executed on TiDB. `name` / `preferred_username` is stored only after `publicDisplayName`. Access tokens and refresh tokens are not stored.
+`POST /api/auth/login` and `GET /api/auth/callback` return `404` `{ "error": "not_found" }`. They set no cookie and no `Location`.
 
 ### `POST /api/auth/logout`
 
-JSON `{ "csrf" }` or header `X-CSRF-Token`. Same origin rule as login.
+Same-origin `Origin` is required (`403` otherwise). The body is not a CSRF cookie. `Authorization: Bearer` uses the same verification as holdings. Success is `204`. A cookie alone is `401`.
 
-- `403` when the session is valid and the token does not match the row. The session stays.
-- `204` after `revoked_at` is set, or when there was no session. Clears `qk_session`.
-- `503` when the store throws. The cookie is left in place so the client cannot pretend the logout worked.
+### `GET /api/account` and `GET /api/users/:userId`
 
-### `GET /api/account`
+Same bearer check. `401` without a valid bearer. `403` when the path id is not the internal UUID. The response user is `{ "id", "displayName": null }`.
 
-- `401` `{ "error": "unauthorized", "message": "需要登录" }` with no valid session.
-- `200` `{ "user": { "id", "displayName" } }` for the session user.
-- Query `userId` is ignored.
-- `503` when the session row cannot be read.
-
-### `GET /api/users/:userId`
-
-- `401` when anonymous or expired.
-- `403` `{ "error": "forbidden", "message": "无权访问该账户" }` when the path id is not the session user. The other row is not loaded.
-- `200` with the same user object when the path id matches.
-
-Market routes are unchanged and do not read the session.
-
-## Redirects
-
-`returnTo` is accepted only as a same-origin `pathname + search`:
-
-- Missing, empty, or undecodable values become `/`.
-- A leftover `%2F`, `%5C`, or `%3A%2F%2F` after one decode becomes `/`.
-- `//`, `/\`, `\`, `://`, another origin, control characters, and `/login` become `/`.
-- The hash is dropped.
-
-The header link is `/login?returnTo=` plus the current path, except on `/login` itself, which does not nest another `returnTo`.
+Market routes stay public and do not read the session.
 
 ## Holdings
 
-Auth modules do not read or write `localStorage` or `qk.holdings.v1`. Login, logout, expiry, and a failed logout do not upload, merge, or delete holdings. The portfolio drawer is React state owned by that page; the expiry banner does not navigate or reset it.
+`PUT` and `DELETE` on `/api/holdings` require the same bearer and a same-origin mutation. A missing holdings table is `503` and writes nothing. Share counts are integers from 1 through 1,000,000,000. The code must be a listed Shanghai or Shenzhen company. `expectedVersion` is 32 lowercase hex; `null` is allowed only when creating. Versions are random and are not reused.
 
-Copy:
+The browser key `qk.holdings.v1` stays readable and is never uploaded, merged, or cleared by login or logout. Guest add goes to `/login?returnTo=` with a same-origin path. The add intent is opened again only after the Worker session returns 200 authenticated.
 
-- Guest portfolio: `本地保存 · 未登录。数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传本地持仓。`
-- Signed-in portfolio, including a failed logout: `本地保存。持仓仍仅保存在此浏览器，不会因登录而同步到云端。`
-- Session still unknown: the guest sentence without `未登录`.
-- Add/edit footnote: `数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传或同步持仓。`
+## UI
 
-## UI states
+The header shows 登录 when the probe is unknown, and when the guest session has `login.ready: true`. It shows 账户 for an authenticated session.
 
-| State | Header | Meaning |
-| --- | --- | --- |
-| `initializing` | 16px spinner, at most 4 seconds | Probe in flight. Pages stay usable. |
-| `unknown` | `登录` as a session check | Timeout, network error, or HTTP 503. Not logged out. `/login` says `无法确认登录状态，请重试。` A late `200` still updates the header. |
-| `guest` and login not offered | no 登录 link | Includes `login.ready: false` (`auth_not_configured`, `storage_unconfigured`, `scopes_not_confirmed`) and `login.ready: true` while `LOGIN_UI_ENABLED` is false. `/login` says `登录暂不可用。访客仍可查看行情。此浏览器里的旧持仓只供查看。` 重试 only probes the session again. |
-| `guest` + `expired` | dismissible banner, no 重新登录 while login is not offered | Previous cookie is dead. Unsaved holdings edits stay. |
-| `authenticated` | `账户` | Still shown when `login.ready` is false. Menu label is `displayName` or `已登录`. |
-| `logoutPending` | `账户`, menu says `正在退出…` | Second submit disabled. |
-| `logoutFailed` | `账户` stays | Menu says `退出失败，请重试。` There is no `已退出` string. |
+`/login` shows the Clerk `SignIn` form only when the publishable key and `login.ready` are both present. It shows `登录暂不可用。访客仍可查看行情。此浏览器里的旧持仓只供查看。` only when login is unconfigured. The form and that card are not shown together. Redirects use `forceRedirectUrl` and `fallbackRedirectUrl` from `safeReturnTo`.
 
-The account panel is not a focus trap. Opening it moves focus to 退出. Escape closes it and returns focus to 账户. Tab and Shift+Tab leave the panel and close it.
+## Review SQL
 
-Unresolved: which OIDC provider to use, and the consent sentence for what that provider collects. Those two choices gate `LOGIN_UI_ENABLED`. The API can report `login.ready: true` before either choice is made.
+Do not run `pnpm migrate`. That command applies every `db/migrations/*.sql` whose filename is missing from `schema_migrations`, including `0006_auth.sql`. We do not execute it. Whether production has applied `0006_auth.sql` was NOT CHECKED. Do not describe that file as unapplied. The crawler list stays `0001` through `0005`.
 
-## Tests
+These two files are outside `db/migrations`, so migrate does not see them. `pnpm auth:sql:review` prints only these paths, in this order, and does not connect:
 
-```bash
-pnpm test
-pnpm typecheck
-pnpm --filter @quki/web build
-pnpm lint
-```
+1. `db/review/0009_auth_identities.sql`
+2. `db/review/0008_auth_holdings.sql`
 
-Covered in process, with no network and no database:
+`--execute` prints `Refusing to execute. Production applied state was NOT CHECKED. This is not pnpm migrate.` and exits without a connection.
 
-- Anonymous `/api/health` and `/api/instruments` with and without a session cookie.
-- With no database URL and no OIDC settings, `GET /api/auth/session` is `200`, `Cache-Control: no-store`, `status: unavailable`, `login.ready: false`, and no `Set-Cookie`. `POST /api/auth/login` is `503` with no `Location`. A store error on a later request is a separate `503`.
-- Cookie flags, CSRF on login and logout, revoked logout, 14-day expiry.
-- `401` versus `403`, ignored caller `userId`, two subjects isolated.
-- Open redirects, callback `state` mismatch, one-time OAuth transaction, PKCE challenge from `oauth4webapi`.
-- Storage errors do not echo the driver URL.
-- `authRuntimeFromEnv` does not call `connect` until a query runs.
-- Display-name filter, `returnTo`, and the 4 second unknown state.
-- Header and relogin stay hidden for `auth_not_configured`, `storage_unconfigured`, `scopes_not_confirmed`, and for `login.ready: true` while `LOGIN_UI_ENABLED` is false. An existing session still shows 账户.
-- Auth client and auth modules do not touch `qk.holdings.v1`.
+## Not verified
 
-These checks use an in-process stand-in for the auth tables. They do not open TiDB, an issuer, or a browser.
-
-Local run after the identity-column change: `pnpm test` passed (32 files, 136 tests), `pnpm typecheck` passed, `pnpm lint` passed with three existing effect-dependency warnings in `RotationChart`, `KlineChart`, and `OverviewPage`, and `pnpm --filter @quki/web build` passed. The new regressions use an in-process stand-in and a fake HTTP response. They are not a TiDB, issuer, or browser run, and they are not a security approval.
-
-## Still outstanding
-
-Fixed in code, still not a release:
-
-- Issuer and subject are `VARBINARY(512)` identity columns. The in-process byte compare and the driver's hex literal are not a TiDB execution of that unique key. Provider choice is still open, and `LOGIN_UI_ENABLED` stays false until consent text exists.
-- Trusted callback origins are `https://quki.cc` and `https://www.quki.cc`. Secrets are not set.
-- `0006_auth.sql` is reviewed code and is not applied. The crawler `POST /admin/migrate` list still stops at `0005_dividend_audit.sql`. Do not treat this file as an instruction to migrate.
-- The conditional `DELETE` is tested with an in-process stand-in and with the driver decoding a fake HTTP JSON body. A numeric `rowsAffected` of `1` wins; `0`, `null`, and the string `"1"` fail closed. Concurrent `DELETE` on a real TiDB cluster, and the JSON type that cluster returns, were not run.
-- No live issuer and no browser pass.
-
-`0005_dividend_audit.sql` was not edited or rerun.
+The JWT checks use a labelled fixture key, not a Clerk account. The identity and holdings stores use an in-process stand-in, not TiDB. No secret is set and nothing here is a release.

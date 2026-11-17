@@ -103,7 +103,7 @@ export function AuthProvider({
     setPhase(pending);
     try {
       if (onLogout) await onLogout();
-      else await logoutSession(pending.csrfToken);
+      else await logoutSession(tokenRef.current ? await tokenRef.current() : null);
       setPhase(finishLogout(pending));
       setExpiryDismissed(false);
     } catch {

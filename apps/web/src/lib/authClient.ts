@@ -24,15 +24,15 @@ export async function fetchSession(
 }
 
 export async function logoutSession(
-  csrfToken: string,
+  token: string | null,
   fetchImpl: typeof fetch = fetch,
 ): Promise<void> {
+  if (!token) throw new Error("logout_failed");
   const response = await fetchImpl("/api/auth/logout", {
     method: "POST",
     credentials: "same-origin",
     cache: "no-store",
-    headers: { accept: "application/json", "content-type": "application/json" },
-    body: JSON.stringify({ csrf: csrfToken }),
+    headers: { accept: "application/json", ...bearerHeader(token) },
   });
   if (!response.ok) throw new Error("logout_failed");
 }

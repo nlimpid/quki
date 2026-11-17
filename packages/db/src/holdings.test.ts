@@ -28,13 +28,15 @@ function store(listed = ["600519"]) {
 }
 
 describe("candidate fake database, not TiDB", () => {
-  it("names 0008 so it does not replace 0006 or the unmerged 0007 file", () => {
-    const names = readdirSync(new URL("../../../db/migrations", import.meta.url));
-    expect(names).toContain("0006_auth.sql");
-    expect(names).not.toContain("0007_holdings.sql");
-    expect(names).toContain("0008_auth_holdings.sql");
+  it("keeps 0008 in review so migrate cannot apply it", () => {
+    const migrations = readdirSync(new URL("../../../db/migrations", import.meta.url));
+    const review = readdirSync(new URL("../../../db/review", import.meta.url));
+    expect(migrations).toContain("0006_auth.sql");
+    expect(migrations).not.toContain("0007_holdings.sql");
+    expect(migrations).not.toContain("0008_auth_holdings.sql");
+    expect([...review].sort()).toEqual(["0008_auth_holdings.sql", "0009_auth_identities.sql"]);
     const sql = readFileSync(
-      new URL("../../../db/migrations/0008_auth_holdings.sql", import.meta.url),
+      new URL("../../../db/review/0008_auth_holdings.sql", import.meta.url),
       "utf8",
     );
     expect(sql).toContain("PRIMARY KEY (user_id, code)");

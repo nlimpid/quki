@@ -7,7 +7,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   LOGIN_CHECK_FAILED_COPY,
-  LOGIN_UI_ENABLED,
   LOGIN_UNAVAILABLE_COPY,
   applyProbeFailure,
   applyProbeSuccess,
@@ -40,7 +39,7 @@ function session(
     expired: false,
     user: null,
     csrfToken: ready ? "csrf" : null,
-    login: { ready, method: ready ? "oidc" : null, reason: ready ? null : reason },
+    login: { ready, method: ready ? "clerk" : null, reason: ready ? null : reason },
     ...extra,
   };
 }
@@ -52,7 +51,6 @@ function guest(reason: AuthUnavailableReason): AuthPhase {
 describe("auth view state", () => {
   it("keeps a probe failure unknown and does not call that logged out", () => {
     expect(AUTH_PROBE_TIMEOUT_MS).toBe(4_000);
-    expect(LOGIN_UI_ENABLED).toBe(false);
     const unknown = applyProbeTimeout(initializing);
     expect(unknown).toEqual({ kind: "unknown", login: unknownLogin });
     expect(headerControl(unknown)).toBe("login");
@@ -75,34 +73,32 @@ describe("auth view state", () => {
       expect(phase).toMatchObject({ kind: "guest", login: { state: "unavailable", reason } });
       expect(headerControl(phase)).toBe("none");
       expect(showLoginCta(phase)).toBe(false);
-      expect(showLoginCta(phase, true)).toBe(false);
+      expect(loginView(phase).mode).toBe("unavailable");
       expect(loginView(phase).message).toBe(LOGIN_UNAVAILABLE_COPY);
       expect(loginView(phase).retry).toBe(true);
-      expect(loginView(phase, "provider_unreachable").alert).toContain("Google");
       expect(loginView(phase, "login_failed").alert).toBe("登录失败，请重试。");
+      expect(loginView(phase, "login_failed").message).toBe(LOGIN_UNAVAILABLE_COPY);
       const expired = applyProbeSuccess(
         initializing,
         session(false, reason, { expired: true, status: "anonymous" }),
       );
       expect(showExpiryBanner(expired, false)).toBe(true);
       expect(showRelogin(expired, false)).toBe(false);
-      expect(showRelogin(expired, false, true)).toBe(false);
     }
   });
 
-  it("does not offer a sign-in button when the API is ready but consent is not", () => {
+  it("offers login when the Worker session is ready", () => {
     const phase = applyProbeSuccess(initializing, session(true, null, { status: "anonymous" }));
     expect(phase).toMatchObject({ kind: "guest", login: { state: "ready" } });
-    expect(headerControl(phase)).toBe("none");
-    expect(showLoginCta(phase)).toBe(false);
-    expect(showLoginCta(phase, true)).toBe(true);
-    expect(loginView(phase).mode).toBe("unavailable");
-    expect(loginView(phase).message).toBe(LOGIN_UNAVAILABLE_COPY);
+    expect(headerControl(phase)).toBe("login");
+    expect(showLoginCta(phase)).toBe(true);
+    expect(loginView(phase).mode).toBe("ready");
+    expect(loginView(phase).message).toBeNull();
+    expect(loginView(phase).retry).toBe(false);
     const expired = { ...phase, expired: true } as AuthPhase;
     expect(showExpiryBanner(expired, false)).toBe(true);
-    expect(showRelogin(expired, false)).toBe(false);
-    expect(showRelogin(expired, false, true)).toBe(true);
-    expect(showRelogin(expired, true, true)).toBe(false);
+    expect(showRelogin(expired, false)).toBe(true);
+    expect(showRelogin(expired, true)).toBe(false);
   });
 
   it("keeps an existing account usable when new login is unavailable", () => {

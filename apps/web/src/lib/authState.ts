@@ -1,12 +1,5 @@
 import type { AuthSessionResponse, AuthUnavailableReason } from "@quki/types";
 
-/**
- * Server `login.ready` and the on-screen sign-in control are separate.
- * The API may be ready before a provider and a real consent sentence exist.
- * Until both are chosen, the page must not offer a login button.
- */
-export const LOGIN_UI_ENABLED = false;
-
 export const LOGIN_UNAVAILABLE_COPY =
   "登录暂不可用。访客仍可查看行情。此浏览器里的旧持仓只供查看。";
 export const LOGIN_CHECK_FAILED_COPY = "无法确认登录状态，请重试。";
@@ -111,17 +104,14 @@ export function failLogout(phase: AuthPhase): AuthPhase {
   };
 }
 
-/** Header "登录" is a real sign-in link only after the product gate is on. Unknown still links to /login as a session check. */
-export function showLoginCta(phase: AuthPhase, uiEnabled = LOGIN_UI_ENABLED): boolean {
+/** Header "登录" appears for an unknown probe and for a guest whose Worker session is ready. */
+export function showLoginCta(phase: AuthPhase): boolean {
   if (phase.kind === "unknown") return true;
   if (phase.kind !== "guest") return false;
-  return uiEnabled && phase.login.state === "ready";
+  return phase.login.state === "ready";
 }
 
-export function headerControl(
-  phase: AuthPhase,
-  uiEnabled = LOGIN_UI_ENABLED,
-): "spinner" | "login" | "account" | "none" {
+export function headerControl(phase: AuthPhase): "spinner" | "login" | "account" | "none" {
   if (phase.kind === "initializing") return "spinner";
   if (
     phase.kind === "authenticated" ||
@@ -130,19 +120,15 @@ export function headerControl(
   ) {
     return "account";
   }
-  return showLoginCta(phase, uiEnabled) ? "login" : "none";
+  return showLoginCta(phase) ? "login" : "none";
 }
 
 export function showExpiryBanner(phase: AuthPhase, dismissed: boolean): boolean {
   return phase.kind === "guest" && phase.expired && !dismissed;
 }
 
-export function showRelogin(
-  phase: AuthPhase,
-  dismissed: boolean,
-  uiEnabled = LOGIN_UI_ENABLED,
-): boolean {
-  return showExpiryBanner(phase, dismissed) && uiEnabled && phase.login.state === "ready";
+export function showRelogin(phase: AuthPhase, dismissed: boolean): boolean {
+  return showExpiryBanner(phase, dismissed) && phase.login.state === "ready";
 }
 
 export type HoldingMutation = "allow" | "wait" | "retry" | "login";
@@ -168,14 +154,14 @@ export function portfolioSubtitle(phase: AuthPhase): string {
 }
 
 export type LoginView = {
-  mode: "checking" | "returning" | "check_failed" | "unavailable";
+  mode: "checking" | "returning" | "check_failed" | "unavailable" | "ready";
   status: string | null;
   alert: string | null;
   message: string | null;
   retry: boolean;
 };
 
-/** Settled anonymous sessions stay on the unavailable card until a provider and consent exist. */
+/** Ready guests get the Clerk form. Unconfigured guests get only the unavailable card. */
 export function loginView(
   phase: AuthPhase,
   loginFailed: boolean | string | null = false,
@@ -211,14 +197,19 @@ export function loginView(
       retry: true,
     };
   }
+  if (phase.login.state === "ready") {
+    return {
+      mode: "ready",
+      status: null,
+      alert: loginFailed ? "登录失败，请重试。" : null,
+      message: null,
+      retry: false,
+    };
+  }
   return {
     mode: "unavailable",
     status: null,
-    alert: loginFailed
-      ? loginFailed === "provider_unreachable"
-        ? "暂时联系不上 Google，请重试。"
-        : "登录失败，请重试。"
-      : null,
+    alert: loginFailed ? "登录失败，请重试。" : null,
     message: LOGIN_UNAVAILABLE_COPY,
     retry: true,
   };

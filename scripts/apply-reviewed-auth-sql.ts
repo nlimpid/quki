@@ -5,12 +5,9 @@
  *
  * A later reviewed execution would apply only these paths, in this order:
  *   db/review/0009_auth_identities.sql
- *   db/migrations/0008_auth_holdings.sql
+ *   db/review/0008_auth_holdings.sql
  */
-const FILES = [
-  "db/review/0009_auth_identities.sql",
-  "db/migrations/0008_auth_holdings.sql",
-] as const;
+const FILES = ["db/review/0009_auth_identities.sql", "db/review/0008_auth_holdings.sql"] as const;
 
 if (process.argv.includes("--execute")) {
   console.error(

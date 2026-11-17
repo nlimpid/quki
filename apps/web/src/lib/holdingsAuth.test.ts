@@ -54,12 +54,15 @@ describe("holdings stay on this browser", () => {
         expired: true,
         user: null,
         csrfToken: null,
-        login: { ready: true, method: "oidc", reason: null },
+        login: { ready: true, method: "clerk", reason: null },
       }),
     );
-    await logoutSession("csrf", async () => new Response(null, { status: 204 }));
+    await logoutSession("labelled-token", async () => new Response(null, { status: 204 }));
     await expect(
-      logoutSession("csrf", async () => new Response("no", { status: 503 })),
+      logoutSession(null, async () => new Response(null, { status: 204 })),
+    ).rejects.toThrow(/logout_failed/);
+    await expect(
+      logoutSession("labelled-token", async () => new Response("no", { status: 503 })),
     ).rejects.toThrow(/logout_failed/);
     expect(saved.get(HOLDINGS_STORAGE_KEY)).toBe(before);
     expect(reads.filter((key) => key === HOLDINGS_STORAGE_KEY)).toEqual([]);
