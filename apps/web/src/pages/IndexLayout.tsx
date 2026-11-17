@@ -44,7 +44,7 @@ export function IndexLayout() {
   }
 
   return (
-    <div className={onBacktest ? undefined : "qk-index"}>
+    <div className={onBacktest ? "qk-product" : "qk-index"}>
       <AppHeader
         code={known ? code : "H30269"}
         search={location.search}

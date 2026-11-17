@@ -1,8 +1,52 @@
-/* Dividend pages and the login shell. Scoped so index cold/hot and market colors stay on the chart views.
- * Values follow design-v2/dividends/tokens-dividends.css.
+/* Dividend pages use the index paper palette. The login shell keeps its previous
+ * tokens so auth screens are not restyled with the product pages.
  */
 
-.dividends-app,
+.dividends-app {
+  --qk-font-sans: "Source Han Sans SC", "Noto Sans SC", "Source Han Sans CN", sans-serif;
+  --qk-font-mono: "Source Code Pro", ui-monospace, monospace;
+  --qk-canvas: #f4f1ea;
+  --qk-surface: #f4f1ea;
+  --qk-surface-muted: #ebe6dc;
+  --qk-border: #e4ded4;
+  --qk-fg: #1c1916;
+  --qk-fg-secondary: #5c574f;
+  --qk-fg-muted: #8a847a;
+  --qk-accent: #1c1916;
+  --qk-accent-hover: #5c574f;
+  --qk-accent-muted: #ebe6dc;
+  --qk-accent-fg: #1c1916;
+  --qk-on-accent: #f4f1ea;
+  --qk-brand-accent: var(--qk-accent);
+  --qk-brand-accent-muted: var(--qk-accent-muted);
+  --qk-border-focus: #d5cfc4;
+  --qk-div-cash-bg: #f3ebe3;
+  --qk-div-cash-fg: #6b4a3a;
+  --qk-div-cash-border: #e4d5c8;
+  --qk-div-bonus-bg: #ebe6dc;
+  --qk-div-bonus-fg: #5c574f;
+  --qk-div-bonus-border: #d5cfc4;
+  --qk-div-transfer-bg: #e7ece8;
+  --qk-div-transfer-fg: #3f5c50;
+  --qk-div-transfer-border: #d3ddd6;
+  --qk-div-mixed-bg: #f4f1ea;
+  --qk-div-mixed-fg: #5c574f;
+  --qk-div-mixed-border: #d5cfc4;
+  --qk-sample-bg: #f3ead6;
+  --qk-sample-fg: #6b5a3e;
+  --qk-sample-border: #e0d3bc;
+  --qk-metric-hero: 28px;
+  --qk-metric-hero-sm: 22px;
+  --qk-radius-card: 0px;
+  --qk-radius-control: 2px;
+  --qk-radius-pill: 999px;
+  --qk-div-shadow: none;
+  --qk-danger: #dc2626;
+  background: var(--qk-canvas);
+  color: var(--qk-fg);
+  min-height: 100%;
+}
+
 .auth-app {
   --qk-font-sans: "Source Han Sans SC", "Noto Sans SC", "Source Han Sans CN", sans-serif;
   --qk-font-mono: "Source Code Pro", ui-monospace, monospace;
@@ -47,7 +91,38 @@
   min-height: 100%;
 }
 
-[data-theme="dark"] .dividends-app,
+[data-theme="dark"] .dividends-app {
+  --qk-canvas: #161513;
+  --qk-surface: #161513;
+  --qk-surface-muted: #2a2723;
+  --qk-border: #2e2b27;
+  --qk-fg: #f3efe8;
+  --qk-fg-secondary: #a8a29a;
+  --qk-fg-muted: #7a756e;
+  --qk-accent: #f3efe8;
+  --qk-accent-hover: #a8a29a;
+  --qk-accent-muted: #2a2723;
+  --qk-accent-fg: #f3efe8;
+  --qk-on-accent: #161513;
+  --qk-div-cash-bg: #3a2e28;
+  --qk-div-cash-fg: #e4c4b4;
+  --qk-div-cash-border: #5a4338;
+  --qk-div-bonus-bg: #2a2723;
+  --qk-div-bonus-fg: #d4cdc2;
+  --qk-div-bonus-border: #3a3631;
+  --qk-div-transfer-bg: #24302c;
+  --qk-div-transfer-fg: #b7d0c4;
+  --qk-div-transfer-border: #3a4a44;
+  --qk-div-mixed-bg: #221f1c;
+  --qk-div-mixed-fg: #a8a29a;
+  --qk-div-mixed-border: #3a3631;
+  --qk-sample-bg: #3a3226;
+  --qk-sample-fg: #e6d3b0;
+  --qk-sample-border: #5a4d38;
+  --qk-div-shadow: none;
+  --qk-danger: #f87171;
+}
+
 [data-theme="dark"] .auth-app {
   --qk-canvas: #12141a;
   --qk-surface: #1c1f26;

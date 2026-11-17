@@ -111,7 +111,7 @@
   font-size: 14px;
 }
 .div-search:focus-within {
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.25);
+  box-shadow: 0 0 0 2px var(--qk-fg);
 }
 .chips {
   display: flex;
@@ -223,7 +223,7 @@
 .btn.primary {
   background: var(--qk-accent);
   border-color: var(--qk-accent);
-  color: white;
+  color: var(--qk-on-accent, #fff);
 }
 .btn:disabled {
   opacity: 0.45;
@@ -426,6 +426,13 @@
     font-size: var(--qk-metric-hero-sm);
   }
 }
+.hero-name,
+.stock-card strong,
+.hold-top a,
+.page-title {
+  overflow-wrap: anywhere;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .skel-row {
     animation: none;
