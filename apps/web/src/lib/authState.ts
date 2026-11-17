@@ -7,7 +7,8 @@ import type { AuthSessionResponse, AuthUnavailableReason } from "@quki/types";
  */
 export const LOGIN_UI_ENABLED = false;
 
-export const LOGIN_UNAVAILABLE_COPY = "登录暂不可用。访客仍可查看行情，并在本机管理持仓。";
+export const LOGIN_UNAVAILABLE_COPY =
+  "登录暂不可用。访客仍可查看行情。此浏览器里的旧持仓只供查看。";
 export const LOGIN_CHECK_FAILED_COPY = "无法确认登录状态，请重试。";
 export const LOGIN_PRIVACY_COPY =
   "登录不会上传或云同步你的本地持仓。持仓仍仅保存在此浏览器，清除站点数据会丢失。";
@@ -144,18 +145,26 @@ export function showRelogin(
   return showExpiryBanner(phase, dismissed) && uiEnabled && phase.login.state === "ready";
 }
 
+export type HoldingMutation = "allow" | "wait" | "retry" | "login";
+
+/** Local add, edit, and delete are closed unless the session is a confirmed account. */
+export function holdingMutation(phase: AuthPhase): HoldingMutation {
+  if (phase.kind === "authenticated") return "allow";
+  if (phase.kind === "initializing" || phase.kind === "logoutPending") return "wait";
+  if (phase.kind === "unknown" || phase.kind === "logoutFailed") return "retry";
+  return "login";
+}
+
 export function portfolioSubtitle(phase: AuthPhase): string {
-  if (
-    phase.kind === "authenticated" ||
-    phase.kind === "logoutPending" ||
-    phase.kind === "logoutFailed"
-  ) {
-    return "本地保存。持仓仍仅保存在此浏览器，不会因登录而同步到云端。";
+  if (phase.kind === "authenticated") {
+    return "账户持仓保存在服务器。此浏览器里的旧列表只供查看，不会自动上传。";
   }
-  if (phase.kind === "guest") {
-    return "本地保存 · 未登录。数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传本地持仓。";
+  if (phase.kind === "logoutPending" || phase.kind === "logoutFailed") {
+    return "正在确认账户。旧列表只供查看，不会因登录而同步到云端。";
   }
-  return "本地保存。数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传本地持仓。";
+  if (phase.kind === "initializing") return "正在确认登录状态。旧列表只供查看。";
+  if (phase.kind === "unknown") return "无法确认登录状态。旧列表只供查看。";
+  return "未登录。此浏览器里的旧持仓只供查看，新增、修改和删除需要登录。";
 }
 
 export type LoginView = {

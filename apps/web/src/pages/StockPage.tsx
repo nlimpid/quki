@@ -2,7 +2,9 @@ import type { DividendEventDto, DividendYears, StockDetailResponse } from "@quki
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 
-import { readHoldings, saveHolding } from "../lib/holdingsStore.js";
+import { writeAccountHoldings } from "../lib/accountHoldings.js";
+import { useHoldingIntent } from "../lib/holdingIntent.js";
+import { readHoldings } from "../lib/holdingsStore.js";
 import { fetchStock, parseYears } from "../lib/stockApi.js";
 import {
   eventBadges,
@@ -40,12 +42,13 @@ export function StockPage() {
     setError(null);
   }
   const loading = valid && loadedKey !== request && error === null;
-  const [heldCodes, setHeldCodes] = useState(
+  const [heldCodes] = useState(
     () => new Set(readHoldings().state.items.map((item) => item.code)),
   );
   const held = heldCodes.has(code);
   const [shares, setShares] = useState("100");
   const [saved, setSaved] = useState<string | null>(null);
+  const { phase, request: requestHolding } = useHoldingIntent();
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 640px)");
@@ -147,13 +150,20 @@ export function StockPage() {
                   className="div-toolbar"
                   onSubmit={(event) => {
                     event.preventDefault();
-                    try {
-                      const next = saveHolding(company.code, Number(shares));
-                      setHeldCodes(new Set(next.items.map((item) => item.code)));
-                      setSaved(null);
-                    } catch (reason) {
-                      setSaved(reason instanceof Error ? reason.message : "无法保存");
-                    }
+                    if (!requestHolding(`/stock/${company.code}?add=1`)) return;
+                    if (phase.kind !== "authenticated") return;
+                    void writeAccountHoldings(
+                      {
+                        code: company.code,
+                        shares: Number(shares),
+                        updatedAt: new Date().toISOString(),
+                      },
+                      phase.csrfToken,
+                    )
+                      .then(() => setSaved(null))
+                      .catch((reason: unknown) => {
+                        setSaved(reason instanceof Error ? reason.message : "账户持仓没有保存");
+                      });
                   }}
                 >
                   <input

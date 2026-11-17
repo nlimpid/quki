@@ -16,6 +16,7 @@ import {
   failLogout,
   finishLogout,
   headerControl,
+  holdingMutation,
   loginView,
   panelTabLeaves,
   portfolioSubtitle,
@@ -131,6 +132,12 @@ describe("auth view state", () => {
     expect(headerControl(finishLogout(pending))).toBe("none");
     expect(portfolioSubtitle(failed)).toContain("不会因登录而同步到云端");
     expect(portfolioSubtitle(guest("auth_not_configured"))).toContain("未登录");
+    expect(holdingMutation(signedIn)).toBe("allow");
+    expect(holdingMutation(pending)).toBe("wait");
+    expect(holdingMutation(failed)).toBe("retry");
+    expect(holdingMutation(guest("auth_not_configured"))).toBe("login");
+    expect(holdingMutation(initializing)).toBe("wait");
+    expect(holdingMutation({ kind: "unknown", login: unknownLogin })).toBe("retry");
   });
 
   it("accepts a late session after the probe timed out", () => {

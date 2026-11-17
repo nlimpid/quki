@@ -514,4 +514,35 @@ describe("auth routes", () => {
       }),
     ).toEqual({ ok: false, reason: "auth_not_configured" });
   });
+
+  it("does not store holdings while the account book is absent", async () => {
+    const { app } = runtime();
+    const anon = await app.request(`${origin}/api/holdings`, {
+      method: "PUT",
+      headers: { origin },
+    });
+    expect(anon.status).toBe(401);
+    const { callback } = await login(app, { sub: "person-a", name: "林" });
+    if (!callback) throw new Error("missing callback");
+    const sessionCookie = cookieValue(callback, "qk_session");
+    const session = await app.request(`${origin}/api/auth/session`, {
+      headers: { cookie: `qk_session=${sessionCookie}` },
+    });
+    const csrf = ((await session.json()) as { csrfToken: string }).csrfToken;
+    const denied = await app.request(`${origin}/api/holdings`, {
+      method: "PUT",
+      headers: {
+        origin,
+        cookie: `qk_session=${sessionCookie}; qk_csrf=${csrf}`,
+        "content-type": "application/json",
+        "x-csrf-token": csrf,
+      },
+      body: JSON.stringify({ csrf, code: "000001", shares: 100 }),
+    });
+    expect(denied.status).toBe(503);
+    expect(await denied.json()).toEqual({
+      error: "holdings_unavailable",
+      message: "账户持仓尚未开通，没有写入任何持仓。",
+    });
+  });
 });
