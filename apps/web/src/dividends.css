@@ -20,10 +20,21 @@
   gap: 16px;
   align-items: flex-start;
   margin-bottom: 24px;
+  min-width: 0;
+}
+.div-toolbar {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+.div-toolbar .search-field,
+.div-toolbar .search-field__group {
+  max-width: 100%;
+  min-width: 0;
 }
 .page-title {
   margin: 0;
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 600;
   letter-spacing: -0.02em;
   display: flex;
@@ -35,12 +46,21 @@
 .crumb {
   margin: 6px 0 0;
   color: var(--qk-fg-secondary);
-  font-size: 13px;
+  font-size: 15px;
 }
-.asof {
-  color: var(--qk-fg-muted);
-  font-size: 12px;
+.dividends-app .asof {
+  color: var(--qk-fg-secondary);
+  font-size: 15px;
   text-align: right;
+}
+@media (max-width: 640px) {
+  .page-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .dividends-app .asof {
+    text-align: left;
+  }
 }
 .mono {
   font-family: var(--qk-font-mono);

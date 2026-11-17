@@ -120,8 +120,8 @@ export function OverviewPage({
       </Suspense>
       <div className="rail">
         <PositionPanel overview={overview} />
-        <TierTable rows={overview.tiers} lastClose={overview.lastClose} />
       </div>
+      <TierTable rows={overview.tiers} lastClose={overview.lastClose} />
       <LowsTable rows={overview.lows} />
     </div>
   );

@@ -11,6 +11,8 @@ import {
   formatPrice,
   formatYield,
 } from "../lib/stockFormat.js";
+import { FilterGroup } from "../components/FilterGroup.js";
+import { usePageTitle } from "../lib/pageTitle.js";
 import { DividendShell } from "./DividendShell.js";
 
 const YEAR_OPTIONS: { id: DividendYears; label: string }[] = [
@@ -84,6 +86,7 @@ export function StockPage() {
   }
 
   const company = detail?.company;
+  usePageTitle(company ? `${company.name} · 个股 · quki` : "个股 · quki");
 
   return (
     <DividendShell activeNav="stocks">
@@ -216,34 +219,21 @@ export function StockPage() {
             <div className="history-bar">
               <h2 style={{ margin: 0, fontSize: 16 }}>分红记录</h2>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <div className="seg" role="tablist" aria-label="年限">
-                  {YEAR_OPTIONS.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className={years === option.id ? "active" : undefined}
-                      onClick={() => patch({ years: option.id })}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="seg" role="tablist" aria-label="视图">
-                  <button
-                    type="button"
-                    className={view === "table" ? "active" : undefined}
-                    onClick={() => patch({ view: "table" })}
-                  >
-                    表格
-                  </button>
-                  <button
-                    type="button"
-                    className={view === "timeline" ? "active" : undefined}
-                    onClick={() => patch({ view: "timeline" })}
-                  >
-                    时间线
-                  </button>
-                </div>
+                <FilterGroup
+                  label="年限"
+                  value={years}
+                  options={YEAR_OPTIONS}
+                  onChange={(next) => patch({ years: next })}
+                />
+                <FilterGroup
+                  label="视图"
+                  value={view}
+                  options={[
+                    { id: "table" as const, label: "表格" },
+                    { id: "timeline" as const, label: "时间线" },
+                  ]}
+                  onChange={(next) => patch({ view: next })}
+                />
               </div>
             </div>
             {detail && detail.events.length === 0 ? (

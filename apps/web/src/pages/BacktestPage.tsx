@@ -1,4 +1,7 @@
+import { usePageTitle } from "../lib/pageTitle.js";
+
 export function BacktestPage() {
+  usePageTitle("回测 · quki");
   return (
     <section className="card backtest">
       <h1>回测即将推出</h1>

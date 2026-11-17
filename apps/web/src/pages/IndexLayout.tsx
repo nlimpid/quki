@@ -4,6 +4,8 @@ import { Link, Outlet, useLocation, useNavigate, useParams, useSearchParams } fr
 
 import { AppHeader } from "../components/AppHeader.js";
 import { Toolbar } from "../components/Toolbar.js";
+import { formatAsOf } from "../lib/format.js";
+import { usePageTitle } from "../lib/pageTitle.js";
 
 const RANGES = new Set<RangeKey>(["1Y", "3Y", "5Y", "10Y", "MAX"]);
 
@@ -14,7 +16,14 @@ export function IndexLayout() {
   const [params, setParams] = useSearchParams();
   const [asOf, setAsOf] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
-  const known = PHASE1_INSTRUMENTS.some((item) => item.symbol === code);
+  const instrument = PHASE1_INSTRUMENTS.find((item) => item.symbol === code);
+  const known = instrument != null;
+  const onBacktest = location.pathname.endsWith("/backtest");
+  usePageTitle(
+    known
+      ? `${instrument.shortName} · ${onBacktest ? "回测" : "指数"} · quki`
+      : "未找到指数 · quki",
+  );
   const period: Period = params.get("period") === "D" ? "D" : "W";
   const rangeParam = params.get("range");
   const range: RangeKey =
@@ -41,27 +50,48 @@ export function IndexLayout() {
         search={location.search}
         activeNav={location.pathname.endsWith("/backtest") ? "backtest" : "index"}
       />
-      {known ? (
-        <Toolbar
-          code={code}
-          period={period}
-          range={range}
-          asOf={asOf}
-          loading={loading && location.pathname.endsWith(`/index/${code}`)}
-          onCode={(next) => go(next)}
-          onPeriod={(next) => {
-            const search = new URLSearchParams(params);
-            search.set("period", next);
-            setParams(search);
-          }}
-          onRange={(next) => {
-            const search = new URLSearchParams(params);
-            search.set("range", next);
-            setParams(search);
-          }}
-        />
-      ) : null}
       <main className="page-main">
+        {known ? (
+          <header className="index-head">
+            <div>
+              <h1>{onBacktest ? `${instrument.shortName}回测` : instrument.shortName}</h1>
+              <p>
+                {instrument.name}
+                <span className="qk-tabular"> {instrument.symbol}</span>
+              </p>
+            </div>
+            <p className="asof">
+              数据截至{" "}
+              {loading && !onBacktest ? (
+                <span
+                  className="skeleton"
+                  style={{ display: "inline-block", width: 128, height: 16 }}
+                />
+              ) : (
+                <strong className="qk-tabular">{asOf ? formatAsOf(asOf) : "—"}</strong>
+              )}{" "}
+              北京时间
+            </p>
+          </header>
+        ) : null}
+        {known && !onBacktest ? (
+          <Toolbar
+            code={code}
+            period={period}
+            range={range}
+            onCode={(next) => go(next)}
+            onPeriod={(next) => {
+              const search = new URLSearchParams(params);
+              search.set("period", next);
+              setParams(search);
+            }}
+            onRange={(next) => {
+              const search = new URLSearchParams(params);
+              search.set("range", next);
+              setParams(search);
+            }}
+          />
+        ) : null}
         {known ? (
           <Outlet context={{ onOverview }} />
         ) : (

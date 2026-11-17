@@ -196,7 +196,7 @@
 .auth-lead {
   margin: 8px 0 0;
   color: var(--qk-fg-secondary, var(--qk-text-secondary));
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .auth-status {
@@ -206,7 +206,7 @@
 
 .auth-note,
 .auth-foot {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.6;
   color: var(--qk-fg-secondary, var(--qk-text-secondary));
 }

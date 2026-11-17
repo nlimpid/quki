@@ -1,3 +1,4 @@
+import { Button } from "@heroui/react";
 import { safeReturnTo } from "@quki/types";
 import { NavLink, useLocation } from "react-router";
 
@@ -29,8 +30,6 @@ export function AppHeader({
     : `/login?returnTo=${encodeURIComponent(returnTo)}`;
   const query = search || "?period=W&range=5Y&vol=0";
   const indexHref = `/index/${code}${query}`;
-  const showIndexLinks =
-    activeNav === "index" || activeNav === "backtest" || activeNav === "rotation";
   const item = (id: ActiveNav, to: string, label: string) => (
     <NavLink
       to={to}
@@ -58,20 +57,20 @@ export function AppHeader({
             {item("index", indexHref, "指数")}
             {item("stocks", "/stocks", "个股")}
             {item("portfolio", "/portfolio", "持仓")}
-            {showIndexLinks ? <span className="nav-split" aria-hidden="true" /> : null}
-            {showIndexLinks ? item("backtest", `/index/${code}/backtest${query}`, "回测") : null}
-            {showIndexLinks ? item("rotation", "/rotation/h00922-h20903?range=5Y", "轮动") : null}
+            <span className="nav-split" aria-hidden="true" />
+            {item("backtest", `/index/${code}/backtest${query}`, "回测")}
+            {item("rotation", "/rotation/h00922-h20903?range=5Y", "轮动")}
           </nav>
         </div>
         <div className="header-right">
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={toggle}
+          <Button
+            isIconOnly
+            variant="ghost"
+            onPress={toggle}
             aria-label={theme === "dark" ? "切换浅色模式" : "切换深色模式"}
           >
             {theme === "dark" ? "☀" : "☾"}
-          </button>
+          </Button>
           {control === "spinner" ? (
             <div className="auth-slot" aria-busy="true">
               <span className="auth-spinner" />

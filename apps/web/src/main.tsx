@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router";
 
@@ -12,6 +12,7 @@ import { StockPage } from "./pages/StockPage.js";
 import { StocksPage } from "./pages/StocksPage.js";
 import { ThemeProvider } from "./lib/theme.js";
 import { LoginPage } from "./pages/LoginPage.js";
+
 import "./styles.css";
 import "./dividends.css";
 import "./auth.css";
@@ -19,7 +20,9 @@ import "./auth.css";
 function RootLayout() {
   return (
     <AuthProvider>
-      <Outlet />
+      <Suspense fallback={null}>
+        <Outlet />
+      </Suspense>
     </AuthProvider>
   );
 }
@@ -44,6 +47,17 @@ const router = createBrowserRouter([
       { path: "/portfolio", element: <PortfolioPage /> },
       { path: "/me", element: <Navigate to="/portfolio" replace /> },
       { path: "/login", element: <LoginPage /> },
+      ...(import.meta.env.DEV
+        ? [
+            {
+              path: "/preview/chart-fixtures",
+              lazy: () =>
+                import("./pages/ChartFixturePage.js").then((mod) => ({
+                  Component: mod.ChartFixturePage,
+                })),
+            },
+          ]
+        : []),
       { path: "*", element: <RootRedirect /> },
     ],
   },
