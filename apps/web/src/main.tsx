@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router";
 
@@ -15,6 +15,10 @@ import { LoginPage } from "./pages/LoginPage.js";
 import "./styles.css";
 import "./dividends.css";
 import "./auth.css";
+
+const UnovisCandleProof = lazy(() =>
+  import("./feasibility/UnovisCandleProof.js").then((mod) => ({ default: mod.UnovisCandleProof })),
+);
 
 function RootLayout() {
   return (
@@ -44,6 +48,14 @@ const router = createBrowserRouter([
       { path: "/portfolio", element: <PortfolioPage /> },
       { path: "/me", element: <Navigate to="/portfolio" replace /> },
       { path: "/login", element: <LoginPage /> },
+      {
+        path: "/feasibility/unovis-candle",
+        element: (
+          <Suspense fallback={null}>
+            <UnovisCandleProof />
+          </Suspense>
+        ),
+      },
       { path: "*", element: <RootRedirect /> },
     ],
   },
