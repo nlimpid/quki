@@ -18,7 +18,11 @@ import { rangeStart } from "../lib/format.js";
 import { useTheme } from "../lib/theme.js";
 import { BandFillPrimitive } from "./bandFill.js";
 import { ChartAttribution } from "./chartAttribution.js";
-import { VisibleRangeControl } from "./VisibleRangeControl.js";
+import {
+  nextVisibleWindow,
+  rangeNeedsApply,
+  VisibleRangeControl,
+} from "./VisibleRangeControl.js";
 
 type Point = RotationView["points"][number];
 
@@ -237,7 +241,8 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
     const onRange = () => {
       const logical = chart.timeScale().getVisibleLogicalRange();
       if (!logical) return;
-      setVisible({ from: logical.from, to: logical.to, last: Math.max(0, points.length - 1) });
+      const last = Math.max(0, points.length - 1);
+      setVisible((previous) => nextVisibleWindow(previous, logical, last));
     };
     chart.timeScale().subscribeVisibleLogicalRangeChange(onRange);
     onRange();
@@ -288,9 +293,11 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
           from={visible.from}
           to={visible.to}
           last={visible.last}
-          onChange={(from, to) =>
-            chartRef.current?.timeScale().setVisibleLogicalRange({ from, to })
-          }
+          onChange={(from, to) => {
+            const scale = chartRef.current?.timeScale();
+            if (!scale || !rangeNeedsApply(scale.getVisibleLogicalRange(), from, to)) return;
+            scale.setVisibleLogicalRange({ from, to });
+          }}
           onReset={() => chartRef.current?.timeScale().fitContent()}
         />
       ) : null}

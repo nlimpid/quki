@@ -26,8 +26,8 @@
 | Deploy    | **Cloudflare Workers** via `@cloudflare/vite-plugin` + Wrangler            | SPA or Workers SSR                                                                     |
 | Styling   | **Tailwind CSS v4** + CSS variables from `tokens.css`                      | Utility speed; tokens as single source                                                 |
 | Routing   | **React Router v7** (data/SPA mode)                                        | Nested routes `/index/:code`, tab children                                             |
-| Charts    | **Apache ECharts 5** + `echarts-for-react`                                 | Candlestick + `markArea` tier bands + `markPoint` lows in one API; strong CN ecosystem |
-| Alt chart | TradingView **lightweight-charts**                                         | Prefer only if pure candle perf matters; band fills need custom primitives             |
+| Charts    | **TradingView Lightweight Charts 5**                                       | Candles, volume, MA55 and tier lines; band fill is a series primitive                  |
+| Alt chart | none                                                                       | Do not add ECharts or a second chart library                                            |
 | Theme     | `data-theme="light\|dark"` on `<html>`                                     | Matches token file; system preference + manual toggle                                  |
 | Fonts     | Noto Sans SC (self-host or Google Fonts) + JetBrains Mono for tabular nums | CJK + aligned digits                                                                   |
 
@@ -282,7 +282,7 @@ type KlineChartProps = {
 };
 ```
 
-#### Chart styling (ECharts mapping)
+#### Chart styling
 
 | Element      | Spec                                                             |
 | ------------ | ---------------------------------------------------------------- |
@@ -297,7 +297,7 @@ type KlineChartProps = {
 #### Tier bands
 
 - For each historical point, band i is the region between `(tier_i / 100) * MA55` and `(tier_{i+1} / 100) * MA55`, plus outer fades.
-- Practical ECharts approach: multiple `line` series for each tier% × MA55 (silent), with `areaStyle` between adjacent lines via `visualMap` or stacked custom series; or `markArea` on visible window refreshed on dataZoom.
+- Draw each tier as its own Lightweight Charts line series (`ma55 * tier / 100`). Do not synthesize OHLC when open, high, or low is missing.
 - **Preferred:** compute six line series `ma55*0.85 … ma55*1.10`, draw with `areaStyle` on each upper series filling down to previous (opacity from tokens). Line stroke 1px dashed at each tier; **100% (MA55 itself)** may use slightly stronger dash.
 
 | Tier | Meaning | Fill token           | Right-axis label     |
@@ -340,7 +340,7 @@ Tooltip panel: bg `--qk-chart-tooltip-bg`, border, radius 8, shadow md, 12px tab
 
 #### Empty / loading / error (chart)
 
-- **Loading:** skeleton block same height as chart + shimmer; or ECharts `showLoading` with muted text「加载中…」.
+- **Loading:** skeleton block same height as chart + shimmer; muted text「加载中…」.
 - **Empty:** illustration-free; centered 14px secondary「暂无行情数据」+ retry button.
 - **Error:**「行情加载失败」+ `重试` button (accent outline).
 
@@ -570,7 +570,7 @@ asOf: 2026-10-31T15:00:00+08:00
 ## 13. Implementation notes for the coding agent
 
 1. Import `tokens.css` once at app root; drive Tailwind `@theme` from the same variables.
-2. Prefer ECharts `candlestick` + line series for MA55/tiers; sync tooltip with `axisPointer`.
+2. Use Lightweight Charts candlestick and line series for MA55 and tiers. Keep the crosshair readout in the page.
 3. Keep presentational components dumb; URL is source of truth for `code/period/range/vol`.
 4. Do not modify design files in `/workspace/quki-handoff/design/` from the app repo — copy tokens into the repo as needed.
 5. All user-visible strings Simplified Chinese as specified.

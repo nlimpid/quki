@@ -22,7 +22,12 @@ describe("chart library boundary", () => {
     expect(css).toContain('@import "@heroui/styles/components/table.css"');
     expect(css).not.toMatch(/@import "@heroui\/styles";/);
     expect(sources).toContain("BandFillPrimitive");
-    expect(sources).toContain('aria-label="可见区间起点"');
+    expect(sources).toContain("可见区间起点");
+    expect(sources).toContain("可见区间终点");
+    expect(sources).toContain("index={index}");
+    const routes = readFileSync("apps/web/src/main.tsx", "utf8");
+    expect(routes).toContain("import.meta.env.DEV");
+    expect(routes).toContain('path: "/preview/chart-fixtures"');
     expect(sources).not.toMatch(/from ["']echarts/);
     expect(sources).not.toMatch(/"echarts"/);
     expect(sources).not.toMatch(/@unovis|@visx|recharts|chart\.js/);

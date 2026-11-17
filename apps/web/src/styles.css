@@ -436,10 +436,6 @@ a {
   align-items: center;
   gap: 6px;
 }
-.range-control input[type="range"] {
-  width: 140px;
-  accent-color: var(--qk-brand-accent);
-}
 .range-reset {
   min-height: 28px;
   border: 1px solid var(--qk-border-default);
