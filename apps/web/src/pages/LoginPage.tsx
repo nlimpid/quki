@@ -5,6 +5,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { AppHeader } from "../components/AppHeader.js";
 import { useAuth } from "../lib/auth.js";
+import { usePageTitle } from "../lib/pageTitle.js";
 import { LOGIN_PRIVACY_COPY, loginView } from "../lib/authState.js";
 
 export function LoginPage() {
@@ -14,6 +15,7 @@ export function LoginPage() {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const returnTo = safeReturnTo(params.get("returnTo"), window.location.origin);
   const view = loginView(phase, params.get("error") === "login_failed");
+  usePageTitle("登录 · quki");
   const busy = retrying || phase.kind === "initializing";
 
   useEffect(() => {

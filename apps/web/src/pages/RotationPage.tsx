@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router";
 
 import { AppHeader } from "../components/AppHeader.js";
+import { FilterGroup } from "../components/FilterGroup.js";
 import { RotationChart } from "../components/RotationChart.js";
+import { usePageTitle } from "../lib/pageTitle.js";
 import { fetchRotation } from "../lib/api.js";
 import { formatAsOf, formatPct } from "../lib/format.js";
 
@@ -49,6 +51,7 @@ export function RotationPage() {
   const [view, setView] = useState<RotationView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [requestKey, setRequestKey] = useState(pairId ?? "");
+  usePageTitle(pair ? `${pair.title} · 轮动 · quki` : "轮动 · quki");
   if (pairId && requestKey !== pairId) {
     setRequestKey(pairId);
     setView(null);
@@ -103,69 +106,54 @@ export function RotationPage() {
   return (
     <>
       <AppHeader code="H30269" search="?period=W&range=5Y&vol=0" activeNav="rotation" />
-      <div className="toolbar">
-        <div className="seg" role="group" aria-label="口径">
-          <button
-            type="button"
-            className={pair.totalReturn ? "active" : ""}
-            onClick={() => go(true, benchmark, range)}
-          >
-            全收益
-          </button>
-          <button
-            type="button"
-            className={pair.totalReturn ? "" : "active"}
-            onClick={() => go(false, benchmark, range)}
-          >
-            价格
-          </button>
-        </div>
-        <div className="seg" role="group" aria-label="基准">
-          <button
-            type="button"
-            className={benchmark === "a" ? "active" : ""}
-            onClick={() => go(pair.totalReturn, "a", range)}
-          >
-            中证A股
-          </button>
-          <button
-            type="button"
-            className={benchmark === "all" ? "active" : ""}
-            onClick={() => go(pair.totalReturn, "all", range)}
-          >
-            中证全指
-          </button>
-        </div>
-        <div className="seg" role="group" aria-label="区间">
-          {RANGES.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              className={range === item.value ? "active" : ""}
-              onClick={() => go(pair.totalReturn, benchmark, item.value)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-        <div className="asof">
-          数据截至{" "}
-          {loading ? (
-            <span
-              className="skeleton"
-              style={{ display: "inline-block", width: 120, height: 14 }}
-            />
-          ) : (
-            <strong className="qk-tabular">{view ? formatAsOf(view.asOf) : "—"}</strong>
-          )}{" "}
-          北京时间
-        </div>
-      </div>
       <main className="page-main">
-        <div className="hint" style={{ marginBottom: 12 }}>
-          {pair.title} · <span className="qk-tabular">{pair.a}</span> /{" "}
-          <span className="qk-tabular">{pair.b}</span>
-          {pair.totalReturn ? " · 两端全收益" : " · 两端价格指数"}
+        <header className="index-head">
+          <div>
+            <h1>轮动</h1>
+            <p>
+              {pair.title} · <span className="qk-tabular">{pair.a}</span> /{" "}
+              <span className="qk-tabular">{pair.b}</span>
+              {pair.totalReturn ? " · 两端全收益" : " · 两端价格指数"}
+            </p>
+          </div>
+          <p className="asof">
+            数据截至{" "}
+            {loading ? (
+              <span
+                className="skeleton"
+                style={{ display: "inline-block", width: 128, height: 16 }}
+              />
+            ) : (
+              <strong className="qk-tabular">{view ? formatAsOf(view.asOf) : "—"}</strong>
+            )}{" "}
+            北京时间
+          </p>
+        </header>
+        <div className="toolbar">
+          <FilterGroup
+            label="口径"
+            value={pair.totalReturn ? "tr" : "price"}
+            options={[
+              { id: "tr", label: "全收益" },
+              { id: "price", label: "价格" },
+            ]}
+            onChange={(next) => go(next === "tr", benchmark, range)}
+          />
+          <FilterGroup
+            label="基准"
+            value={benchmark}
+            options={[
+              { id: "a", label: "中证A股" },
+              { id: "all", label: "中证全指" },
+            ]}
+            onChange={(next) => go(pair.totalReturn, next, range)}
+          />
+          <FilterGroup
+            label="区间"
+            value={range}
+            options={RANGES.map((item) => ({ id: item.value, label: item.label }))}
+            onChange={(next) => go(pair.totalReturn, benchmark, next)}
+          />
         </div>
         {loading ? (
           <section className="card">

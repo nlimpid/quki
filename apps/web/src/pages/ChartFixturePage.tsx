@@ -3,6 +3,7 @@ import { PHASE1_INSTRUMENTS, findRotationPair, type Candle, type Overview } from
 import { useState } from "react";
 
 import { AppHeader } from "../components/AppHeader.js";
+import { usePageTitle } from "../lib/pageTitle.js";
 import { KlineChart } from "../components/KlineChart.js";
 import { RotationChart } from "../components/RotationChart.js";
 
@@ -109,6 +110,7 @@ const rotation: RotationView = {
 
 export function ChartFixturePage() {
   const [showVolume, setShowVolume] = useState(true);
+  usePageTitle("样例图表 · quki");
   return (
     <>
       <AppHeader activeNav="index" />

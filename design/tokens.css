@@ -20,8 +20,8 @@
 
   /* Text */
   --qk-text-primary: #0f172a;
-  --qk-text-secondary: #475569;
-  --qk-text-tertiary: #94a3b8;
+  --qk-text-secondary: #334155;
+  --qk-text-tertiary: #526072;
   --qk-text-inverse: #ffffff;
   --qk-text-link: #4338ca;
   --qk-text-disabled: #cbd5e1;
@@ -150,8 +150,8 @@
   --qk-border-focus: #818cf8;
 
   --qk-text-primary: #f4f4f5;
-  --qk-text-secondary: #a1a1aa;
-  --qk-text-tertiary: #71717a;
+  --qk-text-secondary: #d4d4d8;
+  --qk-text-tertiary: #a1a1aa;
   --qk-text-inverse: #18181b;
   --qk-text-link: #c7d2fe;
   --qk-text-disabled: #475569;
@@ -305,12 +305,12 @@
   --qk-radius-full: 9999px;
 
   /* Layout */
-  --qk-header-h: 64px;
-  --qk-toolbar-h: 56px;
-  --qk-sidebar-w: 340px;
+  --qk-header-h: 56px;
+  --qk-toolbar-h: 44px;
+  --qk-sidebar-w: 280px;
   --qk-max-w: 1440px;
-  --qk-chart-h: 480px;
-  --qk-volume-h: 80px;
+  --qk-chart-h: 300px;
+  --qk-volume-h: 64px;
 
   /* Motion */
   --qk-motion-fast: 120ms;

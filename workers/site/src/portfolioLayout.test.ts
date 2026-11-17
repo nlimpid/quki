@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 describe("portfolio layout styles", () => {
   it("keeps the index temperature figure from leaking onto dividend cards", () => {
     const css = readFileSync("apps/web/src/styles.css", "utf8");
-    expect(css).toContain(".pos .hero {\n  font-size: 40px;");
+    expect(css).toContain(".pos .hero {\n  font-size: 32px;");
     expect(css).toContain(".pos .hero {\n    font-size: 32px;");
     expect(css).not.toMatch(/(^|\n)\.hero \{/);
   });

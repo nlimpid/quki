@@ -12,7 +12,7 @@ import {
   type MouseEventParams,
   type SeriesMarker,
 } from "lightweight-charts";
-import { Table } from "@heroui/react";
+import { Checkbox, Table } from "@heroui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -302,38 +302,13 @@ export function KlineChart({
   return (
     <section className="card chart-card">
       <div className="card-hd">
-        <div>
-          <div className="card-title">K 线 · MA55 与估值分位</div>
-          <div className="legend">
-            <span>
-              <i className="sw" style={{ background: "var(--qk-candle-up)" }} />涨
-            </span>
-            <span>
-              <i className="sw" style={{ background: "var(--qk-candle-down)" }} />跌
-            </span>
-            <span>
-              <i className="sw-line" />
-              MA55（周）
-            </span>
-            <span>
-              <i className="sw-dash" />
-              估值线 · 冷→热
-            </span>
-            <span>▼ 已确认低点（向下箭头）</span>
-            <span>■ 未确认低点（方块）</span>
-          </div>
-          <p className="chart-key" id="kline-marker-key">
-            已确认和未确认用不同形状：已确认是向下箭头，未确认是方块。
-          </p>
-        </div>
-        <label className="chk">
-          <input
-            type="checkbox"
-            checked={showVolume}
-            onChange={(event) => onToggleVolume(event.target.checked)}
-          />
-          成交量
-        </label>
+        <div className="card-title">K 线 · MA55 与估值分位</div>
+        <Checkbox isSelected={showVolume} onChange={onToggleVolume}>
+          <Checkbox.Control>
+            <Checkbox.Indicator />
+          </Checkbox.Control>
+          <Checkbox.Content>成交量</Checkbox.Content>
+        </Checkbox>
       </div>
       <p className="chart-readout" data-chart-readout="kline">
         {readout}
@@ -376,6 +351,30 @@ export function KlineChart({
           />
         )}
       </div>
+      <details className="chart-help">
+        <summary>图例与读法</summary>
+        <div className="legend">
+          <span>
+            <i className="sw" style={{ background: "var(--qk-candle-up)" }} />涨
+          </span>
+          <span>
+            <i className="sw" style={{ background: "var(--qk-candle-down)" }} />跌
+          </span>
+          <span>
+            <i className="sw-line" />
+            MA55（周）
+          </span>
+          <span>
+            <i className="sw-dash" />
+            估值线 · 冷→热
+          </span>
+          <span>▼ 已确认低点（向下箭头）</span>
+          <span>■ 未确认低点（方块）</span>
+        </div>
+        <p className="chart-key" id="kline-marker-key">
+          已确认和未确认用不同形状：已确认是向下箭头，未确认是方块。涨为红色，跌为绿色。
+        </p>
+      </details>
       <ChartAttribution />
       <details className="data-fallback">
         <summary>查看数据表</summary>

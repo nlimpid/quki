@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { useAuth } from "../lib/auth.js";
+import { usePageTitle } from "../lib/pageTitle.js";
 import { portfolioSubtitle } from "../lib/authState.js";
 import { deleteHolding, readHoldings, saveHolding } from "../lib/holdingsStore.js";
 import { fetchStockBatch, fetchStockList } from "../lib/stockApi.js";
@@ -42,18 +43,20 @@ export function PortfolioPage() {
   const shownQuotes = codeKey ? quotes : [];
   const [drawer, setDrawer] = useState<{ code: string; shares: string } | null>(null);
   const restoreFocus = useRef<HTMLElement | null>(null);
-  function openDrawer(next: { code: string; shares: string }) {
+  function openDrawer(next: { code: string; shares: string }, source?: Element | null) {
+    const opener = source instanceof HTMLElement ? source.closest("button") : null;
     restoreFocus.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     setDrawer(next);
   }
   function closeDrawer() {
     const target = restoreFocus.current;
     setDrawer(null);
-    requestAnimationFrame(() => target?.focus());
+    window.setTimeout(() => target?.focus(), 0);
   }
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const { phase } = useAuth();
+  usePageTitle("我的持仓 · quki");
 
   useEffect(() => {
     if (!codeKey) return;
@@ -113,7 +116,10 @@ export function PortfolioPage() {
           </h1>
           <p className="page-sub">{portfolioSubtitle(phase)}</p>
         </div>
-        <Button variant="primary" onPress={() => openDrawer({ code: "", shares: "" })}>
+        <Button
+          variant="primary"
+          onPress={(event) => openDrawer({ code: "", shares: "" }, event.target)}
+        >
           ＋ 添加股票
         </Button>
       </div>
@@ -123,7 +129,10 @@ export function PortfolioPage() {
         <section className="div-card hero">
           <h2 style={{ margin: "0 0 8px" }}>尚未添加持仓</h2>
           <p className="page-sub">添加股票后，这里显示平均股息率和预估全年分红。</p>
-          <Button variant="primary" onPress={() => openDrawer({ code: "", shares: "" })}>
+          <Button
+            variant="primary"
+            onPress={(event) => openDrawer({ code: "", shares: "" }, event.target)}
+          >
             添加股票
           </Button>
         </section>
@@ -163,7 +172,12 @@ export function PortfolioPage() {
                       type="button"
                       className="icon-text"
                       aria-label="编辑"
-                      onClick={() => openDrawer({ code: card.code, shares: String(card.shares) })}
+                      onClick={(event) =>
+                        openDrawer(
+                          { code: card.code, shares: String(card.shares) },
+                          event.currentTarget,
+                        )
+                      }
                     >
                       ✎
                     </button>

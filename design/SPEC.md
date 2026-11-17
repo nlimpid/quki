@@ -20,16 +20,16 @@
 
 ### Recommended stack (if greenfield)
 
-| Layer | Choice | Why |
-|-------|--------|-----|
-| UI | **React 19 + TypeScript + Vite 6** | Matches brief; fast Workers-compatible builds |
-| Deploy | **Cloudflare Workers** via `@cloudflare/vite-plugin` + Wrangler | SPA or Workers SSR |
-| Styling | **Tailwind CSS v4** + CSS variables from `tokens.css` | Utility speed; tokens as single source |
-| Routing | **React Router v7** (data/SPA mode) | Nested routes `/index/:code`, tab children |
-| Charts | **Apache ECharts 5** + `echarts-for-react` | Candlestick + `markArea` tier bands + `markPoint` lows in one API; strong CN ecosystem |
-| Alt chart | TradingView **lightweight-charts** | Prefer only if pure candle perf matters; band fills need custom primitives |
-| Theme | `data-theme="light\|dark"` on `<html>` | Matches token file; system preference + manual toggle |
-| Fonts | Noto Sans SC (self-host or Google Fonts) + JetBrains Mono for tabular nums | CJK + aligned digits |
+| Layer     | Choice                                                                     | Why                                                                                    |
+| --------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| UI        | **React 19 + TypeScript + Vite 6**                                         | Matches brief; fast Workers-compatible builds                                          |
+| Deploy    | **Cloudflare Workers** via `@cloudflare/vite-plugin` + Wrangler            | SPA or Workers SSR                                                                     |
+| Styling   | **Tailwind CSS v4** + CSS variables from `tokens.css`                      | Utility speed; tokens as single source                                                 |
+| Routing   | **React Router v7** (data/SPA mode)                                        | Nested routes `/index/:code`, tab children                                             |
+| Charts    | **Apache ECharts 5** + `echarts-for-react`                                 | Candlestick + `markArea` tier bands + `markPoint` lows in one API; strong CN ecosystem |
+| Alt chart | TradingView **lightweight-charts**                                         | Prefer only if pure candle perf matters; band fills need custom primitives             |
+| Theme     | `data-theme="light\|dark"` on `<html>`                                     | Matches token file; system preference + manual toggle                                  |
+| Fonts     | Noto Sans SC (self-host or Google Fonts) + JetBrains Mono for tabular nums | CJK + aligned digits                                                                   |
 
 **Do not** invent a second token system — map Tailwind theme keys to `--qk-*` variables.
 
@@ -52,13 +52,13 @@
 
 ### Nav (global header)
 
-| Slot | Label | Route | Phase |
-|------|-------|-------|-------|
-| Brand | quki | `/` → redirect | 1 |
-| Primary | 概览 | `/index/:code` (default tab) | 1 |
-| Primary | 回测 | `/index/:code/backtest` | 2 (visible, may show “即将推出” empty) |
-| Utility | 策略 | `/strategies` | 2 (nav slot reserved; hide or disable in phase 1) |
-| Utility | Theme toggle | — | 1 |
+| Slot    | Label        | Route                        | Phase                                             |
+| ------- | ------------ | ---------------------------- | ------------------------------------------------- |
+| Brand   | quki         | `/` → redirect               | 1                                                 |
+| Primary | 概览         | `/index/:code` (default tab) | 1                                                 |
+| Primary | 回测         | `/index/:code/backtest`      | 2 (visible, may show “即将推出” empty)            |
+| Utility | 策略         | `/strategies`                | 2 (nav slot reserved; hide or disable in phase 1) |
+| Utility | Theme toggle | —                            | 1                                                 |
 
 Phase 1: show **概览** active; **回测** link present but page can be a stub. Hide **策略** or render as disabled with tooltip「即将推出」.
 
@@ -73,21 +73,21 @@ Phase 1: show **概览** active; **回测** link present but page can be a stub.
 
 ### Valid `:code` (phase 1)
 
-| code | Display name | Short |
-|------|--------------|-------|
+| code     | Display name       | Short    |
+| -------- | ------------------ | -------- |
 | `H30269` | 中证红利低波动指数 | 红利低波 |
-| `000922` | 中证红利指数 | 中证红利 |
+| `000922` | 中证红利指数       | 中证红利 |
 
 Unknown code → soft 404 empty state with link back to H30269.
 
 ### URL search params (overview)
 
-| Param | Values | Default | Notes |
-|-------|--------|---------|-------|
-| `period` | `D` \| `W` | `W` | 日线 / 周线. MA55 is **always the 55-week MA**; on daily chart draw the weekly MA55 resampled onto daily axis (step or forward-fill). |
-| `range` | `1Y` \| `3Y` \| `5Y` \| `10Y` \| `MAX` | `5Y` | Visible window; does not change underlying series fetch if already cached. |
-| `vol` | `0` \| `1` | `0` | Volume pane optional. |
-| `theme` | omit (prefer system / cookie) | — | Optional override; prefer localStorage + `data-theme`. |
+| Param    | Values                                 | Default | Notes                                                                                                                                 |
+| -------- | -------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `period` | `D` \| `W`                             | `W`     | 日线 / 周线. MA55 is **always the 55-week MA**; on daily chart draw the weekly MA55 resampled onto daily axis (step or forward-fill). |
+| `range`  | `1Y` \| `3Y` \| `5Y` \| `10Y` \| `MAX` | `5Y`    | Visible window; does not change underlying series fetch if already cached.                                                            |
+| `vol`    | `0` \| `1`                             | `0`     | Volume pane optional.                                                                                                                 |
+| `theme`  | omit (prefer system / cookie)          | —       | Optional override; prefer localStorage + `data-theme`.                                                                                |
 
 Example: `/index/H30269?period=W&range=5Y&vol=0`
 
@@ -131,7 +131,7 @@ Tab state (概览 / 回测) is path-based, not a query param.
 
 ```
 [Header 52]
-[Sticky toolbar: index pills — full width scroll] 
+[Sticky toolbar: index pills — full width scroll]
 [period + range compact segmented controls]
 [数据截至 …]
 [PositionPanel]          ← stack order: position FIRST (decision context)
@@ -172,9 +172,9 @@ Full values in `tokens.json` / `tokens.css`. Critical rules:
 
 ```ts
 type AppHeaderProps = {
-  activeNav: 'overview' | 'backtest' | 'strategies';
-  onNav: (id: 'overview' | 'backtest' | 'strategies') => void;
-  theme: 'light' | 'dark';
+  activeNav: "overview" | "backtest" | "strategies";
+  onNav: (id: "overview" | "backtest" | "strategies") => void;
+  theme: "light" | "dark";
   onToggleTheme: () => void;
   showStrategies?: boolean; // default false in phase 1
 };
@@ -210,8 +210,8 @@ type IndexSwitcherProps = {
 
 ```ts
 type PeriodToggleProps = {
-  value: 'D' | 'W';
-  onChange: (p: 'D' | 'W') => void;
+  value: "D" | "W";
+  onChange: (p: "D" | "W") => void;
 };
 ```
 
@@ -223,8 +223,8 @@ Labels: **日** / **周**. Same segmented control pattern as range; size sm (hei
 
 ```ts
 type RangeSelectorProps = {
-  value: '1Y' | '3Y' | '5Y' | '10Y' | 'MAX';
-  onChange: (r: '1Y' | '3Y' | '5Y' | '10Y' | 'MAX') => void;
+  value: "1Y" | "3Y" | "5Y" | "10Y" | "MAX";
+  onChange: (r: "1Y" | "3Y" | "5Y" | "10Y" | "MAX") => void;
 };
 ```
 
@@ -252,42 +252,47 @@ type TierLevel = 85 | 90 | 95 | 100 | 105 | 110;
 
 type Candle = {
   time: string; // YYYY-MM-DD (week ending Fri for W)
-  open: number; high: number; low: number; close: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
   volume?: number;
 };
 
 type SignificantLowMarker = {
   time: string;
-  price: number;       // weekly low
-  ratio: number;       // low / MA55
-  confirmed: boolean;  // false → 未确认
-  label?: string;      // e.g. 史诗底
+  price: number; // weekly low
+  ratio: number; // low / MA55
+  confirmed: boolean; // false → 未确认
+  label?: string; // e.g. 史诗底
 };
 
 type KlineChartProps = {
-  period: 'D' | 'W';
+  period: "D" | "W";
   candles: Candle[];
   ma55: { time: string; value: number }[]; // aligned series
   tiers: Record<TierLevel, number>; // absolute index levels AT LATEST MA55 (for right-axis labels); bands follow MA55 historically
   markers: SignificantLowMarker[];
   showVolume?: boolean;
   height?: number; // default from tokens layout.chartHeight
-  locale?: 'zh-CN';
-  onCrosshair?: (point: null | { time: string; candle: Candle; ma55: number; ratio: number }) => void;
+  locale?: "zh-CN";
+  onCrosshair?: (
+    point: null | { time: string; candle: Candle; ma55: number; ratio: number },
+  ) => void;
 };
 ```
 
 #### Chart styling (ECharts mapping)
 
-| Element | Spec |
-|---------|------|
-| Candles up | fill `--qk-candle-up`, border `--qk-candle-border-up`, wick same |
-| Candles down | fill `--qk-candle-down`, border `--qk-candle-border-down` |
-| MA55 | line color `--qk-ma55`, width 1.5, no symbol |
-| Grid | horizontal only, `--qk-chart-grid`, 1px |
-| Axis | `--qk-chart-axis`, font 11px tabular |
-| Crosshair | dashed `--qk-chart-crosshair` |
-| Volume | optional child grid; up/down muted fills; height `--qk-volume-h` |
+| Element      | Spec                                                             |
+| ------------ | ---------------------------------------------------------------- |
+| Candles up   | fill `--qk-candle-up`, border `--qk-candle-border-up`, wick same |
+| Candles down | fill `--qk-candle-down`, border `--qk-candle-border-down`        |
+| MA55         | line color `--qk-ma55`, width 1.5, no symbol                     |
+| Grid         | horizontal only, `--qk-chart-grid`, 1px                          |
+| Axis         | `--qk-chart-axis`, font 11px tabular                             |
+| Crosshair    | dashed `--qk-chart-crosshair`                                    |
+| Volume       | optional child grid; up/down muted fills; height `--qk-volume-h` |
 
 #### Tier bands
 
@@ -295,23 +300,23 @@ type KlineChartProps = {
 - Practical ECharts approach: multiple `line` series for each tier% × MA55 (silent), with `areaStyle` between adjacent lines via `visualMap` or stacked custom series; or `markArea` on visible window refreshed on dataZoom.
 - **Preferred:** compute six line series `ma55*0.85 … ma55*1.10`, draw with `areaStyle` on each upper series filling down to previous (opacity from tokens). Line stroke 1px dashed at each tier; **100% (MA55 itself)** may use slightly stronger dash.
 
-| Tier | Meaning | Fill token | Right-axis label |
-|------|---------|------------|------------------|
-| 85% | 史诗底 | `--qk-tier-85-fill` | `85% 史诗底` + value |
-| 90% | 重要底 | `--qk-tier-90-fill` | `90% 重要底` + value |
-| 95% | — | `--qk-tier-95-fill` | `95%` + value |
-| 100% | MA55 | `--qk-tier-100-fill` | `MA55` + value |
-| 105% | — | `--qk-tier-105-fill` | `105%` + value |
-| 110% | — | `--qk-tier-110-fill` | `110%` + value |
+| Tier | Meaning | Fill token           | Right-axis label     |
+| ---- | ------- | -------------------- | -------------------- |
+| 85%  | 史诗底  | `--qk-tier-85-fill`  | `85% 史诗底` + value |
+| 90%  | 重要底  | `--qk-tier-90-fill`  | `90% 重要底` + value |
+| 95%  | —       | `--qk-tier-95-fill`  | `95%` + value        |
+| 100% | MA55    | `--qk-tier-100-fill` | `MA55` + value       |
+| 105% | —       | `--qk-tier-105-fill` | `105%` + value       |
+| 110% | —       | `--qk-tier-110-fill` | `110%` + value       |
 
 Right-axis labels: show **tier %** and **current absolute level** (2 decimals) for the **latest** MA55. Color = `--qk-tier-*-label`.
 
 #### Markers (significant lows)
 
-| State | Shape | Size | Fill | Stroke |
-|-------|-------|------|------|--------|
-| Confirmed | **Triangle down** (▼) below bar low | 10px | `--qk-marker-confirmed` | 1.5px `--qk-marker-stroke` |
-| Unconfirmed | **Diamond** (◆) below bar low | 10px | `--qk-marker-unconfirmed` | 1.5px `--qk-marker-stroke` |
+| State       | Shape                               | Size | Fill                      | Stroke                     |
+| ----------- | ----------------------------------- | ---- | ------------------------- | -------------------------- |
+| Confirmed   | **Triangle down** (▼) below bar low | 10px | `--qk-marker-confirmed`   | 1.5px `--qk-marker-stroke` |
+| Unconfirmed | **Diamond** (◆) below bar low       | 10px | `--qk-marker-unconfirmed` | 1.5px `--qk-marker-stroke` |
 
 Also show small text tag on hover: `史诗底` / `重要底` / `未确认`. Do not rely on color alone — shape differs.
 
@@ -350,20 +355,20 @@ type PositionPanelProps = {
   asOf: string;
   lastClose: number;
   ma55: number;
-  ratioPct: number;          // lastClose / ma55 * 100
-  percentile: number;        // 0–100 historical percentile of ratio
-  changePct?: number;        // vs previous session, optional
-  status: 'loading' | 'ready' | 'error' | 'empty';
+  ratioPct: number; // lastClose / ma55 * 100
+  percentile: number; // 0–100 historical percentile of ratio
+  changePct?: number; // vs previous session, optional
+  status: "loading" | "ready" | "error" | "empty";
 };
 ```
 
 **Layout (card):**
 
-1. Title row: `当前位置` + badge for band zone  
-   - ratio &lt; 85 → badge 史诗底 (epic)  
-   - &lt; 90 → 重要底 (important)  
-   - &lt; 95 → 偏低 (neutral/orange-ish via important muted)  
-   - &lt; 105 → 中性  
+1. Title row: `当前位置` + badge for band zone
+   - ratio &lt; 85 → badge 史诗底 (epic)
+   - &lt; 90 → 重要底 (important)
+   - &lt; 95 → 偏低 (neutral/orange-ish via important muted)
+   - &lt; 105 → 中性
    - else → 偏高 / 远离均值 (neutral)
 2. Hero metric: `{ratioPct}%` at 28–32px semibold tabular; sublabel `收盘 / MA55`.
 3. Secondary row: `收盘 {lastClose}` · `MA55 {ma55}` (14px).
@@ -379,8 +384,8 @@ type PositionPanelProps = {
 ```ts
 type TierRow = {
   tier: TierLevel;
-  label: string;       // 史诗底 / 重要底 / MA55 / …
-  level: number;       // absolute index level
+  label: string; // 史诗底 / 重要底 / MA55 / …
+  level: number; // absolute index level
   distancePct: number; // (level - lastClose) / lastClose * 100  — positive = tier above price
 };
 
@@ -391,9 +396,9 @@ type TierTableProps = {
 };
 ```
 
-**Columns:** 档位 | 含义 | 点位 | 距现价  
+**Columns:** 档位 | 含义 | 点位 | 距现价
 
-- 点位: 2 decimals tabular  
+- 点位: 2 decimals tabular
 - 距现价: 1 decimal with sign, e.g. `-7.2%` (tier below) / `+12.4%`; color: if tier is a **buy zone below** (85/90/95) and distance negative (price above tier), use secondary; emphasize the next downside target in accent/warning. Keep simple: negative distance (price already above that floor) = tertiary; positive (price needs to fall to reach) = market-down green is **wrong semantically** — use neutral + bold for actionable downside targets instead. Spec rule: **do not paint distance with 涨跌色**; use primary/secondary only, bold the nearest tier below price.
 
 **Mobile:** keep table; allow `overflow-x: auto` with min-width 320.
@@ -404,18 +409,18 @@ type TierTableProps = {
 
 ```ts
 type LowRow = {
-  weekEnd: string;     // YYYY-MM-DD
+  weekEnd: string; // YYYY-MM-DD
   weekLow: number;
   ma55: number;
-  ratioPct: number;    // weekLow/ma55*100
+  ratioPct: number; // weekLow/ma55*100
   confirmed: boolean;
-  tag: '史诗底' | '重要底' | '其他';
+  tag: "史诗底" | "重要底" | "其他";
 };
 
 type LowsTableProps = {
-  rows: LowRow[];      // sorted desc by weekEnd
-  variant: 'table' | 'cards'; // cards ≤480
-  status: 'loading' | 'ready' | 'error' | 'empty';
+  rows: LowRow[]; // sorted desc by weekEnd
+  variant: "table" | "cards"; // cards ≤480
+  status: "loading" | "ready" | "error" | "empty";
 };
 ```
 
@@ -423,10 +428,10 @@ type LowsTableProps = {
 A significant low = a week whose `weekLow / MA55` is the **minimum within ±13 weeks** AND `ratio < 95%`.  
 If fewer than 13 weeks have elapsed **after** that week, flag **未确认**.
 
-**Table columns:** 周末日期 | 周低点 | 当日MA55 | 低点/MA55 | 标记  
+**Table columns:** 周末日期 | 周低点 | 当日MA55 | 低点/MA55 | 标记
 
-- Latest unconfirmed row: left accent bar 3px warning + badge `未确认`.  
-- Tag badges: 史诗底 / 重要底 per §tokens badge.  
+- Latest unconfirmed row: left accent bar 3px warning + badge `未确认`.
+- Tag badges: 史诗底 / 重要底 per §tokens badge.
 - Empty:「暂无显著低点（需周低点/MA55 为 ±13 周最低且 &lt; 95%）」.
 
 **Cards (mobile):** each card shows date + ratio hero + badges + 周低点/MA55 pair.
@@ -454,15 +459,15 @@ Style: 12px tertiary; top border; padY 24; max-width same as content. Links (if 
 
 ## 6. Number & date formatting
 
-| Kind | Rule | Example |
-|------|------|---------|
-| Index level | 2 decimal places, tabular | `4856.32` |
-| Percent / ratio | 1 decimal + `%` | `92.3%` |
-| Distance % | 1 decimal, explicit `+`/`-` | `-4.6%` |
-| Date | `YYYY-MM-DD` | `2026-10-31` |
-| Datetime as-of | `YYYY-MM-DD HH:mm` + `北京时间` | `2026-10-31 15:00 北京时间` |
-| Volume (CN) | compact 万/亿 | `1.23亿` |
-| Percentile | integer 0–100 + `%` | `18%` |
+| Kind            | Rule                            | Example                     |
+| --------------- | ------------------------------- | --------------------------- |
+| Index level     | 2 decimal places, tabular       | `4856.32`                   |
+| Percent / ratio | 1 decimal + `%`                 | `92.3%`                     |
+| Distance %      | 1 decimal, explicit `+`/`-`     | `-4.6%`                     |
+| Date            | `YYYY-MM-DD`                    | `2026-10-31`                |
+| Datetime as-of  | `YYYY-MM-DD HH:mm` + `北京时间` | `2026-10-31 15:00 北京时间` |
+| Volume (CN)     | compact 万/亿                   | `1.23亿`                    |
+| Percentile      | integer 0–100 + `%`             | `18%`                       |
 
 Use `Intl.NumberFormat('zh-CN', …)` or equivalent; never locale that swaps decimal comma.
 
@@ -491,14 +496,14 @@ Use `Intl.NumberFormat('zh-CN', …)` or equivalent; never locale that swaps dec
 
 ## 9. Responsive behavior checklist
 
-| Item | Desktop | Tablet | Mobile |
-|------|---------|--------|--------|
-| Index switcher | inline toolbar | wrap | sticky + scroll |
-| Chart height | 480 | 400 | 280 |
-| Position panel | right rail | below chart | **above** chart |
-| Tier table | right rail | below position | full width |
-| Lows | table | table | **cards** |
-| Toolbar | single row | two rows | stacked compact |
+| Item           | Desktop        | Tablet         | Mobile          |
+| -------------- | -------------- | -------------- | --------------- |
+| Index switcher | inline toolbar | wrap           | sticky + scroll |
+| Chart height   | 480            | 400            | 280             |
+| Position panel | right rail     | below chart    | **above** chart |
+| Tier table     | right rail     | below position | full width      |
+| Lows           | table          | table          | **cards**       |
+| Toolbar        | single row     | two rows       | stacked compact |
 
 ---
 
@@ -548,17 +553,17 @@ asOf: 2026-10-31T15:00:00+08:00
 
 ## 12. File deliverables in this folder
 
-| Path | Purpose |
-|------|---------|
-| `SPEC.md` | This document |
-| `tokens.json` | Machine-readable tokens |
-| `tokens.css` | CSS variables for app import |
-| `mockups/desktop-light.html` | Static desktop light mock |
-| `mockups/desktop-dark.html` | Static desktop dark mock |
-| `mockups/mobile.html` | Static mobile mock (390×844 frame) |
-| `mockup-desktop-light.png` | Rendered |
-| `mockup-desktop-dark.png` | Rendered |
-| `mockup-mobile.png` | Rendered |
+| Path                         | Purpose                            |
+| ---------------------------- | ---------------------------------- |
+| `SPEC.md`                    | This document                      |
+| `tokens.json`                | Machine-readable tokens            |
+| `tokens.css`                 | CSS variables for app import       |
+| `mockups/desktop-light.html` | Static desktop light mock          |
+| `mockups/desktop-dark.html`  | Static desktop dark mock           |
+| `mockups/mobile.html`        | Static mobile mock (390×844 frame) |
+| `mockup-desktop-light.png`   | Rendered                           |
+| `mockup-desktop-dark.png`    | Rendered                           |
+| `mockup-mobile.png`          | Rendered                           |
 
 ---
 

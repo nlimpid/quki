@@ -159,11 +159,7 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
       title: "",
     });
     chart
-      .addSeries(
-        LineSeries,
-        { ...shared, color: ma, lineWidth: 1, lineStyle: LineStyle.Dashed },
-        2,
-      )
+      .addSeries(LineSeries, { ...shared, color: ma, lineWidth: 1, lineStyle: LineStyle.Dashed }, 2)
       .setData(lineData(points, (point) => point.sMa));
     const rsi = chart.addSeries(
       LineSeries,
@@ -177,11 +173,7 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
     );
     rsi.setData(lineData(points, (point) => point.rsi));
     chart
-      .addSeries(
-        LineSeries,
-        { ...shared, color: ma, lineWidth: 1, lineStyle: LineStyle.Dashed },
-        3,
-      )
+      .addSeries(LineSeries, { ...shared, color: ma, lineWidth: 1, lineStyle: LineStyle.Dashed }, 3)
       .setData(lineData(points, (point) => point.rsiMa));
     const bandMarkers: SeriesMarker<string>[] = markers
       .filter((marker) => marker.kind === "band-above" || marker.kind === "band-below")

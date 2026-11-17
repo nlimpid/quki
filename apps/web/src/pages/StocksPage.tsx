@@ -1,4 +1,6 @@
 import { Button, SearchField, Table } from "@heroui/react";
+import { FilterGroup } from "../components/FilterGroup.js";
+import { usePageTitle } from "../lib/pageTitle.js";
 import type { StockListResponse, StockMarketFilter, StockSort } from "@quki/types";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
@@ -91,6 +93,7 @@ export function StocksPage() {
   const total = data?.total ?? 0;
   const pageSize = data?.pageSize ?? 50;
   const pages = Math.max(1, Math.ceil(total / pageSize));
+  usePageTitle("个股股息 · quki");
 
   return (
     <DividendShell activeNav="stocks">
@@ -114,19 +117,12 @@ export function StocksPage() {
             <SearchField.ClearButton />
           </SearchField.Group>
         </SearchField>
-        <div className="chips" role="group" aria-label="市场">
-          {MARKETS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={market === item.id ? "chip active" : "chip"}
-              aria-pressed={market === item.id}
-              onClick={() => setQuery({ market: item.id })}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+        <FilterGroup
+          label="市场"
+          value={market}
+          options={MARKETS.map((item) => ({ id: item.id, label: item.label }))}
+          onChange={(next) => setQuery({ market: next })}
+        />
         <span className="count-label">
           共 <span className="mono">{total.toLocaleString("zh-CN")}</span> 家
         </span>

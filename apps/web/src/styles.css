@@ -8,7 +8,11 @@
 @import "@heroui/styles/components/drawer.css";
 @import "@heroui/styles/components/input.css";
 @import "@heroui/styles/components/label.css";
+@import "@heroui/styles/components/checkbox.css";
 @import "@heroui/styles/components/search-field.css";
+@import "@heroui/styles/components/slider.css";
+@import "@heroui/styles/components/toggle-button.css";
+@import "@heroui/styles/components/toggle-button-group.css";
 @import "@heroui/styles/components/alert.css";
 @import "@heroui/styles/components/card.css";
 @import "@heroui/styles/components/chip.css";
@@ -87,8 +91,8 @@ a {
   letter-spacing: -0.02em;
 }
 .brand-sub {
-  font-size: 11px;
-  color: var(--qk-text-tertiary);
+  font-size: 13px;
+  color: var(--qk-text-secondary);
 }
 .main-nav {
   display: flex;
@@ -98,11 +102,11 @@ a {
   overflow-x: auto;
 }
 .main-nav a {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--qk-text-secondary);
   text-decoration: none;
-  padding: 18px 0 16px;
+  padding: 16px 0 14px;
   border-bottom: 2px solid transparent;
 }
 .main-nav a.active {
@@ -152,14 +156,36 @@ a {
   box-shadow: var(--qk-shadow-focus);
 }
 
+.index-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.index-head h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--qk-text-primary);
+}
+.index-head p {
+  margin: 4px 0 0;
+  font-size: 15px;
+  color: var(--qk-text-secondary);
+}
 .toolbar {
-  min-height: var(--qk-toolbar-h);
+  min-height: 0;
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 0 var(--qk-space-8);
-  background: var(--qk-bg-surface);
-  border-bottom: 1px solid var(--qk-border-muted);
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 12px;
+  padding: 0;
+  background: transparent;
+  border-bottom: 0;
 }
 .pills {
   display: flex;
@@ -211,18 +237,18 @@ a {
   box-shadow: var(--qk-shadow-sm);
 }
 .asof {
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--qk-text-tertiary);
+  margin: 0;
+  font-size: 15px;
+  color: var(--qk-text-secondary);
   white-space: nowrap;
 }
 .asof strong {
-  font-weight: 500;
-  color: var(--qk-text-secondary);
+  font-weight: 600;
+  color: var(--qk-text-primary);
 }
 
 .page-main {
-  padding: var(--qk-space-8) var(--qk-space-10) var(--qk-space-12);
+  padding: 16px var(--qk-space-8) var(--qk-space-8);
   max-width: var(--qk-max-w);
   margin: 0 auto;
 }
@@ -242,9 +268,11 @@ a {
   grid-row: 1;
   display: flex;
   flex-direction: column;
-  gap: var(--qk-space-6);
+  gap: 12px;
   min-width: 0;
+  align-self: start;
 }
+.tier-card,
 .lows-card {
   grid-column: 1 / -1;
 }
@@ -259,14 +287,14 @@ a {
 }
 .card-hd {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 20px 24px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--qk-border-muted);
 }
 .card-title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
@@ -333,7 +361,25 @@ a {
   white-space: nowrap;
 }
 .chart-body {
-  padding: 16px 16px 20px;
+  padding: 0 12px 8px;
+}
+.chart-help {
+  margin: 0 16px 8px;
+  font-size: 14px;
+  color: var(--qk-text-secondary);
+}
+.chart-help summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--qk-text-primary);
+}
+.range-slider {
+  flex: 1;
+  min-width: 180px;
+}
+.range-readout {
+  font-size: 14px;
+  color: var(--qk-text-primary);
 }
 .chart-box,
 .rot-chart {
@@ -421,10 +467,10 @@ a {
 }
 
 .pos {
-  padding: 24px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 12px;
 }
 .pos-block {
   display: flex;
@@ -439,7 +485,8 @@ a {
 .pos-head {
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .pos-label {
   font-size: 12px;
@@ -450,7 +497,7 @@ a {
   flex-wrap: wrap;
 }
 .pos .hero {
-  font-size: 40px;
+  font-size: 32px;
   font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1;
@@ -529,11 +576,12 @@ a {
 .badge {
   display: inline-flex;
   align-items: center;
-  height: 22px;
+  height: 24px;
   padding: 0 8px;
   border-radius: var(--qk-radius-full);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
   border: 1px solid;
   font-family: var(--qk-font-sans);
 }
@@ -825,8 +873,12 @@ table.qk tr.unconfirmed td:first-child {
     gap: 16px;
   }
   .main-nav a {
-    font-size: 13px;
+    font-size: 15px;
     padding: 14px 0;
+  }
+  .index-head h1,
+  .page-title {
+    font-size: 22px;
   }
   .icon-btn {
     width: 32px;
