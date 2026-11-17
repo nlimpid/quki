@@ -108,6 +108,46 @@ const rotation: RotationView = {
   ],
 };
 
+const DENSE_COUNT = 1212;
+const densePoints = Array.from({ length: DENSE_COUNT }, (_, index) => {
+  const day = new Date(Date.UTC(2018, 0, 1 + index));
+  return {
+    date: day.toISOString().slice(0, 10),
+    a: 1,
+    b: 1,
+    r: 1,
+    ma: 1,
+    upper: 1.2,
+    lower: 0.8,
+    s: 0.01,
+    sMa: 0,
+    rsi: 50,
+    rsiMa: 50,
+  };
+});
+const denseLast = densePoints[DENSE_COUNT - 1]!;
+const denseRotation: RotationView = {
+  pair,
+  asOf: `${denseLast.date}T15:00:00+08:00`,
+  latest: {
+    date: denseLast.date,
+    r: 1,
+    ma: 1,
+    upper: 1.2,
+    lower: 0.8,
+    pctB: 0.5,
+    bandwidth: 0.4,
+    s: 0.01,
+    sPercentile: 50,
+    rsi: 50,
+    rsiMa: 50,
+    zone: "轨道内",
+    lastSpreadCross: null,
+  },
+  points: densePoints,
+  markers: [],
+};
+
 export function ChartFixturePage() {
   const [showVolume, setShowVolume] = useState(true);
   usePageTitle("样例图表 · quki");
@@ -131,6 +171,16 @@ export function ChartFixturePage() {
             <div className="card-title">轮动样例 · 轨道填充</div>
           </div>
           <RotationChart view={rotation} range="MAX" />
+        </section>
+        <section className="card">
+          <div className="card-hd">
+            <div className="card-title">窄窗样例 · 1212 点</div>
+          </div>
+          <p className="chart-key" data-fixture="dense-range">
+            样例数据，不是行情接口。1212
+            个点，窄屏默认停在末尾约 28 根，用来检查两个滑块叠在一起时仍能拖动。
+          </p>
+          <RotationChart view={denseRotation} range="MAX" />
         </section>
       </main>
     </>
