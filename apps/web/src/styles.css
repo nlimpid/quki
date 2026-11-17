@@ -239,10 +239,11 @@ a {
   color: var(--qk-text-primary);
   box-shadow: var(--qk-shadow-sm);
 }
-.asof {
+.index-head .asof {
   margin: 0;
   font-size: 15px;
   color: var(--qk-text-secondary);
+  text-align: left;
   white-space: nowrap;
 }
 .asof strong {
@@ -894,8 +895,9 @@ table.qk tr.unconfirmed td:first-child {
   .page-title {
     font-size: 28px;
   }
-  .asof {
+  .index-head .asof {
     white-space: normal;
+    text-align: left;
   }
   .icon-btn {
     width: 32px;

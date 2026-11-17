@@ -48,10 +48,19 @@
   color: var(--qk-fg-secondary);
   font-size: 15px;
 }
-.asof {
-  color: var(--qk-fg-muted);
-  font-size: 12px;
+.dividends-app .asof {
+  color: var(--qk-fg-secondary);
+  font-size: 15px;
   text-align: right;
+}
+@media (max-width: 640px) {
+  .page-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .dividends-app .asof {
+    text-align: left;
+  }
 }
 .mono {
   font-family: var(--qk-font-mono);
