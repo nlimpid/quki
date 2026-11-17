@@ -20,10 +20,10 @@ export function PositionPanel({ overview }: { overview: Overview }) {
   const temperature = overview.temperature;
   return (
     <section className="card pos pos-card">
-      <div className="pos-block">
-        <div className="pos-kicker">温度</div>
-        <div className="pos-head">
-          <div className="hero qk-tabular">{temperature ? temperature.value : "—"}</div>
+      <div className="temp-summary">
+        <div className="temp-main">
+          <span className="pos-kicker">温度</span>
+          <span className="hero qk-tabular">{temperature ? temperature.value : "—"}</span>
           {temperature ? (
             <span className={`badge ${tempBadge(temperature.band)}`}>
               {temperatureBandLabel(temperature.band)}
@@ -31,47 +31,53 @@ export function PositionPanel({ overview }: { overview: Overview }) {
           ) : (
             <span className="badge badge-neutral">尚未更新</span>
           )}
+          <span className="hero-sub">0–100 · 高表示贵</span>
         </div>
-        <div className="hero-sub">0–100 · 高表示贵</div>
-      </div>
 
-      <div className="pos-block">
-        <div className="pct-label">
-          <span>概率 · 历史分位</span>
-          <span className="qk-tabular">{formatPercentile(overview.percentile)}</span>
+        <div className="temp-pct">
+          <div className="pct-label">
+            <span>历史分位</span>
+            <span className="qk-tabular">{formatPercentile(overview.percentile)}</span>
+          </div>
+          <div
+            className="meter"
+            role="meter"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.min(100, Math.max(0, Math.round(overview.percentile)))}
+            aria-label="历史分位"
+          >
+            <i style={{ width: `${Math.min(100, Math.max(0, Math.round(overview.percentile)))}%` }} />
+          </div>
+          <div className="hint">
+            {temperature
+              ? `自身分位 P_A ${temperature.pa.toFixed(1)}% · 40 日相对分位 P_B ${temperature.pb.toFixed(1)}%`
+              : `当前周收盘/MA55 高于全历史 ${overview.percentileSample} 个样本中的 ${formatPercentile(overview.percentile)}。`}
+          </div>
         </div>
-        <div className="meter" aria-hidden="true">
-          <i style={{ width: `${Math.min(100, Math.max(0, Math.round(overview.percentile)))}%` }} />
-        </div>
-        <div className="hint">
-          {temperature
-            ? `自身分位 P_A ${temperature.pa.toFixed(1)}% · 40 日相对分位 P_B ${temperature.pb.toFixed(1)}%`
-            : `当前周收盘/MA55 高于全历史 ${overview.percentileSample} 个样本中的 ${formatPercentile(overview.percentile)}。`}
-        </div>
-      </div>
 
-      <div className="pos-block">
-        <div className="pos-kicker">区间</div>
-        <div className="pos-head">
-          <div className="range-num qk-tabular">{formatPct(overview.ratioPct)}</div>
-          <span className={`badge badge-${zone.variant}`}>{zone.label}</span>
-          {overview.weekPossiblyOpen ? (
-            <span className="badge badge-unconfirmed">当周未收盘</span>
-          ) : null}
-        </div>
-        <div className="hero-sub">收盘 / MA55</div>
-        <div className="meta-row">
-          <span>
-            收盘 <b className="qk-tabular">{formatLevel(overview.lastClose)}</b>
-          </span>
-          <span>
-            MA55 <b className="qk-tabular">{formatLevel(overview.ma55)}</b>
-          </span>
-          {change != null ? (
-            <span className={change > 0 ? "change-up" : change < 0 ? "change-down" : ""}>
-              日涨跌 <b className="qk-tabular">{formatPct(change)}</b>
+        <div className="temp-range">
+          <div className="temp-main">
+            <span className="pos-kicker">区间</span>
+            <span className="range-num qk-tabular">{formatPct(overview.ratioPct)}</span>
+            <span className={`badge badge-${zone.variant}`}>{zone.label}</span>
+            {overview.weekPossiblyOpen ? (
+              <span className="badge badge-unconfirmed">当周未收盘</span>
+            ) : null}
+          </div>
+          <div className="meta-row">
+            <span>
+              收盘 <b className="qk-tabular">{formatLevel(overview.lastClose)}</b>
             </span>
-          ) : null}
+            <span>
+              MA55 <b className="qk-tabular">{formatLevel(overview.ma55)}</b>
+            </span>
+            {change != null ? (
+              <span className={change > 0 ? "change-up" : change < 0 ? "change-down" : ""}>
+                日涨跌 <b className="qk-tabular">{formatPct(change)}</b>
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
     </section>

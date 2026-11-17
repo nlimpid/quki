@@ -66,15 +66,12 @@ export function OverviewPage({
   if (loading) {
     return (
       <div className="layout-grid">
+        <section className="card pos pos-card">
+          <div className="skeleton" style={{ height: 28, margin: 16 }} />
+        </section>
         <section className="card chart-card">
           <div className="skeleton" style={{ height: "var(--qk-chart-h)", margin: 16 }} />
         </section>
-        <div className="rail">
-          <section className="card pos">
-            <div className="skeleton" style={{ height: 18, width: 80, marginBottom: 12 }} />
-            <div className="skeleton" style={{ height: 36, width: 120 }} />
-          </section>
-        </div>
       </div>
     );
   }
@@ -99,6 +96,7 @@ export function OverviewPage({
 
   return (
     <div className="layout-grid">
+      <PositionPanel overview={overview} />
       <Suspense
         fallback={
           <section className="card chart-card">
@@ -118,9 +116,6 @@ export function OverviewPage({
           }}
         />
       </Suspense>
-      <div className="rail">
-        <PositionPanel overview={overview} />
-      </div>
       <TierTable rows={overview.tiers} lastClose={overview.lastClose} />
       <LowsTable rows={overview.lows} />
     </div>
