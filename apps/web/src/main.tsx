@@ -44,6 +44,7 @@ function ClerkBoundAuth({ children }: { children: React.ReactNode }) {
         return bearerForUser(userId, userRef.current, token);
       }}
       onLogout={() => signOut()}
+      onSessionRejected={() => signOut()}
     >
       {children}
     </AuthProvider>

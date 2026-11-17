@@ -15,6 +15,7 @@ import {
   failLogout,
   finishLogout,
   headerControl,
+  rejectCredential,
   holdingMutation,
   loginView,
   panelTabLeaves,
@@ -56,6 +57,16 @@ describe("auth view state", () => {
     expect(headerControl(unknown)).toBe("login");
     expect(showLoginCta(unknown)).toBe(true);
     expect(applyProbeFailure(initializing)).toEqual(unknown);
+    const signedIn = {
+      kind: "authenticated" as const,
+      displayName: "林",
+      csrfToken: "csrf",
+      login: { state: "ready" as const },
+    };
+    expect(rejectCredential(signedIn)).toEqual({ kind: "initializing", login: unknownLogin });
+    expect(rejectCredential({ ...signedIn, kind: "logoutPending" })).toMatchObject({
+      kind: "logoutPending",
+    });
     expect(loginView(unknown).alert).toBe(LOGIN_CHECK_FAILED_COPY);
     expect(loginView(unknown).message).toBeNull();
     expect(portfolioSubtitle(unknown)).not.toContain("未登录");

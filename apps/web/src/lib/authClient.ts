@@ -21,6 +21,13 @@ export function bearerHeader(token: string | null | undefined): Record<string, s
   return { authorization: `Bearer ${token}` };
 }
 
+export class SessionRejectedError extends Error {
+  constructor() {
+    super("session_rejected");
+    this.name = "SessionRejectedError";
+  }
+}
+
 export async function fetchSession(
   fetchImpl: typeof fetch = fetch,
   token?: string | null,
@@ -33,6 +40,7 @@ export async function fetchSession(
     signal,
     headers: { accept: "application/json", ...bearerHeader(token) },
   });
+  if (response.status === 401) throw new SessionRejectedError();
   if (!response.ok) throw new Error("session_unavailable");
   const parsed = parseAuthSessionResponse(await response.json().catch(() => null));
   if (!parsed) throw new Error("session_unavailable");

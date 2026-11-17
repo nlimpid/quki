@@ -64,6 +64,12 @@ export function applyProbeSuccess(phase: AuthPhase, session: AuthSessionResponse
   return sessionToPhase(session);
 }
 
+/** A rejected bearer is not a transport failure. Drop the account view and probe again. */
+export function rejectCredential(phase: AuthPhase): AuthPhase {
+  if (phase.kind === "logoutPending") return phase;
+  return { kind: "initializing", login: unknownLogin };
+}
+
 export function applyProbeFailure(phase: AuthPhase): AuthPhase {
   if (
     phase.kind === "authenticated" ||

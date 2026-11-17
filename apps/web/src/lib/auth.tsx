@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { fetchSession, logoutSession } from "./authClient.js";
+import { fetchSession, logoutSession, SessionRejectedError } from "./authClient.js";
 import {
   applyProbeFailure,
   applyProbeSuccess,
@@ -17,6 +17,7 @@ import {
   beginLogout,
   failLogout,
   finishLogout,
+  rejectCredential,
   type AuthPhase,
 } from "./authState.js";
 
@@ -40,12 +41,15 @@ export function AuthProvider({
   sessionKey = "static",
   getAccessToken,
   onLogout,
+  onSessionRejected,
 }: {
   children: ReactNode;
   /** `loading` waits. Any other change, including a new Clerk user id, starts a new probe. */
   sessionKey?: string;
   getAccessToken?: () => Promise<string | null>;
   onLogout?: () => Promise<void>;
+  /** Clerk rejected the bearer. Clear that session so the next probe is anonymous. */
+  onSessionRejected?: () => Promise<void>;
 }) {
   const [phase, setPhase] = useState<AuthPhase>({
     kind: "initializing",
@@ -56,9 +60,11 @@ export function AuthProvider({
   const [expiryDismissed, setExpiryDismissed] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const tokenRef = useRef(getAccessToken);
+  const rejectedRef = useRef(onSessionRejected);
   useEffect(() => {
     tokenRef.current = getAccessToken;
-  }, [getAccessToken]);
+    rejectedRef.current = onSessionRejected;
+  }, [getAccessToken, onSessionRejected]);
 
   useEffect(() => {
     if (sessionKey === "loading") return;
@@ -79,9 +85,23 @@ export function AuthProvider({
         if (!session || controller.signal.aborted) return;
         setPhase((current) => applyProbeSuccess(current, session));
       })
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
         if (controller.signal.aborted) return;
         if (error instanceof DOMException && error.name === "AbortError") return;
+        if (error instanceof SessionRejectedError) {
+          const clear = rejectedRef.current;
+          if (!clear) {
+            setPhase((current) => applyProbeFailure(rejectCredential(current)));
+            return;
+          }
+          setPhase((current) => rejectCredential(current));
+          try {
+            await clear();
+          } catch {
+            if (!controller.signal.aborted) setPhase((current) => applyProbeFailure(current));
+          }
+          return;
+        }
         setPhase((current) => applyProbeFailure(current));
       })
       .finally(() => {

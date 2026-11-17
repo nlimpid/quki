@@ -2,7 +2,13 @@ import { HOLDINGS_STORAGE_KEY, type HoldingsState } from "@quki/analytics";
 import { describe, expect, it } from "vitest";
 
 import { visibleAccountHoldings } from "./accountHoldings.js";
-import { bearerForUser, bearerHeader, fetchSession, logoutSession } from "./authClient.js";
+import {
+  bearerForUser,
+  bearerHeader,
+  fetchSession,
+  logoutSession,
+  SessionRejectedError,
+} from "./authClient.js";
 import { writeAccountHoldings } from "./accountHoldings.js";
 import { readHoldings, writeHoldings } from "./holdingsStore.js";
 
@@ -65,6 +71,12 @@ describe("holdings stay on this browser", () => {
     await expect(
       logoutSession("labelled-token", async () => new Response("no", { status: 503 })),
     ).rejects.toThrow(/logout_failed/);
+    await expect(
+      fetchSession(
+        async () => new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 }),
+        "rejected-jwt",
+      ),
+    ).rejects.toBeInstanceOf(SessionRejectedError);
     expect(saved.get(HOLDINGS_STORAGE_KEY)).toBe(before);
     expect(reads.filter((key) => key === HOLDINGS_STORAGE_KEY)).toEqual([]);
     expect(readHoldings().state).toEqual(sample);
