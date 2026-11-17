@@ -303,7 +303,7 @@ export function KlineChart({
     <section className="card chart-card">
       <div className="card-hd">
         <div className="card-title">K 线 · MA55 与估值分位</div>
-        <Checkbox isSelected={showVolume} onChange={onToggleVolume}>
+        <Checkbox className="volume-toggle" isSelected={showVolume} onChange={onToggleVolume}>
           <Checkbox.Control>
             <Checkbox.Indicator />
           </Checkbox.Control>

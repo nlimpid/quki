@@ -163,6 +163,9 @@ a {
   gap: 16px;
   margin-bottom: 12px;
 }
+.index-head > div {
+  min-width: 0;
+}
 .index-head h1 {
   margin: 0;
   font-size: 28px;
@@ -262,6 +265,13 @@ a {
   grid-column: 1;
   grid-row: 1;
   min-width: 0;
+}
+.chart-card .volume-toggle {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: auto;
 }
 .rail {
   grid-column: 2;
@@ -876,20 +886,23 @@ table.qk tr.unconfirmed td:first-child {
     font-size: 15px;
     padding: 14px 0;
   }
+  .index-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
   .index-head h1,
   .page-title {
-    font-size: 22px;
+    font-size: 28px;
+  }
+  .asof {
+    white-space: normal;
   }
   .icon-btn {
     width: 32px;
     height: 32px;
   }
   .toolbar {
-    position: sticky;
-    top: var(--qk-header-h);
-    z-index: var(--qk-z-sticky);
-    padding: 8px 16px 10px;
-    align-items: stretch;
+    align-items: flex-start;
     flex-direction: column;
     gap: 8px;
   }
@@ -911,10 +924,10 @@ table.qk tr.unconfirmed td:first-child {
   .rail {
     display: contents;
   }
-  .pos-card {
+  .chart-card {
     order: 1;
   }
-  .chart-card {
+  .pos-card {
     order: 2;
   }
   .tier-card {
