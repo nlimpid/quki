@@ -1,7 +1,15 @@
 TIDB_QUKI_DATABASE_URL=mysql://user:password@gateway01.region.prod.aws.tidbcloud.com:4000/quki
 
-# Optional login secrets. Leave unset to keep /api/auth unavailable.
-# AUTH_OIDC_ISSUER=
-# AUTH_OIDC_CLIENT_ID=
-# AUTH_OIDC_CLIENT_SECRET=
-# AUTH_OIDC_SCOPES=openid
+# Public Clerk Frontend API origin for local `wrangler dev`. Not a secret.
+# Leave blank to keep login unavailable.
+# Production deploys use the public value in workers/site/wrangler.jsonc.
+# A Clerk development instance looks like https://<name>.clerk.accounts.dev
+CLERK_JWT_ISSUER=
+
+# Optional local azp allowlist. Unset uses the code default.
+# CLERK_AUTHORIZED_PARTIES=http://127.0.0.1:5173
+
+# Not a Worker variable. Set it in the process that runs `pnpm build:site`.
+# Vite inlines it. A runtime setting does not change a build that omitted it.
+# Publishable-key placeholder. Do not commit a real key.
+# VITE_CLERK_PUBLISHABLE_KEY=pk_test_replace_me

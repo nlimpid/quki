@@ -6,12 +6,12 @@ This file is the contract for review. It does not set secrets, run `pnpm migrate
 
 ## Configuration
 
-Names only. No values are in this repository.
+No secrets or publishable keys are in this repository. The public issuer is.
 
 | Name                         | Where                 | Rule                                                                                                                                                                                                               |
 | ---------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `VITE_CLERK_PUBLISHABLE_KEY` | Web build             | Clerk publishable key. Never a secret. The sign-in form renders only when this key is present and the Worker session is ready.                                                                                     |
-| `CLERK_JWT_ISSUER`           | Site Worker           | Exact `https` origin of the Clerk Frontend API. No user, password, query, or hash. The JWKS URL is `{that origin}/.well-known/jwks.json`. The token `iss` is checked against this origin and is never a fetch URL. |
+| `VITE_CLERK_PUBLISHABLE_KEY` | `pnpm build:site`     | Clerk publishable key. Never a secret. It must be in the process that runs `pnpm build:site`, because Vite inlines it into the page. A Worker runtime setting does not reach a build that omitted it. The sign-in form renders only when this built key is present and the Worker session is ready. This repository does not contain the key. |
+| `CLERK_JWT_ISSUER`           | Site Worker `vars`    | Public value `https://clerk.quki.cc` in `workers/site/wrangler.jsonc`. Not a secret. Exact `https` origin of the Clerk Frontend API. No user, password, query, or hash. The JWKS URL is `{that origin}/.well-known/jwks.json`. The token `iss` is checked against this origin and is never a fetch URL. |
 | `CLERK_AUTHORIZED_PARTIES`   | Site Worker, optional | Comma-separated `azp` allowlist. The code default is `https://quki.cc,https://www.quki.cc`. A token without `azp`, or with an `azp` outside the list, is rejected.                                                 |
 | `CLERK_SECRET_KEY`           | unused                | Session verification does not call the Clerk Backend API.                                                                                                                                                          |
 

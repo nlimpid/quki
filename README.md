@@ -111,14 +111,14 @@ Lint and format are oxlint and oxfmt. The web bundler is `rolldown-vite`. Librar
 
 ## Secrets
 
-Never commit values. Names:
+Never commit secrets or the publishable key. Names:
 
 | Name                         | Where                                                                                                                                           |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TIDB_QUKI_DATABASE_URL`     | Worker secret and local env. TiDB Serverless MySQL URL, for example `mysql://USER:PASSWORD@gateway01.<region>.prod.aws.tidbcloud.com:4000/quki` |
 | `INGEST_TOKEN`               | Crawler Worker secret. `Authorization: Bearer …` or `x-ingest-token` on `POST /admin/migrate` and `POST /admin/ingest`                          |
-| `VITE_CLERK_PUBLISHABLE_KEY` | Web env. Clerk publishable key only. Not a Worker secret.                                                                                       |
-| `CLERK_JWT_ISSUER`           | Site Worker. Exact https origin of the Clerk Frontend API. JWKS is fetched only from that origin.                                               |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Web build. Must be present in the process that runs `pnpm build:site`. Vite inlines it into the page. A Worker runtime setting does not reach that build. Publishable key only. This repository does not contain the key. |
+| `CLERK_JWT_ISSUER`           | Public site Worker variable in `workers/site/wrangler.jsonc`, value `https://clerk.quki.cc`. Not a secret. JWKS is fetched only from that origin. |
 | `CLERK_AUTHORIZED_PARTIES`   | Optional site Worker. Comma-separated `azp` origins. Defaults to `https://quki.cc,https://www.quki.cc`.                                         |
 
 ```bash
@@ -172,7 +172,9 @@ Create two Workers Builds projects on this repo. Leave the root directory empty 
 | Build command  | `pnpm build:site`                                    | `pnpm build:crawler`                                    |
 | Deploy command | `npx wrangler deploy -c workers/site/wrangler.jsonc` | `npx wrangler deploy -c workers/crawler/wrangler.jsonc` |
 
-`build:site` compiles `apps/web`. `build:crawler` is a no-op; Wrangler bundles the crawler during deploy. Paths in each `wrangler.jsonc` are relative to that config file, so deploy from the repo root still finds `workers/site/src/index.ts` and the assets directory `apps/web/dist`. Assets stay a binding. They are not inlined into the script. `npx wrangler` uses the Wrangler version pinned in the root `devDependencies`.
+`build:site` compiles `apps/web`. `VITE_CLERK_PUBLISHABLE_KEY` must be in that process. Vite inlines the publishable key into the page assets. Setting the key only on the deployed Worker does not add the sign-in form to a build that omitted it. This repository does not contain the key. `build:crawler` is a no-op; Wrangler bundles the crawler during deploy. Paths in each `wrangler.jsonc` are relative to that config file, so deploy from the repo root still finds `workers/site/src/index.ts` and the assets directory `apps/web/dist`. Assets stay a binding. They are not inlined into the script. `npx wrangler` uses the Wrangler version pinned in the root `devDependencies`.
+
+The site config sets the public variable `CLERK_JWT_ISSUER` to `https://clerk.quki.cc`. That value deploys with the site Worker. It is not a secret, and the crawler config does not set it.
 
 Account `a0eb1f96a32491ca1f70971c118831fd`, zone `quki.cc`. Custom domains `quki.cc` and `www.quki.cc` stay in the site config.
 

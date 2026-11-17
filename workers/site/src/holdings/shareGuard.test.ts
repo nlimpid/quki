@@ -71,14 +71,15 @@ function appFor(statements: string[]) {
   return { app: createApp(market(), auth), token, key };
 }
 
-async function put(
+async function send(
   app: ReturnType<typeof createApp>,
   token: string,
+  method: "PUT" | "DELETE",
   body: string,
   path = "/api/holdings",
 ) {
   return app.request(`${origin}${path}`, {
-    method: "PUT",
+    method,
     headers: {
       origin,
       authorization: `Bearer ${token}`,
@@ -86,6 +87,15 @@ async function put(
     },
     body,
   });
+}
+
+async function put(
+  app: ReturnType<typeof createApp>,
+  token: string,
+  body: string,
+  path = "/api/holdings",
+) {
+  return send(app, token, "PUT", body, path);
 }
 
 describe("account share guard", () => {
@@ -154,5 +164,28 @@ describe("account share guard", () => {
     );
     expect(rejectedUpdate.status).toBe(400);
     expect(statements).toHaveLength(beforeInvalidUpdate);
+  });
+
+  it("returns 400 for a non-object body before identity or holdings SQL", async () => {
+    const statements: string[] = [];
+    const { app, token } = appFor(statements);
+    const bodies = ["true", "false", "1", "0", '"x"', '""', "[]", "[1]", "null", "{"];
+    for (const body of bodies) {
+      for (const path of ["/api/holdings", "/api/holdings/600519"]) {
+        const putResponse = await send(app, token, "PUT", body, path);
+        expect(putResponse.status).toBe(400);
+        expect(await putResponse.json()).toEqual({
+          error: "invalid_holding",
+          message: "不能用整表替换账户持仓。",
+        });
+        const deleteResponse = await send(app, token, "DELETE", body, path);
+        expect(deleteResponse.status).toBe(400);
+        expect(await deleteResponse.json()).toEqual({
+          error: "invalid_holding",
+          message: "不能用整表替换账户持仓。",
+        });
+      }
+    }
+    expect(statements).toEqual([]);
   });
 });

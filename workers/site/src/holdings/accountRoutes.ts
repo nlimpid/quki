@@ -15,14 +15,19 @@ const UNAVAILABLE = {
   message: "账户持仓尚未开通，没有写入任何持仓。",
 } as const;
 
+function isHoldingBody(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
 async function mutationFields(
   c: Context,
   pathCode: string | null,
 ): Promise<Record<string, unknown> | Response> {
-  const fields = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!fields || Array.isArray(fields) || "items" in fields) {
+  const parsed: unknown = await c.req.json().catch(() => null);
+  if (!isHoldingBody(parsed) || "items" in parsed) {
     return c.json({ error: "invalid_holding", message: "不能用整表替换账户持仓。" }, 400);
   }
+  const fields = parsed;
   const version = fields.expectedVersion;
   if (c.req.method === "DELETE" && !validHoldingVersion(version)) {
     return c.json({ error: "invalid_holding", message: "缺少持仓版本。" }, 400);

@@ -16,4 +16,7 @@
     { "pattern": "quki.cc", "custom_domain": true },
     { "pattern": "www.quki.cc", "custom_domain": true },
   ],
+  "vars": {
+    "CLERK_JWT_ISSUER": "https://clerk.quki.cc"
+  }
 }
