@@ -376,6 +376,9 @@ a {
 .chart-body {
   padding: 0 12px 8px;
 }
+.chart-hint {
+  display: none;
+}
 .chart-help {
   margin: 0 16px 8px;
   font-size: 14px;
@@ -1029,5 +1032,83 @@ table.qk tr.unconfirmed td:first-child {
     display: inline-flex;
     white-space: nowrap;
     justify-content: flex-start;
+  }
+  .chart-card {
+    padding: 6px 12px 4px;
+    gap: 4px;
+  }
+  .chart-card .card-hd {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    padding: 0 0 4px;
+  }
+  .chart-card .card-title {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .chart-card .chart-readout {
+    display: none;
+  }
+  .chart-card .chart-hint {
+    display: block;
+    flex: 0 0 auto;
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--qk-text-secondary);
+  }
+  .chart-card .chart-hint summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--qk-text-primary);
+  }
+  .chart-card .chart-hint p {
+    display: none;
+    margin: 4px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .chart-card .chart-hint[open] {
+    flex: 1 0 100%;
+    order: 4;
+  }
+  .chart-card .chart-hint[open] p {
+    display: block;
+  }
+  .chart-card .range-control {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    min-height: 44px;
+  }
+  .chart-card .range-slider {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    overflow: visible;
+  }
+  .chart-card .range-slider .slider,
+  .chart-card .range-slider .slider__track {
+    overflow: visible;
+  }
+  .chart-card .range-slider .slider__thumb::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+  .chart-card .range-readout {
+    flex: none;
+  }
+  .chart-card .chart-body {
+    padding: 0;
   }
 }

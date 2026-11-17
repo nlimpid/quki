@@ -27,11 +27,7 @@ import {
 import { useTheme } from "../lib/theme.js";
 import { ChartAttribution } from "./chartAttribution.js";
 import { lineWithGaps, splitPriceSeries, volumeBars } from "./klineModel.js";
-import {
-  nextVisibleWindow,
-  rangeNeedsApply,
-  VisibleRangeControl,
-} from "./VisibleRangeControl.js";
+import { nextVisibleWindow, rangeNeedsApply, VisibleRangeControl } from "./VisibleRangeControl.js";
 
 const CHART_TIERS = [85, 95, 105, 115] as const;
 
@@ -308,6 +304,10 @@ export function KlineChart({
     <section className="card chart-card">
       <div className="card-hd">
         <div className="card-title">K 线 · MA55 与估值分位</div>
+        <details className="chart-hint">
+          <summary>读数</summary>
+          <p>{readout}</p>
+        </details>
         <Checkbox className="volume-toggle" isSelected={showVolume} onChange={onToggleVolume}>
           <Checkbox.Control>
             <Checkbox.Indicator />
