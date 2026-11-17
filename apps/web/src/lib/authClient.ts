@@ -47,6 +47,58 @@ export async function fetchSession(
   return parsed;
 }
 
+export type AuthProbeOutcome =
+  | { type: "ok"; session: AuthSessionResponse }
+  | { type: "unavailable" }
+  | { type: "rejected-unknown" };
+
+function isAbort(error: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return true;
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+/**
+ * One session read. A rejected bearer signs out, then this function itself
+ * requests the session again with no token. It does not wait for a new Clerk
+ * user id. Transport failures do not sign out and do not start that second read.
+ */
+export async function runAuthProbe(input: {
+  fetchImpl?: typeof fetch;
+  signal?: AbortSignal;
+  getAccessToken?: () => Promise<string | null>;
+  onSessionRejected?: () => Promise<void>;
+}): Promise<AuthProbeOutcome> {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  let token: string | null = null;
+  try {
+    token = input.getAccessToken ? await input.getAccessToken() : null;
+  } catch (error) {
+    if (isAbort(error, input.signal)) throw error;
+    return { type: "unavailable" };
+  }
+  try {
+    return { type: "ok", session: await fetchSession(fetchImpl, token, input.signal) };
+  } catch (error) {
+    if (isAbort(error, input.signal)) throw error;
+    if (!(error instanceof SessionRejectedError)) return { type: "unavailable" };
+    if (!input.onSessionRejected) return { type: "rejected-unknown" };
+    try {
+      await input.onSessionRejected();
+    } catch (clearError) {
+      if (isAbort(clearError, input.signal)) throw clearError;
+      return { type: "rejected-unknown" };
+    }
+    if (input.signal?.aborted) throw new DOMException("The operation was aborted.", "AbortError");
+    try {
+      return { type: "ok", session: await fetchSession(fetchImpl, null, input.signal) };
+    } catch (follow) {
+      if (isAbort(follow, input.signal)) throw follow;
+      if (follow instanceof SessionRejectedError) return { type: "rejected-unknown" };
+      return { type: "unavailable" };
+    }
+  }
+}
+
 export async function logoutSession(
   token: string | null,
   fetchImpl: typeof fetch = fetch,

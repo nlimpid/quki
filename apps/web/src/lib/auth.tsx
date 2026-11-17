@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { fetchSession, logoutSession, SessionRejectedError } from "./authClient.js";
+import { logoutSession, runAuthProbe } from "./authClient.js";
 import {
   applyProbeFailure,
   applyProbeSuccess,
@@ -48,7 +48,7 @@ export function AuthProvider({
   sessionKey?: string;
   getAccessToken?: () => Promise<string | null>;
   onLogout?: () => Promise<void>;
-  /** Clerk rejected the bearer. Clear that session so the next probe is anonymous. */
+  /** Clerk rejected the bearer. After this resolves, one anonymous probe runs with no token. */
   onSessionRejected?: () => Promise<void>;
 }) {
   const [phase, setPhase] = useState<AuthPhase>({
@@ -76,37 +76,30 @@ export function AuthProvider({
       setPhase((current) => applyProbeTimeout(current));
     }, AUTH_PROBE_TIMEOUT_MS);
     void (async () => {
-      const readToken = tokenRef.current;
-      const token = readToken ? await readToken() : null;
-      if (controller.signal.aborted) return;
-      return fetchSession(fetch, token, controller.signal);
-    })()
-      .then((session) => {
-        if (!session || controller.signal.aborted) return;
-        setPhase((current) => applyProbeSuccess(current, session));
-      })
-      .catch(async (error: unknown) => {
+      try {
+        const outcome = await runAuthProbe({
+          signal: controller.signal,
+          getAccessToken: tokenRef.current,
+          onSessionRejected: rejectedRef.current,
+        });
         if (controller.signal.aborted) return;
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        if (error instanceof SessionRejectedError) {
-          const clear = rejectedRef.current;
-          if (!clear) {
-            setPhase((current) => applyProbeFailure(rejectCredential(current)));
-            return;
-          }
-          setPhase((current) => rejectCredential(current));
-          try {
-            await clear();
-          } catch {
-            if (!controller.signal.aborted) setPhase((current) => applyProbeFailure(current));
-          }
+        if (outcome.type === "ok") {
+          setPhase((current) => applyProbeSuccess(current, outcome.session));
+          return;
+        }
+        if (outcome.type === "rejected-unknown") {
+          setPhase((current) => applyProbeFailure(rejectCredential(current)));
           return;
         }
         setPhase((current) => applyProbeFailure(current));
-      })
-      .finally(() => {
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setPhase((current) => applyProbeFailure(current));
+      } finally {
         if (!controller.signal.aborted) setRetrying(false);
-      });
+      }
+    })();
     return () => {
       controller.abort();
       window.clearTimeout(timer);

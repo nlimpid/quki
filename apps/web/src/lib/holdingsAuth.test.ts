@@ -7,6 +7,7 @@ import {
   bearerHeader,
   fetchSession,
   logoutSession,
+  runAuthProbe,
   SessionRejectedError,
 } from "./authClient.js";
 import { writeAccountHoldings } from "./accountHoldings.js";
@@ -132,5 +133,76 @@ describe("holdings stay on this browser", () => {
     await expect(
       writeAccountHoldings({ code: "600519", shares: 10, expectedVersion: null }, null),
     ).rejects.toThrow(/需要登录/);
+  });
+});
+
+const readyGuest = {
+  status: "anonymous",
+  authenticated: false,
+  expired: false,
+  user: null,
+  csrfToken: null,
+  login: { ready: true, method: "clerk", reason: null },
+};
+
+describe("rejected session probe", () => {
+  it("signs out on 401 and then reads the session with no Authorization header", async () => {
+    const authorization: Array<string | null> = [];
+    let rejected = 0;
+    const outcome = await runAuthProbe({
+      getAccessToken: async () => "still-a-jwt",
+      onSessionRejected: async () => {
+        rejected += 1;
+      },
+      fetchImpl: async (_input, init) => {
+        authorization.push(new Headers(init?.headers).get("authorization"));
+        if (authorization.length === 1) return new Response("no", { status: 401 });
+        return Response.json(readyGuest);
+      },
+    });
+    expect(rejected).toBe(1);
+    expect(authorization).toEqual(["Bearer still-a-jwt", null]);
+    expect(outcome).toMatchObject({
+      type: "ok",
+      session: { authenticated: false, login: { ready: true, method: "clerk" } },
+    });
+  });
+
+  it("stays unknown when sign-out throws and does not send a second session request", async () => {
+    const authorization: Array<string | null> = [];
+    const outcome = await runAuthProbe({
+      getAccessToken: async () => "still-a-jwt",
+      onSessionRejected: async () => {
+        throw new Error("sign_out_failed");
+      },
+      fetchImpl: async (_input, init) => {
+        authorization.push(new Headers(init?.headers).get("authorization"));
+        return new Response("no", { status: 401 });
+      },
+    });
+    expect(outcome).toEqual({ type: "rejected-unknown" });
+    expect(authorization).toEqual(["Bearer still-a-jwt"]);
+  });
+
+  it("does not sign out or start an anonymous probe on 503 or a network error", async () => {
+    let rejected = 0;
+    const onSessionRejected = async () => {
+      rejected += 1;
+    };
+    const unavailable = await runAuthProbe({
+      getAccessToken: async () => "still-a-jwt",
+      onSessionRejected,
+      fetchImpl: async () => new Response("no", { status: 503 }),
+    });
+    const network = await runAuthProbe({
+      getAccessToken: async () => "still-a-jwt",
+      onSessionRejected,
+      fetchImpl: async () => {
+        throw new TypeError("network");
+      },
+    });
+    expect(unavailable).toEqual({ type: "unavailable" });
+    expect(network).toEqual({ type: "unavailable" });
+    expect(rejected).toBe(0);
   });
 });
