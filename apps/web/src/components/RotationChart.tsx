@@ -1,40 +1,46 @@
 import type { RotationView } from "@quki/analytics";
 import type { RangeKey } from "@quki/types";
-import { LineChart, ScatterChart } from "echarts/charts";
 import {
-  AxisPointerComponent,
-  DataZoomComponent,
-  GridComponent,
-  MarkLineComponent,
-  TitleComponent,
-  TooltipComponent,
-} from "echarts/components";
-import * as echarts from "echarts/core";
-import { CanvasRenderer } from "echarts/renderers";
-import { useEffect, useMemo, useRef } from "react";
+  ColorType,
+  LineSeries,
+  LineStyle,
+  createChart,
+  createSeriesMarkers,
+  type LineData,
+  type MouseEventParams,
+  type SeriesMarker,
+  type WhitespaceData,
+} from "lightweight-charts";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { rangeStart } from "../lib/format.js";
 import { useTheme } from "../lib/theme.js";
+import { ChartAttribution } from "./chartAttribution.js";
 
-echarts.use([
-  LineChart,
-  ScatterChart,
-  GridComponent,
-  TooltipComponent,
-  AxisPointerComponent,
-  DataZoomComponent,
-  MarkLineComponent,
-  TitleComponent,
-  CanvasRenderer,
-]);
+type Point = RotationView["points"][number];
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+function lineData(
+  points: readonly Point[],
+  pick: (point: Point) => number | null,
+): (LineData | WhitespaceData)[] {
+  return points.map((point) => {
+    const value = pick(point);
+    return value == null ? { time: point.date } : { time: point.date, value };
+  });
+}
+
+function formatNum(value: number | null, digits: number): string {
+  return value == null ? "—" : value.toFixed(digits);
+}
+
 export function RotationChart({ view, range }: { view: RotationView; range: RangeKey }) {
   const host = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
+  const [readout, setReadout] = useState("移动十字线同时查看四个窗格。");
   const start = rangeStart(view.asOf.slice(0, 10), range);
   const points = useMemo(
     () => view.points.filter((point) => (start ? point.date >= start : true)),
@@ -48,269 +54,256 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
   useEffect(() => {
     const el = host.current;
     if (!el || points.length === 0) return;
-    void theme;
-    const chart = echarts.init(el, undefined, { renderer: "canvas" });
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.documentElement.dataset.theme = theme;
+    const axis = cssVar("--qk-chart-axis");
     const text = cssVar("--qk-text-primary");
     const secondary = cssVar("--qk-text-secondary");
-    const axis = cssVar("--qk-chart-axis");
-    const grid = cssVar("--qk-chart-grid");
     const blue = cssVar("--qk-brand-accent");
     const red = cssVar("--qk-market-up");
-    const band = cssVar("--qk-brand-accent-muted");
-    const font = cssVar("--qk-font-sans");
-    const mono = cssVar("--qk-font-tabular");
-    const dates = points.map((point) => point.date);
-    const row = 190;
-    const step = 224;
-    const titles = ["累计收益", "相对强弱 R", "40日收益差", "RSI14"];
-
-    chart.setOption({
-      animation: false,
-      textStyle: { fontFamily: font, color: text },
-      axisPointer: { link: [{ xAxisIndex: "all" }], lineStyle: { type: "dashed" } },
-      title: titles.map((title, index) => ({
-        text: title,
-        top: index * step,
-        left: 8,
-        textStyle: { fontSize: 13, fontWeight: 600, color: text, fontFamily: font },
-      })),
-      tooltip: {
-        trigger: "axis",
-        backgroundColor: cssVar("--qk-chart-tooltip-bg"),
-        borderColor: cssVar("--qk-chart-tooltip-border"),
-        textStyle: { color: text, fontSize: 12, fontFamily: mono },
+    const chart = createChart(el, {
+      width: el.clientWidth,
+      height: el.clientHeight,
+      autoSize: false,
+      layout: {
+        background: { type: ColorType.Solid, color: "transparent" },
+        textColor: axis,
+        fontFamily: cssVar("--qk-font-tabular"),
+        attributionLogo: true,
       },
-      dataZoom: [{ type: "inside", xAxisIndex: [0, 1, 2, 3] }],
-      grid: [0, 1, 2, 3].map((index) => ({
-        left: 64,
-        right: 16,
-        top: 28 + index * step,
-        height: row,
-      })),
-      xAxis: [0, 1, 2, 3].map((index) => ({
-        type: "category",
-        data: dates,
-        gridIndex: index,
-        axisLabel: {
-          show: index === 3,
-          color: axis,
-          fontSize: 11,
-          fontFamily: mono,
-          hideOverlap: true,
-        },
-        axisLine: { lineStyle: { color: grid } },
-        splitLine: { show: false },
-      })),
-      yAxis: [
-        {
-          gridIndex: 0,
-          scale: true,
-          axisLabel: { color: axis, fontSize: 11, fontFamily: mono },
-          splitLine: { lineStyle: { color: grid } },
-        },
-        {
-          gridIndex: 1,
-          scale: true,
-          axisLabel: { color: axis, fontSize: 11, fontFamily: mono },
-          splitLine: { lineStyle: { color: grid } },
-        },
-        {
-          gridIndex: 2,
-          scale: true,
-          axisLabel: {
-            color: axis,
-            fontSize: 11,
-            fontFamily: mono,
-            formatter: (value: number) => `${(value * 100).toFixed(0)}%`,
-          },
-          splitLine: { lineStyle: { color: grid } },
-        },
-        {
-          gridIndex: 3,
-          min: 0,
-          max: 100,
-          axisLabel: { color: axis, fontSize: 11, fontFamily: mono },
-          splitLine: { lineStyle: { color: grid } },
-        },
-      ],
-      series: [
-        {
-          name: view.pair.aName,
-          type: "line",
-          xAxisIndex: 0,
-          yAxisIndex: 0,
-          data: points.map((point) => point.a),
-          showSymbol: false,
-          lineStyle: { width: 1.5, color: blue },
-          itemStyle: { color: blue },
-        },
-        {
-          name: view.pair.bName,
-          type: "line",
-          xAxisIndex: 0,
-          yAxisIndex: 0,
-          data: points.map((point) => point.b),
-          showSymbol: false,
-          lineStyle: { width: 1.25, type: "dashed", color: secondary },
-          itemStyle: { color: secondary },
-        },
-        {
-          name: "下轨",
-          type: "line",
-          xAxisIndex: 1,
-          yAxisIndex: 1,
-          stack: "band",
-          data: points.map((point) => point.lower),
-          showSymbol: false,
-          lineStyle: { opacity: 0 },
-          areaStyle: { opacity: 0 },
-          tooltip: { show: false },
-        },
-        {
-          name: "轨道",
-          type: "line",
-          xAxisIndex: 1,
-          yAxisIndex: 1,
-          stack: "band",
-          data: points.map((point) =>
-            point.upper == null || point.lower == null ? null : point.upper - point.lower,
-          ),
-          showSymbol: false,
-          lineStyle: { opacity: 0 },
-          areaStyle: { color: band, opacity: 0.9 },
-          tooltip: { show: false },
-        },
-        {
-          name: "R",
-          type: "line",
-          xAxisIndex: 1,
-          yAxisIndex: 1,
-          data: points.map((point) => point.r),
-          showSymbol: false,
-          z: 3,
-          lineStyle: { width: 1.5, color: blue },
-          itemStyle: { color: blue },
-        },
-        {
-          name: "MA242",
-          type: "line",
-          xAxisIndex: 1,
-          yAxisIndex: 1,
-          data: points.map((point) => point.ma),
-          showSymbol: false,
-          z: 3,
-          lineStyle: { width: 1.25, color: red },
-          itemStyle: { color: red },
-        },
-        {
-          name: "收益差",
-          type: "line",
-          xAxisIndex: 2,
-          yAxisIndex: 2,
-          data: points.map((point) => point.s),
-          showSymbol: false,
-          lineStyle: { width: 1.25, color: text },
-          itemStyle: { color: text },
-          markLine: {
-            silent: true,
-            symbol: "none",
-            lineStyle: { type: "dashed", color: axis },
-            data: [{ yAxis: 0 }],
-            label: { show: false },
-          },
-        },
-        {
-          name: "MA242(收益差)",
-          type: "line",
-          xAxisIndex: 2,
-          yAxisIndex: 2,
-          data: points.map((point) => point.sMa),
-          showSymbol: false,
-          lineStyle: { width: 1.25, type: "dashed", color: red },
-          itemStyle: { color: red },
-        },
-        {
-          name: "RSI14",
-          type: "line",
-          xAxisIndex: 3,
-          yAxisIndex: 3,
-          data: points.map((point) => point.rsi),
-          showSymbol: false,
-          lineStyle: { width: 1.5, color: cssVar("--qk-brand-primary") },
-          itemStyle: { color: cssVar("--qk-brand-primary") },
-        },
-        {
-          name: "MA242(RSI)",
-          type: "line",
-          xAxisIndex: 3,
-          yAxisIndex: 3,
-          data: points.map((point) => point.rsiMa),
-          showSymbol: false,
-          lineStyle: { width: 1.25, type: "dashed", color: red },
-          itemStyle: { color: red },
-        },
-        {
-          name: "轨道穿越",
-          type: "scatter",
-          xAxisIndex: 1,
-          yAxisIndex: 1,
-          z: 5,
-          data: markers
-            .filter((marker) => marker.kind === "band-above" || marker.kind === "band-below")
-            .map((marker) => ({
-              value: [marker.date, marker.value],
-              symbol: "triangle",
-              symbolRotate: marker.kind === "band-below" ? 180 : 0,
-              symbolSize: 9,
-              itemStyle: { color: marker.kind === "band-above" ? red : cssVar("--qk-market-down") },
-            })),
-        },
-        {
-          name: "均线穿零",
-          type: "scatter",
-          xAxisIndex: 2,
-          yAxisIndex: 2,
-          z: 5,
-          data: markers
-            .filter((marker) => marker.kind === "spread-up" || marker.kind === "spread-down")
-            .map((marker) => ({
-              value: [marker.date, marker.value],
-              symbol: "circle",
-              symbolSize: 8,
-              itemStyle: { color: red },
-            })),
-        },
-        {
-          name: "收益差极值",
-          type: "scatter",
-          xAxisIndex: 2,
-          yAxisIndex: 2,
-          z: 5,
-          data: markers
-            .filter((marker) => marker.kind === "spread-extreme")
-            .map((marker, index, all) => ({
-              value: [marker.date, marker.value],
-              symbol: "diamond",
-              symbolSize: 8,
-              label: {
-                show: index >= all.length - 3,
-                formatter: marker.label,
-                fontSize: 10,
-                color: secondary,
-                position: "top",
-              },
-              itemStyle: { color: cssVar("--qk-warning") },
-            })),
-        },
-      ],
+      grid: {
+        vertLines: { color: cssVar("--qk-chart-grid") },
+        horzLines: { color: cssVar("--qk-chart-grid") },
+      },
+      crosshair: {
+        vertLine: { color: cssVar("--qk-chart-crosshair"), style: LineStyle.Dashed },
+        horzLine: { color: cssVar("--qk-chart-crosshair"), style: LineStyle.Dashed },
+      },
+      rightPriceScale: { borderColor: cssVar("--qk-chart-grid") },
+      timeScale: { borderColor: cssVar("--qk-chart-grid") },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: false,
+      },
+      handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
+      kineticScroll: { touch: !reduce, mouse: false },
     });
-    const observer = new ResizeObserver(() => chart.resize());
+    const shared = { priceLineVisible: false, lastValueVisible: false, pointMarkersVisible: false };
+    chart
+      .addSeries(LineSeries, { ...shared, color: blue, lineWidth: 2 }, 0)
+      .setData(lineData(points, (point) => point.a));
+    chart
+      .addSeries(
+        LineSeries,
+        { ...shared, color: secondary, lineWidth: 1, lineStyle: LineStyle.Dashed },
+        0,
+      )
+      .setData(lineData(points, (point) => point.b));
+    chart
+      .addSeries(
+        LineSeries,
+        { ...shared, color: axis, lineWidth: 1, lineStyle: LineStyle.Dashed },
+        1,
+      )
+      .setData(lineData(points, (point) => point.lower));
+    chart
+      .addSeries(
+        LineSeries,
+        { ...shared, color: axis, lineWidth: 1, lineStyle: LineStyle.Dashed },
+        1,
+      )
+      .setData(lineData(points, (point) => point.upper));
+    const relative = chart.addSeries(LineSeries, { ...shared, color: blue, lineWidth: 2 }, 1);
+    relative.setData(lineData(points, (point) => point.r));
+    chart
+      .addSeries(LineSeries, { ...shared, color: red, lineWidth: 1 }, 1)
+      .setData(lineData(points, (point) => point.ma));
+    const spread = chart.addSeries(
+      LineSeries,
+      {
+        ...shared,
+        color: text,
+        lineWidth: 1,
+        priceFormat: {
+          type: "custom",
+          minMove: 0.0001,
+          formatter: (price: number) => `${(price * 100).toFixed(0)}%`,
+        },
+      },
+      2,
+    );
+    spread.setData(lineData(points, (point) => point.s));
+    spread.createPriceLine({
+      price: 0,
+      color: axis,
+      lineWidth: 1,
+      lineStyle: LineStyle.Dashed,
+      axisLabelVisible: false,
+      title: "",
+    });
+    chart
+      .addSeries(
+        LineSeries,
+        { ...shared, color: red, lineWidth: 1, lineStyle: LineStyle.Dashed },
+        2,
+      )
+      .setData(lineData(points, (point) => point.sMa));
+    const rsi = chart.addSeries(
+      LineSeries,
+      {
+        ...shared,
+        color: cssVar("--qk-brand-primary"),
+        lineWidth: 2,
+        autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
+      },
+      3,
+    );
+    rsi.setData(lineData(points, (point) => point.rsi));
+    chart
+      .addSeries(
+        LineSeries,
+        { ...shared, color: red, lineWidth: 1, lineStyle: LineStyle.Dashed },
+        3,
+      )
+      .setData(lineData(points, (point) => point.rsiMa));
+    const bandMarkers: SeriesMarker<string>[] = markers
+      .filter((marker) => marker.kind === "band-above" || marker.kind === "band-below")
+      .sort((left, right) => left.date.localeCompare(right.date))
+      .map((marker) => ({
+        time: marker.date,
+        position: marker.kind === "band-above" ? "aboveBar" : "belowBar",
+        shape: marker.kind === "band-above" ? "arrowUp" : "arrowDown",
+        color: marker.kind === "band-above" ? red : cssVar("--qk-market-down"),
+        text: marker.label,
+      }));
+    createSeriesMarkers(relative, bandMarkers);
+    const extremes = markers.filter((marker) => marker.kind === "spread-extreme");
+    const spreadMarkers: SeriesMarker<string>[] = markers
+      .filter(
+        (marker) =>
+          marker.kind === "spread-up" ||
+          marker.kind === "spread-down" ||
+          marker.kind === "spread-extreme",
+      )
+      .sort((left, right) => left.date.localeCompare(right.date))
+      .map((marker) => {
+        const extremeIndex = extremes.findIndex(
+          (item) => item.date === marker.date && item.label === marker.label,
+        );
+        const showLabel = marker.kind === "spread-extreme" && extremeIndex >= extremes.length - 3;
+        return {
+          time: marker.date,
+          position: "aboveBar" as const,
+          shape: marker.kind === "spread-extreme" ? "square" : "circle",
+          color: marker.kind === "spread-extreme" ? cssVar("--qk-warning") : red,
+          text: showLabel ? marker.label : undefined,
+          price: marker.value,
+        };
+      });
+    createSeriesMarkers(spread, spreadMarkers);
+    for (const pane of chart.panes()) pane.setStretchFactor(1);
+    requestAnimationFrame(() => {
+      if (!el.isConnected) return;
+      el.dataset.paneHeights = chart
+        .panes()
+        .map((pane) => pane.getHeight())
+        .join(",");
+    });
+    const onMove = (param: MouseEventParams) => {
+      const time = typeof param.time === "string" ? param.time : "";
+      const point = points.find((item) => item.date === time);
+      if (!point) {
+        setReadout("移动十字线同时查看四个窗格。");
+        return;
+      }
+      setReadout(
+        `${point.date} · 累计 ${view.pair.aName} ${formatNum(point.a, 3)} / ${view.pair.bName} ${formatNum(point.b, 3)} · R ${formatNum(point.r, 3)} 上轨 ${formatNum(point.upper, 3)} 下轨 ${formatNum(point.lower, 3)} · 收益差 ${point.s == null ? "—" : `${(point.s * 100).toFixed(2)}%`} · RSI ${formatNum(point.rsi, 1)}`,
+      );
+    };
+    chart.subscribeCrosshairMove(onMove);
+    const observer = new ResizeObserver(() => {
+      chart.applyOptions({ width: el.clientWidth, height: el.clientHeight });
+    });
     observer.observe(el);
     return () => {
+      chart.unsubscribeCrosshairMove(onMove);
       observer.disconnect();
-      chart.dispose();
+      chart.remove();
     };
   }, [points, markers, theme, view.pair.aName, view.pair.bName]);
 
-  return <div ref={host} className="rot-chart" role="img" aria-label="轮动三棱镜四图" />;
+  return (
+    <div>
+      <div className="legend">
+        <span>1 累计收益</span>
+        <span>2 相对强弱 R</span>
+        <span>3 40日收益差</span>
+        <span>4 RSI14</span>
+        <span>
+          <i className="sw" style={{ background: "var(--qk-brand-accent)" }} />
+          {view.pair.aName} / R
+        </span>
+        <span>
+          <i className="sw-dash" />
+          {view.pair.bName}
+        </span>
+        <span>▲▼ 轨道穿越</span>
+        <span>● 均线穿零</span>
+        <span>■ 收益差极值</span>
+      </div>
+      <p className="chart-gap">
+        轨道填充未提供。Lightweight Charts
+        不能在两条线之间铺面积，上轨和下轨以虚线保留。标记图形改为箭头、圆点和方块。
+      </p>
+      <p className="chart-readout" data-chart-readout="rotation">
+        {readout}
+      </p>
+      {points.length === 0 ? (
+        <div className="state">暂无轮动数据</div>
+      ) : (
+        <div
+          ref={host}
+          className="rot-chart"
+          role="img"
+          aria-label="轮动三棱镜四图"
+          data-points={points.length}
+          data-panes="4"
+        />
+      )}
+      <ChartAttribution />
+      <details className="data-fallback">
+        <summary>查看数据表</summary>
+        <div className="table-scroll">
+          <table className="qk">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>A</th>
+                <th>B</th>
+                <th>R</th>
+                <th>收益差</th>
+                <th>RSI14</th>
+              </tr>
+            </thead>
+            <tbody>
+              {points.slice(-8).map((point) => (
+                <tr key={point.date}>
+                  <td className="num">{point.date}</td>
+                  <td className="num">{formatNum(point.a, 3)}</td>
+                  <td className="num">{formatNum(point.b, 3)}</td>
+                  <td className="num">{formatNum(point.r, 3)}</td>
+                  <td className="num">
+                    {point.s == null ? "—" : `${(point.s * 100).toFixed(2)}%`}
+                  </td>
+                  <td className="num">{formatNum(point.rsi, 1)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  );
 }

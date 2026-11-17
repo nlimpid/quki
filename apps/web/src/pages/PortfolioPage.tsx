@@ -1,4 +1,5 @@
 import { portfolioDividendSummary, type HoldingsState } from "@quki/analytics";
+import { Button, Drawer, Input, Label, SearchField } from "@heroui/react";
 import type { StockListItem } from "@quki/types";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
@@ -101,13 +102,9 @@ export function PortfolioPage() {
           </h1>
           <p className="page-sub">{portfolioSubtitle(phase)}</p>
         </div>
-        <button
-          type="button"
-          className="btn primary"
-          onClick={() => setDrawer({ code: "", shares: "" })}
-        >
+        <Button variant="primary" onPress={() => setDrawer({ code: "", shares: "" })}>
           ＋ 添加股票
-        </button>
+        </Button>
       </div>
       {storageError ? <p className="yield-note">{storageError}</p> : null}
       {quoteError ? <p className="yield-note">{quoteError}</p> : null}
@@ -115,13 +112,9 @@ export function PortfolioPage() {
         <section className="div-card hero">
           <h2 style={{ margin: "0 0 8px" }}>尚未添加持仓</h2>
           <p className="page-sub">添加股票后，这里显示平均股息率和预估全年分红。</p>
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => setDrawer({ code: "", shares: "" })}
-          >
+          <Button variant="primary" onPress={() => setDrawer({ code: "", shares: "" })}>
             添加股票
-          </button>
+          </Button>
         </section>
       ) : (
         <>
@@ -263,84 +256,88 @@ function HoldingDrawer({
   }, [query, locked]);
   const visibleHits = !locked && query.length > 0 ? hits : [];
 
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+  function save() {
+    const chosen = locked ? initialCode : code;
+    try {
+      onSave(chosen, Number(shares));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "无法保存");
     }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }
 
   return (
-    <div className="drawer-back" onClick={onClose}>
-      <div
-        className="drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-label={locked ? "编辑持仓" : "添加股票"}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h2 style={{ marginTop: 0 }}>{locked ? "编辑持仓" : "添加股票"}</h2>
-        {locked ? (
-          <p className="mono">{initialCode}</p>
-        ) : (
-          <>
-            <input
-              type="search"
-              placeholder="搜索代码 / 名称"
-              aria-label="搜索代码 / 名称"
-              value={q}
-              onChange={(event) => setQ(event.target.value)}
-            />
-            {visibleHits.map((hit) => (
-              <button
-                key={hit.code}
-                type="button"
-                className="search-hit"
-                onClick={() => {
-                  setCode(hit.code);
-                  setName(hit.name);
-                }}
-              >
-                <span>{hit.name}</span>
-                <span className="mono subdued">{hit.code}</span>
-              </button>
-            ))}
-            {code ? (
-              <p>
-                已选 {name} <span className="mono">{code}</span>
+    <Drawer
+      isOpen
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <Drawer.Backdrop>
+        <Drawer.Content placement="right">
+          <Drawer.Dialog aria-label={locked ? "编辑持仓" : "添加股票"}>
+            <Drawer.Header>
+              <Drawer.Heading>{locked ? "编辑持仓" : "添加股票"}</Drawer.Heading>
+              <Drawer.CloseTrigger />
+            </Drawer.Header>
+            <Drawer.Body>
+              {locked ? (
+                <p className="mono">{initialCode}</p>
+              ) : (
+                <>
+                  <SearchField aria-label="搜索代码 / 名称" value={q} onChange={setQ}>
+                    <SearchField.Group>
+                      <SearchField.SearchIcon />
+                      <SearchField.Input placeholder="搜索代码 / 名称" autoFocus />
+                      <SearchField.ClearButton />
+                    </SearchField.Group>
+                  </SearchField>
+                  {visibleHits.map((hit) => (
+                    <Button
+                      key={hit.code}
+                      variant="ghost"
+                      fullWidth
+                      onPress={() => {
+                        setCode(hit.code);
+                        setName(hit.name);
+                      }}
+                    >
+                      <span>{hit.name}</span>
+                      <span className="mono subdued">{hit.code}</span>
+                    </Button>
+                  ))}
+                  {code ? (
+                    <p>
+                      已选 {name} <span className="mono">{code}</span>
+                    </p>
+                  ) : null}
+                </>
+              )}
+              <Label style={{ display: "block", margin: "16px 0 8px" }}>
+                股数
+                <Input
+                  fullWidth
+                  inputMode="numeric"
+                  value={shares}
+                  onChange={(event) => setShares(event.target.value)}
+                  aria-label="股数"
+                />
+              </Label>
+              {error ? <p className="yield-note">{error}</p> : null}
+              <p className="yield-note">
+                数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传或同步持仓。
               </p>
-            ) : null}
-          </>
-        )}
-        <label style={{ display: "block", margin: "16px 0 8px" }}>
-          股数
-          <input
-            inputMode="numeric"
-            value={shares}
-            onChange={(event) => setShares(event.target.value)}
-            aria-label="股数"
-          />
-        </label>
-        {error ? <p className="yield-note">{error}</p> : null}
-        <button
-          type="button"
-          className="btn primary"
-          onClick={() => {
-            const chosen = locked ? initialCode : code;
-            try {
-              onSave(chosen, Number(shares));
-            } catch (reason) {
-              setError(reason instanceof Error ? reason.message : "无法保存");
-            }
-          }}
-        >
-          保存到本机
-        </button>
-        <p className="yield-note">
-          数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传或同步持仓。
-        </p>
-      </div>
-    </div>
+            </Drawer.Body>
+            <Drawer.Footer>
+              <Button variant="secondary" onPress={onClose}>
+                取消
+              </Button>
+              <Button variant="primary" onPress={save}>
+                保存到本机
+              </Button>
+            </Drawer.Footer>
+          </Drawer.Dialog>
+        </Drawer.Content>
+      </Drawer.Backdrop>
+    </Drawer>
   );
 }

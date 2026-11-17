@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@heroui/styles";
 @import "../../../design/tokens.css";
 @import "./fonts.css";
 
@@ -233,6 +234,8 @@ a {
   border: 1px solid var(--qk-border-default);
   border-radius: var(--qk-radius-lg);
   box-shadow: var(--qk-shadow-sm);
+  min-width: 0;
+  max-width: 100%;
 }
 .card-hd {
   display: flex;
@@ -312,12 +315,33 @@ a {
 .chart-body {
   padding: 16px 16px 20px;
 }
-.chart-box {
+.chart-box,
+.rot-chart {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+.chart-box {
   height: var(--qk-chart-h);
 }
 .chart-box.with-volume {
   height: calc(var(--qk-chart-h) + var(--qk-volume-h));
+}
+.chart-readout,
+.chart-attribution,
+.chart-gap {
+  margin: 0 16px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--qk-text-secondary);
+  overflow-wrap: anywhere;
+}
+.chart-attribution a {
+  color: var(--qk-brand-accent);
+}
+.chart-gap {
+  color: var(--qk-text-tertiary);
 }
 
 .pos {
@@ -460,6 +484,7 @@ a {
 
 .table-scroll {
   overflow-x: auto;
+  max-width: 100%;
 }
 table.qk {
   width: 100%;
@@ -652,6 +677,15 @@ table.qk tr.unconfirmed td:first-child {
 
 .data-fallback {
   padding: 0 20px 16px;
+  max-width: 100%;
+  min-width: 0;
+}
+.data-fallback:not([open]) > :not(summary) {
+  display: none;
+}
+.data-fallback .table__scroll-container {
+  max-width: 100%;
+  overflow-x: auto;
 }
 .data-fallback summary {
   cursor: pointer;
@@ -668,7 +702,7 @@ table.qk tr.unconfirmed td:first-child {
     padding-right: 20px;
   }
   .layout-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .chart-card,
   .rail,
