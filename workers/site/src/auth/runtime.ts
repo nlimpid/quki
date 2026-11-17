@@ -1,4 +1,10 @@
-import { createAuthStore, type AuthStore, type SqlConn } from "@quki/db";
+import {
+  createAuthStore,
+  createHoldingStore,
+  type AuthStore,
+  type HoldingStore,
+  type SqlConn,
+} from "@quki/db";
 import type { AuthUnavailableReason } from "@quki/types";
 
 import {
@@ -13,6 +19,8 @@ import {
 export type AuthRuntime = {
   now: () => Date;
   store: AuthStore | null;
+  /** Null until a database is configured. A missing auth_holdings table stays a 503. */
+  holdings: HoldingStore | null;
   oidc: OidcClient | null;
   unavailableReason: AuthUnavailableReason | null;
   /** Exact request origins allowed to start login and receive the OAuth callback. */
@@ -23,6 +31,7 @@ export function unavailableAuth(): AuthRuntime {
   return {
     now: () => new Date(),
     store: null,
+    holdings: null,
     oidc: null,
     unavailableReason: "auth_not_configured",
     trustedOrigins: PRODUCTION_AUTH_ORIGINS,
@@ -40,6 +49,7 @@ export function authRuntimeFromEnv(
     return {
       now: () => new Date(),
       store: null,
+      holdings: null,
       oidc: null,
       unavailableReason: !oidcEnv.ok ? oidcEnv.reason : "storage_unconfigured",
       trustedOrigins: trustedAuthOrigins(env),
@@ -48,6 +58,7 @@ export function authRuntimeFromEnv(
   return {
     now: () => new Date(),
     store: createAuthStore(() => connect(databaseUrl)),
+    holdings: createHoldingStore(() => connect(databaseUrl)),
     oidc: createClient(oidcEnv.config),
     unavailableReason: null,
     trustedOrigins: trustedAuthOrigins(env),

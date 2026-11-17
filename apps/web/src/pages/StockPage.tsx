@@ -154,7 +154,6 @@ export function StockPage() {
                       {
                         code: company.code,
                         shares: Number(shares),
-                        updatedAt: new Date().toISOString(),
                         expectedVersion: null,
                       },
                       phase.csrfToken,

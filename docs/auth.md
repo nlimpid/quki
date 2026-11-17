@@ -38,7 +38,7 @@ Names only. Do not create the provider account in this change.
    - `AUTH_OIDC_CLIENT_ID`
    - `AUTH_OIDC_CLIENT_SECRET`
    - `AUTH_OIDC_SCOPES` — omit it, or set `openid profile`. `email`, `phone`, or `openid` alone keep login unavailable.
-4. Apply `db/migrations/0006_auth.sql` with `pnpm migrate` after review. It is not applied here. It does not modify dividend tables and does not depend on `0005_dividend_audit.sql`.
+4. Do not run `pnpm migrate` for this review. That command applies every unapplied `db/migrations/*.sql` in filename order, so it would apply `0006_auth.sql` and the candidate `0008_auth_holdings.sql` together. `0006` is already in the tree and was not checked against production here. The crawler `/admin/migrate` list stays `0001` through `0005` and does not gain `0006` or `0008`. The unmerged holdings branch already uses `0007_holdings.sql` for `auth_user_books`; the candidate file is `0008_auth_holdings.sql` so it does not replace that file or any merged migration.
 5. Choose the provider, write the real consent sentence, then set `LOGIN_UI_ENABLED` and add the unbranded 继续登录 control that posts to `POST /api/auth/login`. Do not flip the flag while the consent text is still missing. `login.ready: true` alone does not show that button.
 6. Local `http://127.0.0.1` will not keep the session cookie, because `Secure` is always set. Exercise login on HTTPS.
 

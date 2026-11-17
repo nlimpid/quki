@@ -74,6 +74,7 @@ describe("auth security regressions", () => {
     const auth: AuthRuntime = {
       now: () => new Date("2026-11-16T00:00:00.000Z"),
       store: createAuthStore(() => createAuthMemoryConn()),
+      holdings: null,
       oidc,
       unavailableReason: null,
       trustedOrigins: PRODUCTION_AUTH_ORIGINS,
@@ -156,6 +157,7 @@ describe("auth security regressions", () => {
     const auth: AuthRuntime = {
       now: () => new Date("2026-11-16T00:00:00.000Z"),
       store: createAuthStore(() => createAuthMemoryConn()),
+      holdings: null,
       oidc,
       unavailableReason: null,
       trustedOrigins: ["https://quki.cc"],
@@ -202,6 +204,7 @@ describe("auth security regressions", () => {
     const auth: AuthRuntime = {
       now: () => new Date("2026-11-16T00:00:00.000Z"),
       store: createAuthStore(() => createAuthMemoryConn()),
+      holdings: null,
       oidc: {
         async authorizationUrl(input) {
           const url = new URL("https://idp.example/authorize");

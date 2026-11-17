@@ -1,4 +1,17 @@
-export type AccountHolding = { code: string; shares: number; updatedAt: string };
+export type AccountHolding = {
+  code: string;
+  shares: number;
+  updatedAt: string;
+  version: string;
+};
+
+/** Account rows leave the screen when the session ends. The browser book is a different value. */
+export function visibleAccountHoldings(
+  signedIn: boolean,
+  items: AccountHolding[] | null,
+): AccountHolding[] | null {
+  return signedIn ? items : null;
+}
 
 export class AccountHoldingsError extends Error {
   constructor(message: string) {
@@ -17,11 +30,28 @@ export async function readAccountHoldings(): Promise<AccountHolding[]> {
   if (!response.ok) throw new AccountHoldingsError(await readError(response));
   const body = (await response.json()) as { items?: unknown };
   if (!Array.isArray(body.items)) throw new AccountHoldingsError("账户持仓没有保存");
-  return body.items as AccountHolding[];
+  return body.items.map((item) => {
+    if (!item || typeof item !== "object") throw new AccountHoldingsError("账户持仓没有保存");
+    const row = item as Record<string, unknown>;
+    if (
+      typeof row.code !== "string" ||
+      typeof row.shares !== "number" ||
+      typeof row.updatedAt !== "string" ||
+      typeof row.version !== "string"
+    ) {
+      throw new AccountHoldingsError("账户持仓没有保存");
+    }
+    return {
+      code: row.code,
+      shares: row.shares,
+      updatedAt: row.updatedAt,
+      version: row.version,
+    };
+  });
 }
 
 export async function writeAccountHoldings(
-  item: AccountHolding & { expectedVersion: number | null },
+  item: { code: string; shares: number; expectedVersion: string | null },
   csrfToken: string,
 ): Promise<void> {
   const response = await fetch("/api/holdings", {
@@ -40,7 +70,7 @@ export async function writeAccountHoldings(
 
 export async function deleteAccountHolding(
   code: string,
-  expectedVersion: number,
+  expectedVersion: string,
   csrfToken: string,
 ): Promise<void> {
   const response = await fetch(`/api/holdings/${encodeURIComponent(code)}`, {

@@ -1,4 +1,5 @@
-import { createAuthStore, type AuthStore } from "@quki/db";
+import { createAuthStore, createHoldingStore, type AuthStore } from "@quki/db";
+import { createCandidateHoldingMemoryConn } from "../../../../packages/db/src/holdingMemory.js";
 import { createAuthMemoryConn } from "../../../../packages/db/src/authMemory.js";
 import { PHASE1_INSTRUMENTS } from "@quki/types";
 import { readFileSync } from "node:fs";
@@ -69,6 +70,7 @@ function runtime(now = new Date("2026-11-16T00:00:00.000Z")) {
   const auth: AuthRuntime = {
     now: () => clock,
     store: createAuthStore(() => memory),
+    holdings: null,
     oidc: fakeOidc(),
     unavailableReason: null,
     trustedOrigins: testOrigins,
@@ -446,6 +448,7 @@ describe("auth routes", () => {
     const broken = createApp(market(), {
       now: () => new Date(),
       store: throwing,
+      holdings: null,
       oidc: fakeOidc(),
       unavailableReason: null,
       trustedOrigins: testOrigins,
@@ -614,5 +617,91 @@ describe("auth routes", () => {
     expect(stock).not.toContain("writeHoldings");
     expect(portfolio).toContain("账户持仓");
     expect(portfolio).toContain("此浏览器里的旧持仓");
+    expect(portfolio).toContain("visibleAccountHoldings");
+  });
+
+  it("uses a labelled fixture session and an in-process fake database, not Google or TiDB", async () => {
+    const memory = createCandidateHoldingMemoryConn(["600519"]);
+    const versions = [
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "cccccccccccccccccccccccccccccccc",
+    ];
+    let index = 0;
+    const app = createApp(market(), {
+      now: () => new Date("2026-11-16T00:00:00.000Z"),
+      store: createAuthStore(() => memory),
+      holdings: createHoldingStore(() => memory, {
+        newVersion: () => versions[index++] ?? "dddddddddddddddddddddddddddddddd",
+      }),
+      oidc: fakeOidc(),
+      unavailableReason: null,
+      trustedOrigins: testOrigins,
+    });
+    const { callback } = await login(app, { sub: "person-a", name: "样例夹具" });
+    if (!callback) throw new Error("missing callback");
+    expect(callback.headers.get("location")).not.toContain("accounts.google.com");
+    const sessionCookie = cookieValue(callback, "qk_session");
+    const session = await app.request(`${origin}/api/auth/session`, {
+      headers: { cookie: `qk_session=${sessionCookie}` },
+    });
+    const csrf = ((await session.json()) as { csrfToken: string }).csrfToken;
+    const headers = {
+      origin,
+      cookie: `qk_session=${sessionCookie}`,
+      "content-type": "application/json",
+      "x-csrf-token": csrf,
+    };
+    const created = await app.request(`${origin}/api/holdings`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        csrf,
+        code: "600519",
+        shares: 100,
+        expectedVersion: null,
+        userId: "other",
+      }),
+    });
+    expect(created.status).toBe(200);
+    const row = (await created.json()) as { version: string; shares: number };
+    expect(row.version).toBe("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    const unknown = await app.request(`${origin}/api/holdings`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ csrf, code: "000001", shares: 100, expectedVersion: null }),
+    });
+    expect(unknown.status).toBe(404);
+    const stale = await app.request(`${origin}/api/holdings/600519`, {
+      method: "DELETE",
+      headers,
+      body: JSON.stringify({ csrf, expectedVersion: row.version }),
+    });
+    expect(stale.status).toBe(204);
+    const again = await app.request(`${origin}/api/holdings`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ csrf, code: "600519", shares: 40, expectedVersion: null }),
+    });
+    expect(again.status).toBe(200);
+    const resurrect = await app.request(`${origin}/api/holdings`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ csrf, code: "600519", shares: 9, expectedVersion: row.version }),
+    });
+    expect(resurrect.status).toBe(409);
+    const mine = await app.request(`${origin}/api/holdings`, {
+      headers: { cookie: `qk_session=${sessionCookie}` },
+    });
+    expect(await mine.json()).toEqual({
+      items: [
+        {
+          code: "600519",
+          shares: 40,
+          version: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          updatedAt: "2026-11-16 00:00:00.000",
+        },
+      ],
+    });
   });
 });

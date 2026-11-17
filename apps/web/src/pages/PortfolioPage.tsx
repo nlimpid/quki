@@ -9,6 +9,7 @@ import { usePageTitle } from "../lib/pageTitle.js";
 import { portfolioSubtitle } from "../lib/authState.js";
 import {
   readAccountHoldings,
+  visibleAccountHoldings,
   writeAccountHoldings,
   type AccountHolding,
 } from "../lib/accountHoldings.js";
@@ -64,6 +65,12 @@ export function PortfolioPage() {
   const [accountItems, setAccountItems] = useState<AccountHolding[] | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
   const { phase, retry } = useAuth();
+  const signedIn = phase.kind === "authenticated";
+  if (!signedIn && (accountItems != null || accountError != null)) {
+    setAccountItems(null);
+    setAccountError(null);
+  }
+  const shownAccount = visibleAccountHoldings(signedIn, accountItems);
   const { notice, request } = useHoldingIntent();
   const [params, setParams] = useSearchParams();
   usePageTitle("我的持仓 · quki");
@@ -180,19 +187,19 @@ export function PortfolioPage() {
           ) : null}
         </p>
       ) : null}
-      {phase.kind === "authenticated" ? (
+      {signedIn ? (
         <section className="div-card" aria-label="账户持仓">
           <h2 style={{ margin: "0 0 8px" }}>账户持仓</h2>
           {accountError ? <p className="page-sub">{accountError}</p> : null}
-          {!accountError && accountItems == null ? (
+          {!accountError && shownAccount == null ? (
             <p className="page-sub">正在读取账户持仓…</p>
           ) : null}
-          {!accountError && accountItems?.length === 0 ? (
+          {!accountError && shownAccount?.length === 0 ? (
             <p className="page-sub">账户里还没有持仓。</p>
           ) : null}
-          {!accountError && accountItems && accountItems.length > 0 ? (
+          {!accountError && shownAccount && shownAccount.length > 0 ? (
             <ul>
-              {accountItems.map((item) => (
+              {shownAccount.map((item) => (
                 <li key={item.code}>
                   <span className="mono">{item.code}</span> · {formatShares(item.shares)} 股
                 </li>
@@ -336,7 +343,7 @@ export function PortfolioPage() {
             if (!request("/portfolio")) return;
             if (phase.kind !== "authenticated") return;
             void writeAccountHoldings(
-              { code, shares, updatedAt: new Date().toISOString(), expectedVersion: null },
+              { code, shares, expectedVersion: null },
               phase.csrfToken,
             )
               .then(() => closeDrawer())
