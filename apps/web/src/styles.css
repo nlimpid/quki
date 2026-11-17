@@ -871,7 +871,27 @@ table.qk tr.unconfirmed td:first-child {
     height: 760px;
   }
   .app-header {
-    padding: 0 16px;
+    height: auto;
+    min-height: var(--qk-header-h);
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 8px 16px 4px;
+  }
+  .header-left {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .header-right {
+    position: absolute;
+    top: 8px;
+    right: 16px;
+  }
+  .main-nav {
+    flex-basis: 100%;
+    margin-left: 0;
+    flex-wrap: wrap;
+    overflow: visible;
+    gap: 0 16px;
   }
   .brand-sub {
     display: none;
@@ -879,13 +899,9 @@ table.qk tr.unconfirmed td:first-child {
   .brand-name {
     font-size: 16px;
   }
-  .main-nav {
-    margin-left: 16px;
-    gap: 16px;
-  }
   .main-nav a {
     font-size: 15px;
-    padding: 14px 0;
+    padding: 8px 0;
   }
   .index-head {
     flex-direction: column;
