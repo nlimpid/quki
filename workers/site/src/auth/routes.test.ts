@@ -1,4 +1,5 @@
-import { createAuthStore, createHoldingStore, type AuthStore } from "@quki/db";
+import { createAuthStore, createHoldingStore, createIdentityStore, type AuthStore } from "@quki/db";
+import { createIdentityMemoryConn } from "../../../../packages/db/src/identityMemory.js";
 import { createCandidateHoldingMemoryConn } from "../../../../packages/db/src/holdingMemory.js";
 import { createAuthMemoryConn } from "../../../../packages/db/src/authMemory.js";
 import { PHASE1_INSTRUMENTS } from "@quki/types";
@@ -6,6 +7,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { createApp, type MarketSource } from "../app.js";
+import { clearClerkJwksCache } from "./clerkVerify.js";
+import { fixtureKey, signSessionToken } from "./clerkTestToken.js";
 import type { OidcClient } from "./oidc.js";
 import { readOidcEnv } from "./oidc.js";
 import { authRuntimeFromEnv, type AuthRuntime } from "./runtime.js";
@@ -71,6 +74,8 @@ function runtime(now = new Date("2026-11-16T00:00:00.000Z")) {
     now: () => clock,
     store: createAuthStore(() => memory),
     holdings: null,
+    clerk: null,
+    identities: null,
     oidc: fakeOidc(),
     unavailableReason: null,
     trustedOrigins: testOrigins,
@@ -449,6 +454,8 @@ describe("auth routes", () => {
       now: () => new Date(),
       store: throwing,
       holdings: null,
+      clerk: null,
+      identities: null,
       oidc: fakeOidc(),
       unavailableReason: null,
       trustedOrigins: testOrigins,
@@ -547,52 +554,65 @@ describe("auth routes", () => {
       headers: { origin },
     });
     expect(anon.status).toBe(401);
-    const { callback } = await login(app, { sub: "person-a", name: "林" });
-    if (!callback) throw new Error("missing callback");
-    const sessionCookie = cookieValue(callback, "qk_session");
-    const session = await app.request(`${origin}/api/auth/session`, {
-      headers: { cookie: `qk_session=${sessionCookie}` },
-    });
-    const csrf = ((await session.json()) as { csrfToken: string }).csrfToken;
-    const denied = await app.request(`${origin}/api/holdings`, {
-      method: "PUT",
-      headers: {
-        origin,
-        cookie: `qk_session=${sessionCookie}; qk_csrf=${csrf}`,
-        "content-type": "application/json",
-        "x-csrf-token": csrf,
+    clearClerkJwksCache();
+    const key = fixtureKey();
+    const identities = createIdentityMemoryConn();
+    const clerkApp = createApp(market(), {
+      now: () => new Date("2026-11-16T00:00:00.000Z"),
+      store: null,
+      holdings: null,
+      clerk: {
+        issuer: "https://trusted.example",
+        authorizedParties: ["https://quki.cc"],
+        fetchJwks: async () => new Response(JSON.stringify(key.jwks), { status: 200 }),
       },
-      body: JSON.stringify({ csrf, code: "000001", shares: 100, expectedVersion: null }),
+      identities: createIdentityStore(() => identities),
+      oidc: null,
+      unavailableReason: null,
+      trustedOrigins: testOrigins,
+    });
+    const token = signSessionToken(key.privateKey, {
+      iss: "https://trusted.example",
+      sub: "user_fixture_subject",
+      azp: "https://quki.cc",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      iat: Math.floor(Date.now() / 1000),
+    });
+    const headers = {
+      origin,
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    };
+    const cookieOnly = await clerkApp.request(`${origin}/api/holdings`, {
+      method: "PUT",
+      headers: { origin, cookie: "qk_session=not-a-bearer" },
+      body: JSON.stringify({ code: "000001", shares: 100, expectedVersion: null }),
+    });
+    expect(cookieOnly.status).toBe(401);
+    const denied = await clerkApp.request(`${origin}/api/holdings`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ code: "000001", shares: 100, expectedVersion: null }),
     });
     expect(denied.status).toBe(503);
     expect(await denied.json()).toEqual({
       error: "holdings_unavailable",
       message: "账户持仓尚未开通，没有写入任何持仓。",
     });
-    const replaced = await app.request(`${origin}/api/holdings`, {
+    const replaced = await clerkApp.request(`${origin}/api/holdings`, {
       method: "PUT",
-      headers: {
-        origin,
-        cookie: `qk_session=${sessionCookie}`,
-        "content-type": "application/json",
-        "x-csrf-token": csrf,
-      },
-      body: JSON.stringify({ csrf, items: [{ code: "000001", shares: 100 }] }),
+      headers,
+      body: JSON.stringify({ items: [{ code: "000001", shares: 100 }] }),
     });
     expect(replaced.status).toBe(400);
-    const missingVersion = await app.request(`${origin}/api/holdings/000001`, {
+    const missingVersion = await clerkApp.request(`${origin}/api/holdings/000001`, {
       method: "DELETE",
-      headers: {
-        origin,
-        cookie: `qk_session=${sessionCookie}`,
-        "content-type": "application/json",
-        "x-csrf-token": csrf,
-      },
-      body: JSON.stringify({ csrf, expectedVersion: null }),
+      headers,
+      body: JSON.stringify({ expectedVersion: null }),
     });
     expect(missingVersion.status).toBe(400);
-    const account = await app.request(`${origin}/api/holdings`, {
-      headers: { cookie: `qk_session=${sessionCookie}` },
+    const account = await clerkApp.request(`${origin}/api/holdings`, {
+      headers: { authorization: headers.authorization },
     });
     expect(account.status).toBe(503);
     expect(await account.json()).toEqual({
@@ -628,39 +648,45 @@ describe("auth routes", () => {
       "cccccccccccccccccccccccccccccccc",
     ];
     let index = 0;
+    clearClerkJwksCache();
+    const key = fixtureKey();
+    const identities = createIdentityMemoryConn();
     const app = createApp(market(), {
       now: () => new Date("2026-11-16T00:00:00.000Z"),
-      store: createAuthStore(() => memory),
+      store: null,
       holdings: createHoldingStore(() => memory, {
         newVersion: () => versions[index++] ?? "dddddddddddddddddddddddddddddddd",
       }),
-      oidc: fakeOidc(),
+      clerk: {
+        issuer: "https://trusted.example",
+        authorizedParties: ["https://quki.cc"],
+        fetchJwks: async () => new Response(JSON.stringify(key.jwks), { status: 200 }),
+      },
+      identities: createIdentityStore(() => identities),
+      oidc: null,
       unavailableReason: null,
       trustedOrigins: testOrigins,
     });
-    const { callback } = await login(app, { sub: "person-a", name: "样例夹具" });
-    if (!callback) throw new Error("missing callback");
-    expect(callback.headers.get("location")).not.toContain("accounts.google.com");
-    const sessionCookie = cookieValue(callback, "qk_session");
-    const session = await app.request(`${origin}/api/auth/session`, {
-      headers: { cookie: `qk_session=${sessionCookie}` },
+    const token = signSessionToken(key.privateKey, {
+      iss: "https://trusted.example",
+      sub: "user_fixture_not_google",
+      azp: "https://quki.cc",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      iat: Math.floor(Date.now() / 1000),
     });
-    const csrf = ((await session.json()) as { csrfToken: string }).csrfToken;
     const headers = {
       origin,
-      cookie: `qk_session=${sessionCookie}`,
+      authorization: `Bearer ${token}`,
       "content-type": "application/json",
-      "x-csrf-token": csrf,
     };
     const created = await app.request(`${origin}/api/holdings`, {
       method: "PUT",
       headers,
       body: JSON.stringify({
-        csrf,
         code: "600519",
         shares: 100,
         expectedVersion: null,
-        userId: "other",
+        userId: "other-ignored",
       }),
     });
     expect(created.status).toBe(200);
@@ -669,29 +695,29 @@ describe("auth routes", () => {
     const unknown = await app.request(`${origin}/api/holdings`, {
       method: "PUT",
       headers,
-      body: JSON.stringify({ csrf, code: "000001", shares: 100, expectedVersion: null }),
+      body: JSON.stringify({ code: "000001", shares: 100, expectedVersion: null }),
     });
     expect(unknown.status).toBe(404);
     const stale = await app.request(`${origin}/api/holdings/600519`, {
       method: "DELETE",
       headers,
-      body: JSON.stringify({ csrf, expectedVersion: row.version }),
+      body: JSON.stringify({ expectedVersion: row.version }),
     });
     expect(stale.status).toBe(204);
     const again = await app.request(`${origin}/api/holdings`, {
       method: "PUT",
       headers,
-      body: JSON.stringify({ csrf, code: "600519", shares: 40, expectedVersion: null }),
+      body: JSON.stringify({ code: "600519", shares: 40, expectedVersion: null }),
     });
     expect(again.status).toBe(200);
     const resurrect = await app.request(`${origin}/api/holdings`, {
       method: "PUT",
       headers,
-      body: JSON.stringify({ csrf, code: "600519", shares: 9, expectedVersion: row.version }),
+      body: JSON.stringify({ code: "600519", shares: 9, expectedVersion: row.version }),
     });
     expect(resurrect.status).toBe(409);
     const mine = await app.request(`${origin}/api/holdings`, {
-      headers: { cookie: `qk_session=${sessionCookie}` },
+      headers: { authorization: headers.authorization },
     });
     expect(await mine.json()).toEqual({
       items: [

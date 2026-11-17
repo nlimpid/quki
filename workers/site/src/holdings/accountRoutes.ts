@@ -1,13 +1,13 @@
 import {
   HoldingTableMissing,
+  IdentityTableMissing,
   validHoldingShares,
   validHoldingVersion,
   type HoldingStore,
 } from "@quki/db";
 import type { Context, Hono } from "hono";
 
-import { readCookie, SESSION_COOKIE } from "../auth/cookies.js";
-import { secretsEqual, sha256Hex } from "../auth/crypto.js";
+import { bearerFromAuthorization, verifyClerkSessionToken } from "../auth/clerkVerify.js";
 import type { AuthRuntime } from "../auth/runtime.js";
 
 const UNAVAILABLE = {
@@ -45,20 +45,18 @@ async function handle(c: Context, auth: AuthRuntime, pathCode: string | null): P
   if (c.req.method !== "GET" && !sameOrigin(c.req.raw)) {
     return c.json({ error: "forbidden", message: "请求来源不被接受" }, 403);
   }
-  const token = readCookie(c, SESSION_COOKIE);
-  if (!token || !auth.store) return c.json({ error: "unauthorized", message: "需要登录" }, 401);
+  const bearer = bearerFromAuthorization(c.req.header("authorization"));
+  if (!bearer) return c.json({ error: "unauthorized", message: "需要登录" }, 401);
+  if (!auth.clerk || !auth.identities) {
+    return c.json({ error: "auth_unavailable", message: "登录暂不可用" }, 503);
+  }
+  const verified = await verifyClerkSessionToken(bearer, auth.clerk);
+  if (!verified.ok) return c.json({ error: "unauthorized", message: "需要登录" }, 401);
   let userId = "";
   let fields: Record<string, unknown> | null = null;
   try {
-    const lookup = await auth.store.findSession(await sha256Hex(token), auth.now());
-    if (lookup.state !== "valid")
-      return c.json({ error: "unauthorized", message: "需要登录" }, 401);
-    userId = lookup.user.id;
+    userId = await auth.identities.resolve(verified.issuer, verified.subject, auth.now());
     if (c.req.method !== "GET") {
-      const header = c.req.header("x-csrf-token") ?? "";
-      if (!header || !(await secretsEqual(header, lookup.csrfToken))) {
-        return c.json({ error: "csrf", message: "请求未通过安全校验" }, 403);
-      }
       fields = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
       if (!fields || Array.isArray(fields) || "items" in fields) {
         return c.json({ error: "invalid_holding", message: "不能用整表替换账户持仓。" }, 400);
@@ -75,7 +73,7 @@ async function handle(c: Context, auth: AuthRuntime, pathCode: string | null): P
       }
       if (c.req.method === "PUT") {
         const code = pathCode ?? fields.code;
-        if (pathCode && fields.code !== pathCode) {
+        if (pathCode && fields.code != null && fields.code !== pathCode) {
           return c.json({ error: "invalid_holding", message: "股票代码不正确。" }, 400);
         }
         if (typeof code !== "string" || !/^\d{6}$/.test(code)) {
@@ -92,7 +90,8 @@ async function handle(c: Context, auth: AuthRuntime, pathCode: string | null): P
         return c.json({ error: "invalid_holding", message: "股票代码不正确。" }, 400);
       }
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof IdentityTableMissing) return c.json(UNAVAILABLE, 503);
     return c.json({ error: "auth_unavailable", message: "登录暂不可用" }, 503);
   }
   if (!auth.holdings) return c.json(UNAVAILABLE, 503);

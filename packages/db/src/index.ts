@@ -23,6 +23,8 @@ export type {
   HoldingWriteResult,
 } from "./holdings.js";
 export type { AuthStore, AuthUserRecord, SessionLookup, TransactionRecord } from "./auth.js";
+export { IdentityTableMissing, createIdentityStore } from "./identity.js";
+export type { IdentityStore } from "./identity.js";
 export {
   assertDividendAuditDatabase,
   dividendAuditUpdateSql,

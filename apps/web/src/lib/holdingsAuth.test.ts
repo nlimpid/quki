@@ -2,7 +2,7 @@ import { HOLDINGS_STORAGE_KEY, type HoldingsState } from "@quki/analytics";
 import { describe, expect, it } from "vitest";
 
 import { visibleAccountHoldings } from "./accountHoldings.js";
-import { fetchSession, logoutSession } from "./authClient.js";
+import { bearerHeader, fetchSession, logoutSession } from "./authClient.js";
 import { readHoldings, writeHoldings } from "./holdingsStore.js";
 
 const sample: HoldingsState = {
@@ -75,6 +75,9 @@ describe("holdings stay on this browser", () => {
         version: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       },
     ];
+    expect(bearerHeader(null)).toEqual({});
+    expect(bearerHeader("")).toEqual({});
+    expect(bearerHeader("jwt")).toEqual({ authorization: "Bearer jwt" });
     expect(visibleAccountHoldings(false, account)).toBeNull();
     expect(visibleAccountHoldings(true, account)).toEqual(account);
   });

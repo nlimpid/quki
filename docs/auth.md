@@ -28,17 +28,14 @@ Tradeoff: the OIDC callback is implemented and tested with an in-process stand-i
 
 Names only. Do not create the provider account in this change.
 
-1. Use Google as the issuer. The Worker accepts only `https://accounts.google.com`, authorization code, PKCE `S256`, a confidential client secret, and Google's discovery document.
-2. Register both callback URLs:
-   - `https://quki.cc/api/auth/callback`
-   - `https://www.quki.cc/api/auth/callback`
-   The callback is `https://quki.cc/api/auth/callback` or `https://www.quki.cc/api/auth/callback`, chosen by an exact match of the request URL origin against that allowlist. `www` is its own entry. `X-Forwarded-Host` and `Forwarded` are ignored. Any other host fails closed and does not build a callback. Tests may inject extra origins; production does not.
-3. Set site Worker secrets:
-   - `AUTH_OIDC_ISSUER` — `https://accounts.google.com`
-   - `AUTH_OIDC_CLIENT_ID`
-   - `AUTH_OIDC_CLIENT_SECRET`
-   - `AUTH_OIDC_SCOPES` — omit it, or set `openid profile`. `email`, `phone`, or `openid` alone keep login unavailable.
-4. Do not run `pnpm migrate` for this review. That command applies every unapplied `db/migrations/*.sql` in filename order, so it would apply `0006_auth.sql` and the candidate `0008_auth_holdings.sql` together. `0006` is already in the tree and was not checked against production here. The crawler `/admin/migrate` list stays `0001` through `0005` and does not gain `0006` or `0008`. The unmerged holdings branch already uses `0007_holdings.sql` for `auth_user_books`; the candidate file is `0008_auth_holdings.sql` so it does not replace that file or any merged migration.
+1. Account login is Clerk email on the current `@clerk/react` package. Google OIDC is not the account path. Do not import existing users by email.
+2. Names only. No values are in this repository.
+   - `VITE_CLERK_PUBLISHABLE_KEY` — client publishable key. Never a secret.
+   - `CLERK_JWT_ISSUER` — Worker. Exact `https` origin of the Clerk Frontend API. The JWKS URL is that origin plus `/.well-known/jwks.json`. The token cannot choose another host.
+   - `CLERK_AUTHORIZED_PARTIES` — Worker. Comma-separated `azp` allowlist. Default in code is `https://quki.cc,https://www.quki.cc`.
+   - `CLERK_SECRET_KEY` is not required for session verification.
+3. The Worker verifies the bearer session JWT itself. `isSignedIn` in the browser does not authorize a route. A missing issuer or a missing identity table is HTTP 503 and is not an authenticated success.
+4. Do not run `pnpm migrate`. That command applies every `db/migrations/*.sql` whose filename is missing from `schema_migrations`, including `0006_auth.sql`. We do not execute it. Whether production has applied `0006_auth.sql` was NOT CHECKED. The crawler list stays `0001` through `0005`. Account identity SQL for review is `db/review/0009_auth_identities.sql`, outside that directory. `scripts/apply-reviewed-auth-sql.ts` prints two explicit paths and refuses `--execute`. It is not `pnpm migrate`.
 5. Choose the provider, write the real consent sentence, then set `LOGIN_UI_ENABLED` and add the unbranded 继续登录 control that posts to `POST /api/auth/login`. Do not flip the flag while the consent text is still missing. `login.ready: true` alone does not show that button.
 6. Local `http://127.0.0.1` will not keep the session cookie, because `Secure` is always set. Exercise login on HTTPS.
 

@@ -117,10 +117,9 @@ Never commit values. Names:
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TIDB_QUKI_DATABASE_URL` | Worker secret and local env. TiDB Serverless MySQL URL, for example `mysql://USER:PASSWORD@gateway01.<region>.prod.aws.tidbcloud.com:4000/quki` |
 | `INGEST_TOKEN`           | Crawler Worker secret. `Authorization: Bearer …` or `x-ingest-token` on `POST /admin/migrate` and `POST /admin/ingest`                          |
-| `AUTH_OIDC_ISSUER`       | Site Worker secret. Must be `https://accounts.google.com`. Any other issuer keeps login unavailable.                                           |
-| `AUTH_OIDC_CLIENT_ID`    | Site Worker secret. Google OAuth client id.                                                                                                     |
-| `AUTH_OIDC_CLIENT_SECRET`| Site Worker secret. Confidential client secret. Not a session cookie.                                                                          |
-| `AUTH_OIDC_SCOPES`       | Optional site Worker secret. Omit it, or set `openid profile`. Any other value keeps login unavailable.                                        |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Web env. Clerk publishable key only. Not a Worker secret.                                                                                     |
+| `CLERK_JWT_ISSUER`       | Site Worker. Exact https origin of the Clerk Frontend API. JWKS is fetched only from that origin.                                              |
+| `CLERK_AUTHORIZED_PARTIES` | Optional site Worker. Comma-separated `azp` origins. Defaults to `https://quki.cc,https://www.quki.cc`.                                     |
 
 ```bash
 # from workers/site and workers/crawler respectively

@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@clerk/react": "6.18.9",
     "@heroui/react": "3.2.7",
     "@heroui/styles": "3.2.7",
     "@quki/analytics": "workspace:*",

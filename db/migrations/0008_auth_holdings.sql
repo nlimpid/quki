@@ -10,9 +10,9 @@
 --
 -- pnpm migrate risk: packages/db/src/migrate.ts applies every *.sql in
 -- db/migrations whose filename is missing from schema_migrations, in filename
--- order. The next pnpm migrate would apply 0006_auth.sql and this file if
--- neither filename is recorded. 0006 was not checked against production here.
--- Do not run pnpm migrate for this candidate.
+-- order. We do not execute that command. Whether production has applied
+-- 0006_auth.sql was NOT CHECKED. Do not describe 0006 as unapplied.
+-- user_id is the internal UUID from auth_identities, not a Clerk user id.
 --
 -- Columns are the primary key (user_id, code) plus shares, version, updated_at.
 -- No KEY (user_id). InnoDB and TiDB use the leftmost prefix of the primary key

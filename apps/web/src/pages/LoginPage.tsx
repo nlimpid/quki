@@ -1,3 +1,4 @@
+import { SignIn } from "@clerk/react";
 import { Alert, Button } from "@heroui/react";
 import { DIVIDEND_DISCLAIMER, safeReturnTo } from "@quki/types";
 import { useEffect, useRef } from "react";
@@ -14,6 +15,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const returnTo = safeReturnTo(params.get("returnTo"), window.location.origin);
+  const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
   const view = loginView(phase, params.get("error"));
   usePageTitle("登录 · quki");
   const busy = retrying || phase.kind === "initializing";
@@ -44,6 +46,14 @@ export function LoginPage() {
           <h1 ref={headingRef} tabIndex={-1}>
             登录
           </h1>
+          {publishableKey && phase.kind !== "authenticated" ? (
+            <SignIn
+              path="/login"
+              routing="path"
+              forceRedirectUrl={returnTo}
+              fallbackRedirectUrl={returnTo}
+            />
+          ) : null}
           {view.message ? <p className="auth-lead">{view.message}</p> : null}
           {view.status ? (
             <p className="auth-status" aria-live="polite">

@@ -19,9 +19,11 @@ import {
   writeSessionCookie,
 } from "./cookies.js";
 import { randomToken, secretsEqual, sha256Hex } from "./crypto.js";
+import { bearerFromAuthorization, verifyClerkSessionToken } from "./clerkVerify.js";
 import type { OidcIdentity } from "./oidc.js";
 import { authCallbackUrl, classifyOidcFailure } from "./oidc.js";
 import type { AuthRuntime } from "./runtime.js";
+import { IdentityTableMissing } from "@quki/db";
 
 function noStore(c: Context): void {
   c.header("cache-control", "no-store");
@@ -69,6 +71,7 @@ function csrfField(c: Context, fields: Record<string, unknown>): string {
 function sessionPayload(
   response: Omit<AuthSessionResponse, "login"> & {
     ready: boolean;
+    method?: AuthSessionResponse["login"]["method"];
     reason: AuthSessionResponse["login"]["reason"];
   },
 ): AuthSessionResponse {
@@ -80,7 +83,7 @@ function sessionPayload(
     csrfToken: response.csrfToken,
     login: {
       ready: response.ready,
-      method: response.ready ? "oidc" : null,
+      method: response.ready ? (response.method ?? "oidc") : null,
       reason: response.ready ? null : response.reason,
     },
   };
@@ -137,6 +140,70 @@ async function upsertUser(auth: AuthRuntime, identity: OidcIdentity) {
 export function mountAuthRoutes(app: Hono, auth: AuthRuntime): void {
   app.get("/api/auth/session", async (c) => {
     noStore(c);
+    const bearer = bearerFromAuthorization(c.req.header("authorization"));
+    if (c.req.header("authorization")) {
+      if (!bearer) return c.json({ error: "unauthorized", message: "需要登录" }, 401);
+      if (!auth.clerk) {
+        return c.json(
+          sessionPayload({
+            status: "unavailable",
+            authenticated: false,
+            expired: false,
+            user: null,
+            csrfToken: null,
+            ready: false,
+            reason: "auth_not_configured",
+          }),
+          503,
+        );
+      }
+      const verified = await verifyClerkSessionToken(bearer, auth.clerk);
+      if (!verified.ok) return c.json({ error: "unauthorized", message: "需要登录" }, 401);
+      if (!auth.identities) {
+        return c.json(
+          sessionPayload({
+            status: "unavailable",
+            authenticated: false,
+            expired: false,
+            user: null,
+            csrfToken: null,
+            ready: false,
+            reason: "storage_unconfigured",
+          }),
+          503,
+        );
+      }
+      try {
+        const id = await auth.identities.resolve(verified.issuer, verified.subject, auth.now());
+        return c.json(
+          sessionPayload({
+            status: "authenticated",
+            authenticated: true,
+            expired: false,
+            user: { id, displayName: null },
+            csrfToken: randomToken(),
+            ready: true,
+            method: "clerk",
+            reason: null,
+          }),
+        );
+      } catch (error) {
+        const reason =
+          error instanceof IdentityTableMissing ? "storage_unconfigured" : "auth_not_configured";
+        return c.json(
+          sessionPayload({
+            status: "unavailable",
+            authenticated: false,
+            expired: false,
+            user: null,
+            csrfToken: null,
+            ready: false,
+            reason,
+          }),
+          503,
+        );
+      }
+    }
     const ready = auth.store != null && auth.oidc != null && auth.unavailableReason == null;
     if (!auth.store) {
       return c.json(

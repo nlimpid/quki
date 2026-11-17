@@ -25,7 +25,18 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({
+  children,
+  sessionKey = "static",
+  getAccessToken,
+  onLogout,
+}: {
+  children: ReactNode;
+  /** `loading` waits. Any other change, including a new Clerk user id, starts a new probe. */
+  sessionKey?: string;
+  getAccessToken?: () => Promise<string | null>;
+  onLogout?: () => Promise<void>;
+}) {
   const [phase, setPhase] = useState<AuthPhase>({
     kind: "initializing",
     login: { state: "unknown" },
@@ -34,8 +45,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [retrying, setRetrying] = useState(false);
   const [expiryDismissed, setExpiryDismissed] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const tokenRef = useRef(getAccessToken);
+  useEffect(() => {
+    tokenRef.current = getAccessToken;
+  }, [getAccessToken]);
 
   useEffect(() => {
+    if (sessionKey === "loading") return;
     const startedAt = generation;
     const controller = new AbortController();
     abortRef.current = controller;
@@ -43,13 +59,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (controller.signal.aborted || startedAt !== generation) return;
       setPhase((current) => applyProbeTimeout(current));
     }, AUTH_PROBE_TIMEOUT_MS);
-    void fetchSession()
+    void (async () => {
+      const readToken = tokenRef.current;
+      const token = readToken ? await readToken() : null;
+      if (controller.signal.aborted) return;
+      return fetchSession(fetch, token, controller.signal);
+    })()
       .then((session) => {
-        if (controller.signal.aborted) return;
+        if (!session || controller.signal.aborted) return;
         setPhase((current) => applyProbeSuccess(current, session));
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (controller.signal.aborted) return;
+        if (error instanceof DOMException && error.name === "AbortError") return;
         setPhase((current) => applyProbeFailure(current));
       })
       .finally(() => {
@@ -59,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [generation]);
+  }, [generation, sessionKey]);
 
   const retry = () => {
     setRetrying(true);
@@ -80,7 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     abortRef.current?.abort();
     setPhase(pending);
     try {
-      await logoutSession(pending.csrfToken);
+      if (onLogout) await onLogout();
+      else await logoutSession(pending.csrfToken);
       setPhase(finishLogout(pending));
       setExpiryDismissed(false);
     } catch {
