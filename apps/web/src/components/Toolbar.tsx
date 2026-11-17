@@ -38,16 +38,18 @@ export function Toolbar({
         }))}
         onChange={onCode}
       />
-      <FilterGroup
-        label="周期"
-        value={period}
-        options={[
-          { id: "D", label: "日" },
-          { id: "W", label: "周" },
-        ]}
-        onChange={onPeriod}
-      />
-      <FilterGroup label="区间" value={range} options={RANGES} onChange={onRange} />
+      <div className="toolbar-split">
+        <FilterGroup
+          label="周期"
+          value={period}
+          options={[
+            { id: "D", label: "日" },
+            { id: "W", label: "周" },
+          ]}
+          onChange={onPeriod}
+        />
+        <FilterGroup label="区间" value={range} options={RANGES} onChange={onRange} />
+      </div>
     </div>
   );
 }
