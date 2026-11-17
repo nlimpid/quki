@@ -215,7 +215,7 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
       });
     createSeriesMarkers(spread, spreadMarkers);
     for (const pane of chart.panes()) pane.setStretchFactor(1);
-    requestAnimationFrame(() => {
+    const frame = requestAnimationFrame(() => {
       if (!el.isConnected) return;
       const heights = chart
         .panes()
@@ -251,6 +251,7 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
     });
     observer.observe(el);
     return () => {
+      cancelAnimationFrame(frame);
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(onRange);
       chart.unsubscribeCrosshairMove(onMove);
       observer.disconnect();

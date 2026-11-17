@@ -1,4 +1,5 @@
 import { Table } from "@heroui/react";
+import type { CSSProperties } from "react";
 import type { TierLevel, TierRow } from "@quki/types";
 
 import { ceilingTier, formatDistance, formatLevel } from "../lib/format.js";
@@ -47,6 +48,11 @@ export function TierTable({ rows, lastClose }: { rows: TierRow[]; lastClose: num
                     key={row.tier}
                     id={String(row.tier)}
                     className={row.tier === highlight ? "hl" : undefined}
+                    style={
+                      row.tier === highlight
+                        ? ({ "--hl": DOT[row.tier] } as CSSProperties)
+                        : undefined
+                    }
                   >
                     <Table.Cell>
                       <i className="tier-dot" style={{ background: DOT[row.tier] }} />

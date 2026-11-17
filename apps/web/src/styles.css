@@ -643,10 +643,12 @@ table.qk td.num {
 table.qk tr:last-child td {
   border-bottom: none;
 }
-table.qk tr.hl td {
+table.qk tr.hl td,
+.tier-card .table__row.hl .table__cell {
   background: color-mix(in srgb, var(--hl, var(--qk-tier-95-solid)) 14%, var(--qk-bg-surface));
 }
-table.qk tr.hl td.num {
+table.qk tr.hl td.num,
+.tier-card .table__row.hl .table__cell.num {
   font-weight: 600;
 }
 table.qk tr.unconfirmed td:first-child {
