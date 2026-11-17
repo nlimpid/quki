@@ -1,3 +1,5 @@
+import { bearerHeader } from "./authClient.js";
+
 export type AccountHolding = {
   code: string;
   shares: number;
@@ -25,8 +27,12 @@ async function readError(response: Response): Promise<string> {
   return typeof body?.message === "string" ? body.message : "账户持仓没有保存";
 }
 
-export async function readAccountHoldings(): Promise<AccountHolding[]> {
-  const response = await fetch("/api/holdings", { credentials: "same-origin" });
+export async function readAccountHoldings(token: string | null): Promise<AccountHolding[]> {
+  if (!token) throw new AccountHoldingsError("需要登录");
+  const response = await fetch("/api/holdings", {
+    credentials: "same-origin",
+    headers: bearerHeader(token),
+  });
   if (!response.ok) throw new AccountHoldingsError(await readError(response));
   const body = (await response.json()) as { items?: unknown };
   if (!Array.isArray(body.items)) throw new AccountHoldingsError("账户持仓没有保存");
@@ -52,14 +58,14 @@ export async function readAccountHoldings(): Promise<AccountHolding[]> {
 
 export async function writeAccountHoldings(
   item: { code: string; shares: number; expectedVersion: string | null },
-  csrfToken: string,
+  token: string | null,
 ): Promise<void> {
+  if (!token) throw new AccountHoldingsError("需要登录");
   const response = await fetch("/api/holdings", {
     method: "PUT",
     credentials: "same-origin",
-    headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+    headers: { "content-type": "application/json", ...bearerHeader(token) },
     body: JSON.stringify({
-      csrf: csrfToken,
       code: item.code,
       shares: item.shares,
       expectedVersion: item.expectedVersion,
@@ -71,13 +77,14 @@ export async function writeAccountHoldings(
 export async function deleteAccountHolding(
   code: string,
   expectedVersion: string,
-  csrfToken: string,
+  token: string | null,
 ): Promise<void> {
+  if (!token) throw new AccountHoldingsError("需要登录");
   const response = await fetch(`/api/holdings/${encodeURIComponent(code)}`, {
     method: "DELETE",
     credentials: "same-origin",
-    headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-    body: JSON.stringify({ csrf: csrfToken, expectedVersion }),
+    headers: { "content-type": "application/json", ...bearerHeader(token) },
+    body: JSON.stringify({ expectedVersion }),
   });
   if (!response.ok) throw new AccountHoldingsError(await readError(response));
 }

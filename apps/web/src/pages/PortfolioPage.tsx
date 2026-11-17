@@ -64,7 +64,7 @@ export function PortfolioPage() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [accountItems, setAccountItems] = useState<AccountHolding[] | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
-  const { phase, retry } = useAuth();
+  const { phase, retry, accessToken } = useAuth();
   const signedIn = phase.kind === "authenticated";
   if (!signedIn && (accountItems != null || accountError != null)) {
     setAccountItems(null);
@@ -94,7 +94,8 @@ export function PortfolioPage() {
   useEffect(() => {
     if (phase.kind !== "authenticated") return;
     let cancel = false;
-    readAccountHoldings()
+    void accessToken()
+      .then((token) => readAccountHoldings(token))
       .then((items) => {
         if (cancel) return;
         setAccountItems(items);
@@ -106,7 +107,7 @@ export function PortfolioPage() {
     return () => {
       cancel = true;
     };
-  }, [phase.kind]);
+  }, [accessToken, phase.kind]);
 
   useEffect(() => {
     if (!codeKey) return;
@@ -342,10 +343,8 @@ export function PortfolioPage() {
           onSave={(code, shares) => {
             if (!request("/portfolio")) return;
             if (phase.kind !== "authenticated") return;
-            void writeAccountHoldings(
-              { code, shares, expectedVersion: null },
-              phase.csrfToken,
-            )
+            void accessToken()
+              .then((token) => writeAccountHoldings({ code, shares, expectedVersion: null }, token))
               .then(() => closeDrawer())
               .catch((reason: unknown) => {
                 setQuoteError(reason instanceof Error ? reason.message : "账户持仓没有保存");

@@ -1,5 +1,13 @@
 import { AUTH_PROBE_TIMEOUT_MS } from "@quki/types";
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { fetchSession, logoutSession } from "./authClient.js";
 import {
@@ -21,6 +29,8 @@ type AuthContextValue = {
   recheck: () => void;
   logout: () => Promise<void>;
   dismissExpiry: () => void;
+  /** Clerk session JWT for this probe, or null. Holdings must send this bearer. */
+  accessToken: () => Promise<string | null>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -96,6 +106,11 @@ export function AuthProvider({
     setGeneration((current) => current + 1);
   };
 
+  const accessToken = useCallback(
+    () => (tokenRef.current ? tokenRef.current() : Promise.resolve(null)),
+    [],
+  );
+
   const logout = async () => {
     const pending = beginLogout(phase);
     if (pending.kind !== "logoutPending") return;
@@ -121,6 +136,7 @@ export function AuthProvider({
         recheck,
         logout,
         dismissExpiry: () => setExpiryDismissed(true),
+        accessToken,
       }}
     >
       {children}

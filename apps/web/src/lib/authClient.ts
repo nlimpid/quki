@@ -1,5 +1,21 @@
 import { parseAuthSessionResponse, type AuthSessionResponse } from "@quki/types";
 
+/**
+ * Keep a token only for the Clerk user id that started the read.
+ * Compare that id with the id observed after `getToken()` resolves.
+ * The ref is updated in an effect, so reading it before the await still
+ * sees the previous user and must not be the expected id.
+ */
+export function bearerForUser(
+  startedUserId: string | null,
+  currentUserId: string | null | undefined,
+  token: string | null | undefined,
+): string | null {
+  if (!startedUserId || startedUserId !== currentUserId) return null;
+  if (!token) return null;
+  return token;
+}
+
 export function bearerHeader(token: string | null | undefined): Record<string, string> {
   if (!token) return {};
   return { authorization: `Bearer ${token}` };

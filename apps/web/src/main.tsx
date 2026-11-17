@@ -7,6 +7,7 @@ import { Navigate, Outlet, useNavigate } from "react-router";
 
 import { BacktestRoute, LayoutRoute, OverviewRoute, RootRedirect } from "./App.js";
 import { AuthProvider } from "./lib/auth.js";
+import { bearerForUser } from "./lib/authClient.js";
 import { PortfolioPage } from "./pages/PortfolioPage.js";
 import { RotationPage } from "./pages/RotationPage.js";
 import { StockPage } from "./pages/StockPage.js";
@@ -38,11 +39,9 @@ function ClerkBoundAuth({ children }: { children: React.ReactNode }) {
     <AuthProvider
       sessionKey={isLoaded ? `ready:${userId ?? "guest"}` : "loading"}
       getAccessToken={async () => {
-        if (!isLoaded || !isSignedIn) return null;
-        const expected = userRef.current;
+        if (!isLoaded || !isSignedIn || !userId) return null;
         const token = await getToken();
-        if (userRef.current !== expected) return null;
-        return typeof token === "string" && token.length > 0 ? token : null;
+        return bearerForUser(userId, userRef.current, token);
       }}
       onLogout={() => signOut()}
     >

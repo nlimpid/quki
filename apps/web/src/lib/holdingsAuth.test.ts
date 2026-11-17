@@ -2,7 +2,8 @@ import { HOLDINGS_STORAGE_KEY, type HoldingsState } from "@quki/analytics";
 import { describe, expect, it } from "vitest";
 
 import { visibleAccountHoldings } from "./accountHoldings.js";
-import { bearerHeader, fetchSession, logoutSession } from "./authClient.js";
+import { bearerForUser, bearerHeader, fetchSession, logoutSession } from "./authClient.js";
+import { writeAccountHoldings } from "./accountHoldings.js";
 import { readHoldings, writeHoldings } from "./holdingsStore.js";
 
 const sample: HoldingsState = {
@@ -81,7 +82,43 @@ describe("holdings stay on this browser", () => {
     expect(bearerHeader(null)).toEqual({});
     expect(bearerHeader("")).toEqual({});
     expect(bearerHeader("jwt")).toEqual({ authorization: "Bearer jwt" });
+    expect(bearerForUser("user-a", "user-a", "jwt")).toBe("jwt");
+    expect(bearerForUser("user-a", "user-b", "jwt")).toBeNull();
+    expect(bearerForUser(null, "user-a", "jwt")).toBeNull();
+    expect(bearerForUser("user-a", "user-a", "")).toBeNull();
     expect(visibleAccountHoldings(false, account)).toBeNull();
     expect(visibleAccountHoldings(true, account)).toEqual(account);
+  });
+
+  it("sends the Clerk bearer on an account holding write", async () => {
+    const seen: { authorization: string | null; csrf: string | null; body: string }[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (_input, init) => {
+      const headers = new Headers(init?.headers);
+      seen.push({
+        authorization: headers.get("authorization"),
+        csrf: headers.get("x-csrf-token"),
+        body: typeof init?.body === "string" ? init.body : "",
+      });
+      return Response.json({ code: "600519", shares: 10, version: "a".repeat(32) });
+    }) as typeof fetch;
+    try {
+      await writeAccountHoldings(
+        { code: "600519", shares: 10, expectedVersion: null },
+        "session-jwt",
+      );
+    } finally {
+      globalThis.fetch = original;
+    }
+    expect(seen).toEqual([
+      {
+        authorization: "Bearer session-jwt",
+        csrf: null,
+        body: JSON.stringify({ code: "600519", shares: 10, expectedVersion: null }),
+      },
+    ]);
+    await expect(
+      writeAccountHoldings({ code: "600519", shares: 10, expectedVersion: null }, null),
+    ).rejects.toThrow(/需要登录/);
   });
 });

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 
 import { writeAccountHoldings } from "../lib/accountHoldings.js";
+import { useAuth } from "../lib/auth.js";
 import { useHoldingIntent } from "../lib/holdingIntent.js";
 import { readHoldings } from "../lib/holdingsStore.js";
 import { fetchStock, parseYears } from "../lib/stockApi.js";
@@ -46,6 +47,7 @@ export function StockPage() {
   const held = heldCodes.has(code);
   const [shares, setShares] = useState("100");
   const [saved, setSaved] = useState<string | null>(null);
+  const { accessToken } = useAuth();
   const { phase, request: requestHolding } = useHoldingIntent();
 
   useEffect(() => {
@@ -150,14 +152,17 @@ export function StockPage() {
                     event.preventDefault();
                     if (!requestHolding(`/stock/${company.code}?add=1`)) return;
                     if (phase.kind !== "authenticated") return;
-                    void writeAccountHoldings(
-                      {
-                        code: company.code,
-                        shares: Number(shares),
-                        expectedVersion: null,
-                      },
-                      phase.csrfToken,
-                    )
+                    void accessToken()
+                      .then((token) =>
+                        writeAccountHoldings(
+                          {
+                            code: company.code,
+                            shares: Number(shares),
+                            expectedVersion: null,
+                          },
+                          token,
+                        ),
+                      )
                       .then(() => setSaved(null))
                       .catch((reason: unknown) => {
                         setSaved(reason instanceof Error ? reason.message : "账户持仓没有保存");
