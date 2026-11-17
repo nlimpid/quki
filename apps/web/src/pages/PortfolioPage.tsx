@@ -7,12 +7,9 @@ import { Link, useSearchParams } from "react-router";
 import { useAuth } from "../lib/auth.js";
 import { usePageTitle } from "../lib/pageTitle.js";
 import { ACCOUNT_SAVE_COPY, ACCOUNT_SAVE_LABEL, portfolioSubtitle } from "../lib/authState.js";
+import { AccountBookPanel } from "../lib/AccountBookPanel.js";
 import { useAccountBook } from "../lib/accountBook.js";
-import {
-  showAccountBook,
-  visibleAccountHoldings,
-  writeAccountHoldings,
-} from "../lib/accountHoldings.js";
+import { showAccountBook } from "../lib/accountHoldings.js";
 import { useHoldingIntent } from "../lib/holdingIntent.js";
 import { readHoldings } from "../lib/holdingsStore.js";
 import { fetchStockBatch, fetchStockList } from "../lib/stockApi.js";
@@ -59,9 +56,6 @@ export function PortfolioPage() {
     confirmedSessionKey,
   });
   const account = useAccountBook({ sessionKey, signedIn, accessToken });
-  const accountItems = account.items;
-  const accountError = account.error;
-  const shownAccount = visibleAccountHoldings(signedIn, accountItems);
   if (drawer && drawerEpoch !== account.epoch) {
     setDrawer(null);
     setDrawerEpoch(null);
@@ -88,19 +82,35 @@ export function PortfolioPage() {
   const intent = addIntent ? "add" : editIntent && /^\d{6}$/.test(editIntent) ? editIntent : "";
   const [openedIntent, setOpenedIntent] = useState("");
   if (intent && intent !== openedIntent) {
-    setOpenedIntent(intent);
-    if (intent === "add") {
-      setDrawerEpoch(account.epoch);
-      setDrawer({ code: "", shares: "" });
+    if (signedIn && intent !== "add" && account.items == null) {
+      // Wait until the account list is loaded so the edit uses that row's version.
     } else {
-      const item = holdings.items.find((holding) => holding.code === intent);
-      setDrawerEpoch(account.epoch);
-      setDrawer({ code: intent, shares: item ? String(item.shares) : "" });
+      setOpenedIntent(intent);
+      if (intent === "add") {
+        if (signedIn) account.openEditor({ code: "", shares: "", expectedVersion: null });
+        else {
+          setDrawerEpoch(account.epoch);
+          setDrawer({ code: "", shares: "" });
+        }
+      } else if (signedIn) {
+        const item = account.items?.find((row) => row.code === intent);
+        if (item) {
+          account.openEditor({
+            code: item.code,
+            shares: String(item.shares),
+            expectedVersion: item.version,
+          });
+        }
+      } else {
+        const item = holdings.items.find((holding) => holding.code === intent);
+        setDrawerEpoch(account.epoch);
+        setDrawer({ code: intent, shares: item ? String(item.shares) : "" });
+      }
+      const next = new URLSearchParams(params);
+      next.delete("add");
+      next.delete("edit");
+      setParams(next, { replace: true });
     }
-    const next = new URLSearchParams(params);
-    next.delete("add");
-    next.delete("edit");
-    setParams(next, { replace: true });
   }
 
   useEffect(() => {
@@ -165,6 +175,10 @@ export function PortfolioPage() {
           variant="primary"
           onPress={(event) => {
             if (!request("/portfolio?add=1")) return;
+            if (signedIn) {
+              account.openEditor({ code: "", shares: "", expectedVersion: null });
+              return;
+            }
             openDrawer({ code: "", shares: "" }, event.target);
           }}
         >
@@ -182,27 +196,7 @@ export function PortfolioPage() {
           ) : null}
         </p>
       ) : null}
-      {signedIn ? (
-        <section className="div-card" aria-label="账户持仓">
-          <h2 style={{ margin: "0 0 8px" }}>账户持仓</h2>
-          {accountError ? <p className="page-sub">{accountError}</p> : null}
-          {!accountError && shownAccount == null ? (
-            <p className="page-sub">正在读取账户持仓…</p>
-          ) : null}
-          {!accountError && shownAccount?.length === 0 ? (
-            <p className="page-sub">账户里还没有持仓。</p>
-          ) : null}
-          {!accountError && shownAccount && shownAccount.length > 0 ? (
-            <ul>
-              {shownAccount.map((item) => (
-                <li key={item.code}>
-                  <span className="mono">{item.code}</span> · {formatShares(item.shares)} 股
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </section>
-      ) : null}
+      {signedIn ? <AccountBookPanel book={account} /> : null}
       {quoteError ? <p className="yield-note">{quoteError}</p> : null}
       {holdings.items.length > 0 && phase.kind === "authenticated" ? (
         <h2 className="page-title" style={{ fontSize: 18 }}>
@@ -336,12 +330,12 @@ export function PortfolioPage() {
           onClose={closeDrawer}
           onSave={(code, shares) => {
             if (!request("/portfolio")) return;
-            if (phase.kind !== "authenticated") return;
+            if (!signedIn) return;
             const ticket = drawerEpoch ?? account.epoch;
+            const expectedVersion =
+              account.items?.find((item) => item.code === code)?.version ?? null;
             void account
-              .commit(ticket, (token) =>
-                writeAccountHoldings({ code, shares, expectedVersion: null }, token),
-              )
+              .save({ ticket, code, shares, expectedVersion })
               .then((result) => {
                 if (result === "written") closeDrawer();
               })

@@ -145,7 +145,12 @@ describe("holdings stay on this browser", () => {
         csrf: headers.get("x-csrf-token"),
         body: typeof init?.body === "string" ? init.body : "",
       });
-      return Response.json({ code: "600519", shares: 10, version: "a".repeat(32) });
+      return Response.json({
+        code: "600519",
+        shares: 10,
+        version: "a".repeat(32),
+        updatedAt: "2026-11-17 00:00:00.000",
+      });
     }) as typeof fetch;
     try {
       await writeAccountHoldings(

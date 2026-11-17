@@ -322,9 +322,16 @@ describe("auth routes", () => {
     expect(portfolio).not.toContain("writeHoldings");
     expect(stock).not.toContain("saveHolding");
     expect(stock).not.toContain("writeHoldings");
-    expect(portfolio).toContain("账户持仓");
+    expect(portfolio).toContain("AccountBookPanel");
     expect(portfolio).toContain("此浏览器里的旧持仓");
-    expect(portfolio).toContain("visibleAccountHoldings");
+    const panel = readFileSync(
+      new URL("../../../../apps/web/src/lib/AccountBookPanel.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(panel).toContain("expectedVersion: item.version");
+    expect(panel).toContain("removeRow");
+    expect(panel).not.toContain("writeHoldings");
+    expect(panel).not.toContain("holdingsStore");
   });
 
   it("uses a labelled fixture session and an in-process fake database, not Google or TiDB", async () => {
