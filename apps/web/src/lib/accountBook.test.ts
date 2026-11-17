@@ -8,6 +8,7 @@ import type { AccountHolding } from "./accountHoldings.js";
 
 type ReadWait = {
   token: string | null;
+  settled: boolean;
   resolve: (rows: AccountHolding[]) => void;
 };
 
@@ -24,6 +25,12 @@ function installDom() {
     Node: window.Node,
     IS_REACT_ACT_ENVIRONMENT: true,
   });
+}
+
+function once(wait: ReadWait | undefined, rows: AccountHolding[]) {
+  if (!wait || wait.settled) throw new Error("read is not a fresh pending request");
+  wait.settled = true;
+  wait.resolve(rows);
 }
 
 function Probe({
@@ -45,7 +52,7 @@ function Probe({
     accessToken: takeToken,
     read: (bearer) =>
       new Promise((resolve) => {
-        reads.push({ token: bearer, resolve });
+        reads.push({ token: bearer, settled: false, resolve });
       }),
   });
   return createElement(
@@ -92,44 +99,143 @@ function Probe({
   );
 }
 
-describe("mounted account switch", () => {
-  it("ignores a late previous account after A→B and A→B→A, and does not write that selection with the new token", async () => {
-    installDom();
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root: Root = createRoot(host);
-    const reads: ReadWait[] = [];
-    const writes: { token: string; code: string; shares: number }[] = [];
-    const tokens: Array<(value: string | null) => void> = [];
-    const takeToken = () =>
-      new Promise<string | null>((resolve) => {
-        tokens.push(resolve);
-      });
+function mount() {
+  installDom();
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const root: Root = createRoot(host);
+  const reads: ReadWait[] = [];
+  const writes: { token: string; code: string; shares: number }[] = [];
+  const tokens: Array<(value: string | null) => void> = [];
+  const takeToken = () =>
+    new Promise<string | null>((resolve) => {
+      tokens.push(resolve);
+    });
+  const show = (sessionKey: string) => {
+    root.render(
+      createElement(Probe, {
+        sessionKey,
+        signedIn: true,
+        takeToken,
+        reads,
+        writes,
+      }),
+    );
+  };
+  return { root, reads, writes, tokens, show };
+}
 
-    const show = (sessionKey: string) => {
-      root.render(
-        createElement(Probe, {
-          sessionKey,
-          signedIn: true,
-          takeToken,
-          reads,
-          writes,
-        }),
-      );
-    };
+async function releaseToken(
+  tokens: Array<(value: string | null) => void>,
+  index: number,
+  value: string,
+) {
+  const release = tokens[index];
+  if (!release) throw new Error(`missing token waiter ${index}`);
+  await act(async () => {
+    release(value);
+    await Promise.resolve();
+  });
+}
+
+describe("mounted account switch", () => {
+  it("keeps an unresolved A read from rendering after the session becomes B", async () => {
+    const { root, reads, tokens, show } = mount();
+    await act(async () => {
+      show("ready:A");
+    });
+    await releaseToken(tokens, 0, "token-A");
+    const readA = reads[0];
+    expect(readA?.settled).toBe(false);
+    expect(readA?.token).toBe("token-A");
+
+    await act(async () => {
+      show("ready:B");
+    });
+    expect(document.getElementById("codes")?.textContent).toBe("");
+    expect(readA?.settled).toBe(false);
+
+    await act(async () => {
+      once(readA, [row("000001")]);
+      await Promise.resolve();
+    });
+    expect(readA?.settled).toBe(true);
+    expect(document.getElementById("codes")?.textContent).toBe("");
+
+    await releaseToken(tokens, 1, "token-B");
+    const readB = reads[1];
+    expect(readB?.settled).toBe(false);
+    expect(readB?.token).toBe("token-B");
+    await act(async () => {
+      once(readB, [row("600519")]);
+      await Promise.resolve();
+    });
+    expect(document.getElementById("codes")?.textContent).toBe("600519");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("drops the original unresolved A read and the unresolved B read after A→B→A", async () => {
+    const { root, reads, tokens, show } = mount();
+    await act(async () => {
+      show("ready:A");
+    });
+    await releaseToken(tokens, 0, "token-A");
+    const readA1 = reads[0];
+    expect(readA1?.settled).toBe(false);
+
+    await act(async () => {
+      show("ready:B");
+    });
+    await releaseToken(tokens, 1, "token-B");
+    const readB = reads[1];
+    expect(readB?.settled).toBe(false);
+    expect(readA1?.settled).toBe(false);
 
     await act(async () => {
       show("ready:A");
     });
-    expect(tokens).toHaveLength(1);
+    expect(document.getElementById("codes")?.textContent).toBe("");
+    await releaseToken(tokens, 2, "token-A");
+    const readA2 = reads[2];
+    expect(readA2?.settled).toBe(false);
+    expect(readA2?.token).toBe("token-A");
+    expect(readA1?.settled).toBe(false);
+    expect(readB?.settled).toBe(false);
+
     await act(async () => {
-      tokens[0]?.("token-A");
+      once(readA1, [row("999999")]);
       await Promise.resolve();
     });
-    expect(reads).toHaveLength(1);
-    expect(reads[0]?.token).toBe("token-A");
+    expect(document.getElementById("codes")?.textContent).toBe("");
+
     await act(async () => {
-      reads[0]?.resolve([row("000001")]);
+      once(readB, [row("000002")]);
+      await Promise.resolve();
+    });
+    expect(document.getElementById("codes")?.textContent).toBe("");
+
+    await act(async () => {
+      once(readA2, [row("000001")]);
+      await Promise.resolve();
+    });
+    expect(document.getElementById("codes")?.textContent).toBe("000001");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("does not write or delete an A selection after the pending token resolves as B", async () => {
+    const { root, reads, writes, tokens, show } = mount();
+    await act(async () => {
+      show("ready:A");
+    });
+    await releaseToken(tokens, 0, "token-A");
+    await act(async () => {
+      once(reads[0], [row("000001")]);
       await Promise.resolve();
     });
     expect(document.getElementById("codes")?.textContent).toBe("000001");
@@ -144,7 +250,9 @@ describe("mounted account switch", () => {
     await act(async () => {
       (document.getElementById("remove") as HTMLButtonElement).click();
     });
-    expect(tokens.length).toBeGreaterThanOrEqual(3);
+    const saveToken = tokens[1];
+    const removeToken = tokens[2];
+    if (!saveToken || !removeToken) throw new Error("save and delete did not wait for a token");
 
     await act(async () => {
       show("ready:B");
@@ -153,49 +261,10 @@ describe("mounted account switch", () => {
     expect(document.getElementById("drawer")?.textContent).toBe("");
 
     await act(async () => {
-      tokens[1]?.("token-B");
-      tokens[2]?.("token-B");
-      reads[0]?.resolve([row("999999")]);
+      saveToken("token-B");
+      removeToken("token-B");
       await Promise.resolve();
     });
-    expect(writes).toEqual([]);
-    expect(document.getElementById("codes")?.textContent).toBe("");
-
-    expect(tokens).toHaveLength(4);
-    await act(async () => {
-      tokens[3]?.("token-B");
-      await Promise.resolve();
-    });
-    expect(reads).toHaveLength(2);
-    expect(reads[1]?.token).toBe("token-B");
-    await act(async () => {
-      reads[1]?.resolve([row("600519")]);
-      await Promise.resolve();
-    });
-    expect(document.getElementById("codes")?.textContent).toBe("600519");
-
-    await act(async () => {
-      show("ready:A");
-    });
-    expect(document.getElementById("codes")?.textContent).toBe("");
-    await act(async () => {
-      reads[1]?.resolve([row("000002")]);
-      await Promise.resolve();
-    });
-    expect(document.getElementById("codes")?.textContent).toBe("");
-
-    expect(tokens).toHaveLength(5);
-    await act(async () => {
-      tokens[4]?.("token-A");
-      await Promise.resolve();
-    });
-    const latest = reads.at(-1);
-    expect(latest?.token).toBe("token-A");
-    await act(async () => {
-      latest?.resolve([row("000001")]);
-      await Promise.resolve();
-    });
-    expect(document.getElementById("codes")?.textContent).toBe("000001");
     expect(writes).toEqual([]);
 
     await act(async () => {
