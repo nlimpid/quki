@@ -1,7 +1,7 @@
 import { portfolioDividendSummary, type HoldingsState } from "@quki/analytics";
 import { Button, Drawer, Input, Label, SearchField } from "@heroui/react";
 import type { StockListItem } from "@quki/types";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { useAuth } from "../lib/auth.js";
@@ -41,6 +41,17 @@ export function PortfolioPage() {
   const loading = codeKey.length > 0 && loadedKey !== codeKey && quoteError === null;
   const shownQuotes = codeKey ? quotes : [];
   const [drawer, setDrawer] = useState<{ code: string; shares: string } | null>(null);
+  const restoreFocus = useRef<HTMLElement | null>(null);
+  function openDrawer(next: { code: string; shares: string }) {
+    restoreFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setDrawer(next);
+  }
+  function closeDrawer() {
+    const target = restoreFocus.current;
+    setDrawer(null);
+    requestAnimationFrame(() => target?.focus());
+  }
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const { phase } = useAuth();
 
@@ -102,7 +113,7 @@ export function PortfolioPage() {
           </h1>
           <p className="page-sub">{portfolioSubtitle(phase)}</p>
         </div>
-        <Button variant="primary" onPress={() => setDrawer({ code: "", shares: "" })}>
+        <Button variant="primary" onPress={() => openDrawer({ code: "", shares: "" })}>
           ＋ 添加股票
         </Button>
       </div>
@@ -112,7 +123,7 @@ export function PortfolioPage() {
         <section className="div-card hero">
           <h2 style={{ margin: "0 0 8px" }}>尚未添加持仓</h2>
           <p className="page-sub">添加股票后，这里显示平均股息率和预估全年分红。</p>
-          <Button variant="primary" onPress={() => setDrawer({ code: "", shares: "" })}>
+          <Button variant="primary" onPress={() => openDrawer({ code: "", shares: "" })}>
             添加股票
           </Button>
         </section>
@@ -152,7 +163,7 @@ export function PortfolioPage() {
                       type="button"
                       className="icon-text"
                       aria-label="编辑"
-                      onClick={() => setDrawer({ code: card.code, shares: String(card.shares) })}
+                      onClick={() => openDrawer({ code: card.code, shares: String(card.shares) })}
                     >
                       ✎
                     </button>
@@ -214,10 +225,10 @@ export function PortfolioPage() {
         <HoldingDrawer
           initialCode={drawer.code}
           initialShares={drawer.shares}
-          onClose={() => setDrawer(null)}
+          onClose={closeDrawer}
           onSave={(code, shares) => {
             setHoldings(saveHolding(code, shares));
-            setDrawer(null);
+            closeDrawer();
           }}
         />
       ) : null}

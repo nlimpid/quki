@@ -1,3 +1,4 @@
+import { Alert, Button } from "@heroui/react";
 import { DIVIDEND_DISCLAIMER, safeReturnTo } from "@quki/types";
 import { useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
@@ -48,20 +49,16 @@ export function LoginPage() {
             </p>
           ) : null}
           {view.alert ? (
-            <p className="auth-error" role="alert">
-              {view.alert}
-            </p>
+            <Alert status="danger">
+              <Alert.Content>
+                <Alert.Description>{view.alert}</Alert.Description>
+              </Alert.Content>
+            </Alert>
           ) : null}
           {view.retry ? (
-            <button
-              type="button"
-              className="auth-header-btn"
-              onClick={onRetry}
-              disabled={busy}
-              aria-busy={busy}
-            >
+            <Button variant="primary" onPress={onRetry} isDisabled={busy} aria-busy={busy}>
               重试
-            </button>
+            </Button>
           ) : null}
           <p className="auth-note">{LOGIN_PRIVACY_COPY}</p>
         </section>

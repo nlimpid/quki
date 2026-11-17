@@ -1,3 +1,4 @@
+import { Table } from "@heroui/react";
 import type { TierLevel, TierRow } from "@quki/types";
 
 import { ceilingTier, formatDistance, formatLevel } from "../lib/format.js";
@@ -28,44 +29,46 @@ export function TierTable({ rows, lastClose }: { rows: TierRow[]; lastClose: num
         </div>
       </div>
       <div className="table-scroll">
-        <table className="qk" style={{ minWidth: 560 }}>
-          <thead>
-            <tr>
-              <th>档位</th>
-              <th>含义</th>
-              <th>点位</th>
-              <th>距现价</th>
-              <th>历史分位</th>
-              <th>次数</th>
-              <th>最近</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr
-                key={row.tier}
-                className={row.tier === highlight ? "hl" : undefined}
-                style={{ ["--hl" as string]: DOT[row.tier] }}
-              >
-                <td>
-                  <i className="tier-dot" style={{ background: DOT[row.tier] }} />
-                  {row.tier}%
-                </td>
-                <td>
-                  {row.label}
-                  {row.derived ? <span className="derived">派生</span> : null}
-                </td>
-                <td className="num">{formatLevel(row.level)}</td>
-                <td className="num">{formatDistance(row.distancePct)}</td>
-                <td className="num">{Math.round(row.ratioPercentile)}%</td>
-                <td className="num">
-                  {row.episodeCount} 次 / {row.episodeWeeks} 周
-                </td>
-                <td className="num">{row.latestEpisode ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Table>
+          <Table.ScrollContainer>
+            <Table.Content aria-label="分档点位">
+              <Table.Header>
+                <Table.Column isRowHeader>档位</Table.Column>
+                <Table.Column>含义</Table.Column>
+                <Table.Column>点位</Table.Column>
+                <Table.Column>距现价</Table.Column>
+                <Table.Column>历史分位</Table.Column>
+                <Table.Column>次数</Table.Column>
+                <Table.Column>最近</Table.Column>
+              </Table.Header>
+              <Table.Body>
+                {rows.map((row) => (
+                  <Table.Row
+                    key={row.tier}
+                    id={String(row.tier)}
+                    className={row.tier === highlight ? "hl" : undefined}
+                  >
+                    <Table.Cell>
+                      <i className="tier-dot" style={{ background: DOT[row.tier] }} />
+                      {row.tier}%
+                    </Table.Cell>
+                    <Table.Cell>
+                      {row.label}
+                      {row.derived ? <span className="derived">派生</span> : null}
+                    </Table.Cell>
+                    <Table.Cell className="num">{formatLevel(row.level)}</Table.Cell>
+                    <Table.Cell className="num">{formatDistance(row.distancePct)}</Table.Cell>
+                    <Table.Cell className="num">{Math.round(row.ratioPercentile)}%</Table.Cell>
+                    <Table.Cell className="num">
+                      {row.episodeCount} 次 / {row.episodeWeeks} 周
+                    </Table.Cell>
+                    <Table.Cell className="num">{row.latestEpisode ?? "—"}</Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Content>
+          </Table.ScrollContainer>
+        </Table>
       </div>
     </section>
   );

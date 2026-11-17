@@ -6,13 +6,13 @@
 .auth-app {
   --qk-font-sans: "IBM Plex Sans SC", "IBM Plex Sans", system-ui, sans-serif;
   --qk-font-mono: "IBM Plex Mono", ui-monospace, monospace;
-  --qk-canvas: #f4f4f5;
-  --qk-surface: #ffffff;
-  --qk-surface-muted: #fafafa;
-  --qk-border: #e4e4e7;
-  --qk-fg: #18181b;
-  --qk-fg-secondary: #52525b;
-  --qk-fg-muted: #a1a1aa;
+  --qk-canvas: #eef1f4;
+  --qk-surface: #f7f8fa;
+  --qk-surface-muted: #e7ebf0;
+  --qk-border: #d5dbe3;
+  --qk-fg: #0f172a;
+  --qk-fg-secondary: #475569;
+  --qk-fg-muted: #71717a;
   --qk-accent: #4f46e5;
   --qk-accent-hover: #4338ca;
   --qk-accent-muted: #eef2ff;
@@ -23,12 +23,12 @@
   --qk-div-cash-bg: #eef2ff;
   --qk-div-cash-fg: #3730a3;
   --qk-div-cash-border: #c7d2fe;
-  --qk-div-bonus-bg: #ecfdf5;
-  --qk-div-bonus-fg: #065f46;
-  --qk-div-bonus-border: #a7f3d0;
-  --qk-div-transfer-bg: #f0f9ff;
-  --qk-div-transfer-fg: #075985;
-  --qk-div-transfer-border: #bae6fd;
+  --qk-div-bonus-bg: #f4f4f5;
+  --qk-div-bonus-fg: #3f3f46;
+  --qk-div-bonus-border: #d4d4d8;
+  --qk-div-transfer-bg: #eef2ff;
+  --qk-div-transfer-fg: #312e81;
+  --qk-div-transfer-border: #c7d2fe;
   --qk-div-mixed-bg: #f4f4f5;
   --qk-div-mixed-fg: #3f3f46;
   --qk-div-mixed-border: #e4e4e7;
@@ -49,10 +49,10 @@
 
 [data-theme="dark"] .dividends-app,
 [data-theme="dark"] .auth-app {
-  --qk-canvas: #0a0a0b;
-  --qk-surface: #111113;
-  --qk-surface-muted: #18181b;
-  --qk-border: #27272a;
+  --qk-canvas: #12141a;
+  --qk-surface: #1c1f26;
+  --qk-surface-muted: #16181e;
+  --qk-border: #2c313a;
   --qk-fg: #fafafa;
   --qk-fg-secondary: #a1a1aa;
   --qk-fg-muted: #71717a;
@@ -63,12 +63,12 @@
   --qk-div-cash-bg: rgba(99, 102, 241, 0.18);
   --qk-div-cash-fg: #c7d2fe;
   --qk-div-cash-border: rgba(129, 140, 248, 0.35);
-  --qk-div-bonus-bg: rgba(16, 185, 129, 0.14);
-  --qk-div-bonus-fg: #6ee7b7;
-  --qk-div-bonus-border: rgba(52, 211, 153, 0.3);
-  --qk-div-transfer-bg: rgba(14, 165, 233, 0.14);
-  --qk-div-transfer-fg: #7dd3fc;
-  --qk-div-transfer-border: rgba(56, 189, 248, 0.3);
+  --qk-div-bonus-bg: #242830;
+  --qk-div-bonus-fg: #d4d4d8;
+  --qk-div-bonus-border: #3a404b;
+  --qk-div-transfer-bg: rgba(99, 102, 241, 0.18);
+  --qk-div-transfer-fg: #e0e7ff;
+  --qk-div-transfer-border: rgba(165, 180, 252, 0.35);
   --qk-div-mixed-bg: #18181b;
   --qk-div-mixed-fg: #a1a1aa;
   --qk-div-mixed-border: #27272a;

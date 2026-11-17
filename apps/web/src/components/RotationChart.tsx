@@ -6,6 +6,7 @@ import {
   LineStyle,
   createChart,
   createSeriesMarkers,
+  type IChartApi,
   type LineData,
   type MouseEventParams,
   type SeriesMarker,
@@ -15,7 +16,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { rangeStart } from "../lib/format.js";
 import { useTheme } from "../lib/theme.js";
+import { BandFillPrimitive } from "./bandFill.js";
 import { ChartAttribution } from "./chartAttribution.js";
+import { VisibleRangeControl } from "./VisibleRangeControl.js";
 
 type Point = RotationView["points"][number];
 
@@ -39,8 +42,11 @@ function formatNum(value: number | null, digits: number): string {
 
 export function RotationChart({ view, range }: { view: RotationView; range: RangeKey }) {
   const host = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
   const { theme } = useTheme();
   const [readout, setReadout] = useState("移动十字线同时查看四个窗格。");
+  const [paneHeights, setPaneHeights] = useState<number[]>([]);
+  const [visible, setVisible] = useState<{ from: number; to: number; last: number } | null>(null);
   const start = rangeStart(view.asOf.slice(0, 10), range);
   const points = useMemo(
     () => view.points.filter((point) => (start ? point.date >= start : true)),
@@ -61,6 +67,7 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
     const secondary = cssVar("--qk-text-secondary");
     const blue = cssVar("--qk-brand-accent");
     const red = cssVar("--qk-market-up");
+    const ma = cssVar("--qk-brand-primary");
     const chart = createChart(el, {
       width: el.clientWidth,
       height: el.clientHeight,
@@ -90,6 +97,7 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
       handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
       kineticScroll: { touch: !reduce, mouse: false },
     });
+    chartRef.current = chart;
     const shared = { priceLineVisible: false, lastValueVisible: false, pointMarkersVisible: false };
     chart
       .addSeries(LineSeries, { ...shared, color: blue, lineWidth: 2 }, 0)
@@ -117,8 +125,15 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
       .setData(lineData(points, (point) => point.upper));
     const relative = chart.addSeries(LineSeries, { ...shared, color: blue, lineWidth: 2 }, 1);
     relative.setData(lineData(points, (point) => point.r));
+    const fill = cssVar("--qk-brand-accent-muted");
+    relative.attachPrimitive(
+      new BandFillPrimitive(
+        points.map((point) => ({ time: point.date, upper: point.upper, lower: point.lower })),
+        fill.startsWith("#") && fill.length === 7 ? `${fill}8c` : fill,
+      ),
+    );
     chart
-      .addSeries(LineSeries, { ...shared, color: red, lineWidth: 1 }, 1)
+      .addSeries(LineSeries, { ...shared, color: ma, lineWidth: 1 }, 1)
       .setData(lineData(points, (point) => point.ma));
     const spread = chart.addSeries(
       LineSeries,
@@ -146,7 +161,7 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
     chart
       .addSeries(
         LineSeries,
-        { ...shared, color: red, lineWidth: 1, lineStyle: LineStyle.Dashed },
+        { ...shared, color: ma, lineWidth: 1, lineStyle: LineStyle.Dashed },
         2,
       )
       .setData(lineData(points, (point) => point.sMa));
@@ -164,7 +179,7 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
     chart
       .addSeries(
         LineSeries,
-        { ...shared, color: red, lineWidth: 1, lineStyle: LineStyle.Dashed },
+        { ...shared, color: ma, lineWidth: 1, lineStyle: LineStyle.Dashed },
         3,
       )
       .setData(lineData(points, (point) => point.rsiMa));
@@ -206,10 +221,14 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
     for (const pane of chart.panes()) pane.setStretchFactor(1);
     requestAnimationFrame(() => {
       if (!el.isConnected) return;
-      el.dataset.paneHeights = chart
+      const heights = chart
         .panes()
-        .map((pane) => pane.getHeight())
-        .join(",");
+        .map((pane) => pane.getHTMLElement()?.clientHeight || pane.getHeight());
+      setPaneHeights(heights);
+      el.dataset.paneHeights = heights.join(",");
+      el.dataset.band = points.some((point) => point.upper != null && point.lower != null)
+        ? "filled"
+        : "none";
     });
     const onMove = (param: MouseEventParams) => {
       const time = typeof param.time === "string" ? param.time : "";
@@ -223,14 +242,23 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
       );
     };
     chart.subscribeCrosshairMove(onMove);
+    const onRange = () => {
+      const logical = chart.timeScale().getVisibleLogicalRange();
+      if (!logical) return;
+      setVisible({ from: logical.from, to: logical.to, last: Math.max(0, points.length - 1) });
+    };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(onRange);
+    onRange();
     const observer = new ResizeObserver(() => {
       chart.applyOptions({ width: el.clientWidth, height: el.clientHeight });
     });
     observer.observe(el);
     return () => {
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(onRange);
       chart.unsubscribeCrosshairMove(onMove);
       observer.disconnect();
       chart.remove();
+      chartRef.current = null;
     };
   }, [points, markers, theme, view.pair.aName, view.pair.bName]);
 
@@ -249,28 +277,56 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
           <i className="sw-dash" />
           {view.pair.bName}
         </span>
-        <span>▲▼ 轨道穿越</span>
-        <span>● 均线穿零</span>
-        <span>■ 收益差极值</span>
+        <span>▲▼ 轨道穿越（箭头）</span>
+        <span>● 均线穿零（圆点）</span>
+        <span>■ 收益差极值（方块）</span>
+        <span>
+          <i className="sw" style={{ background: "var(--qk-brand-accent-muted)" }} />
+          轨道填充
+        </span>
       </div>
-      <p className="chart-gap">
-        轨道填充未提供。Lightweight Charts
-        不能在两条线之间铺面积，上轨和下轨以虚线保留。标记图形改为箭头、圆点和方块。
+      <p className="chart-key" id="rotation-marker-key">
+        轨道穿越是箭头，均线穿零是圆点，收益差极值是方块。上轨和下轨之间是半透明填充。
       </p>
       <p className="chart-readout" data-chart-readout="rotation">
         {readout}
       </p>
+      {visible ? (
+        <VisibleRangeControl
+          from={visible.from}
+          to={visible.to}
+          last={visible.last}
+          onChange={(from, to) =>
+            chartRef.current?.timeScale().setVisibleLogicalRange({ from, to })
+          }
+          onReset={() => chartRef.current?.timeScale().fitContent()}
+        />
+      ) : null}
       {points.length === 0 ? (
         <div className="state">暂无轮动数据</div>
       ) : (
-        <div
-          ref={host}
-          className="rot-chart"
-          role="img"
-          aria-label="轮动三棱镜四图"
-          data-points={points.length}
-          data-panes="4"
-        />
+        <div className="pane-frame">
+          <div className="pane-labels">
+            {["累计收益", "相对强弱 R", "40日收益差", "RSI14"].map((label, index) => (
+              <div
+                key={label}
+                className="pane-label"
+                style={paneHeights[index] ? { height: paneHeights[index] } : undefined}
+              >
+                {label}
+              </div>
+            ))}
+          </div>
+          <div
+            ref={host}
+            className="rot-chart"
+            role="img"
+            aria-label="轮动三棱镜四图"
+            aria-describedby="rotation-marker-key"
+            data-points={points.length}
+            data-panes="4"
+          />
+        </div>
       )}
       <ChartAttribution />
       <details className="data-fallback">

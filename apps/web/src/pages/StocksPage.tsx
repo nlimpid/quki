@@ -1,4 +1,5 @@
-import type { StockListItem, StockListResponse, StockMarketFilter, StockSort } from "@quki/types";
+import { Button, SearchField, Table } from "@heroui/react";
+import type { StockListResponse, StockMarketFilter, StockSort } from "@quki/types";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
@@ -106,15 +107,13 @@ export function StocksPage() {
         </div>
       </div>
       <div className="div-toolbar">
-        <label className="div-search">
-          <span aria-hidden="true">⌕</span>
-          <input
-            value={draft}
-            placeholder="搜索代码 / 名称"
-            aria-label="搜索代码 / 名称"
-            onChange={(event) => setDraft(event.target.value)}
-          />
-        </label>
+        <SearchField aria-label="搜索代码 / 名称" value={draft} onChange={setDraft}>
+          <SearchField.Group>
+            <SearchField.SearchIcon />
+            <SearchField.Input placeholder="搜索代码 / 名称" />
+            <SearchField.ClearButton />
+          </SearchField.Group>
+        </SearchField>
         <div className="chips" role="group" aria-label="市场">
           {MARKETS.map((item) => (
             <button
@@ -144,13 +143,9 @@ export function StocksPage() {
           <div className="state-block">
             列表加载失败
             <div>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => setAttempt((value) => value + 1)}
-              >
+              <Button variant="secondary" onPress={() => setAttempt((value) => value + 1)}>
                 重试
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
@@ -159,10 +154,9 @@ export function StocksPage() {
             没有匹配的股票
             {q ? (
               <div>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => {
+                <Button
+                  variant="secondary"
+                  onPress={() => {
                     setDraft("");
                     const next = new URLSearchParams(params);
                     next.delete("q");
@@ -171,7 +165,7 @@ export function StocksPage() {
                   }}
                 >
                   清空搜索
-                </button>
+                </Button>
               </div>
             ) : null}
           </div>
@@ -179,52 +173,71 @@ export function StocksPage() {
         {!loading && !error && items.length > 0 ? (
           <>
             <div className="div-table-wrap list-table">
-              <table className="div-table">
-                <thead>
-                  <tr>
-                    <SortableHead
-                      label="代码"
-                      sort="code"
-                      active={sort}
-                      onSort={(next) => setQuery({ sort: next })}
-                    />
-                    <th>名称</th>
-                    <th className="num">最新价</th>
-                    <SortableHead
-                      label="近12月股息率"
-                      sort="yield"
-                      active={sort}
-                      align="right"
-                      onSort={(next) => setQuery({ sort: next })}
-                    />
-                    <SortableHead
-                      label="最近除权日"
-                      sort="lastDivDate"
-                      active={sort}
-                      align="right"
-                      onSort={(next) => setQuery({ sort: next })}
-                    />
-                    <th className="num">每10股派息</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => (
-                    <tr key={item.code}>
-                      <td className="mono">
-                        <Link to={`/stock/${item.code}`}>{item.code}</Link>
-                      </td>
-                      <td>
-                        <Link to={`/stock/${item.code}`}>{item.name}</Link>{" "}
-                        <span className="subdued">{item.exchange}</span>
-                      </td>
-                      <PriceCell item={item} />
-                      <td className="num mono">{formatYield(item.trailingYieldPct)}</td>
-                      <td className="num mono subdued">{item.lastCashDivDate ?? "—"}</td>
-                      <td className="num mono">{formatPer10(item.lastCashPer10)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <Table>
+                <Table.ScrollContainer>
+                  <Table.Content aria-label="股票列表">
+                    <Table.Header>
+                      <Table.Column isRowHeader>
+                        <SortButton
+                          label="代码"
+                          sort="code"
+                          active={sort}
+                          onSort={(next) => setQuery({ sort: next })}
+                        />
+                      </Table.Column>
+                      <Table.Column>名称</Table.Column>
+                      <Table.Column>最新价</Table.Column>
+                      <Table.Column>
+                        <SortButton
+                          label="近12月股息率"
+                          sort="yield"
+                          active={sort}
+                          onSort={(next) => setQuery({ sort: next })}
+                        />
+                      </Table.Column>
+                      <Table.Column>
+                        <SortButton
+                          label="最近除权日"
+                          sort="lastDivDate"
+                          active={sort}
+                          onSort={(next) => setQuery({ sort: next })}
+                        />
+                      </Table.Column>
+                      <Table.Column>每10股派息</Table.Column>
+                    </Table.Header>
+                    <Table.Body>
+                      {items.map((item) => (
+                        <Table.Row key={item.code} id={item.code}>
+                          <Table.Cell className="mono">
+                            <Link to={`/stock/${item.code}`}>{item.code}</Link>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Link to={`/stock/${item.code}`}>{item.name}</Link>{" "}
+                            <span className="subdued">{item.exchange}</span>
+                          </Table.Cell>
+                          <Table.Cell
+                            className={item.quoteFresh ? "num mono" : "num mono quote-stale"}
+                          >
+                            {formatPrice(item.lastClose)}
+                            {!item.quoteFresh && item.lastClose != null ? (
+                              <span className="subdued"> 已知</span>
+                            ) : null}
+                          </Table.Cell>
+                          <Table.Cell className="num mono">
+                            {formatYield(item.trailingYieldPct)}
+                          </Table.Cell>
+                          <Table.Cell className="num mono subdued">
+                            {item.lastCashDivDate ?? "—"}
+                          </Table.Cell>
+                          <Table.Cell className="num mono">
+                            {formatPer10(item.lastCashPer10)}
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
             </div>
             <div className="stock-cards">
               {items.map((item) => (
@@ -254,25 +267,23 @@ export function StocksPage() {
         ) : null}
         {pages > 1 ? (
           <div className="pager">
-            <button
-              type="button"
-              className="btn"
-              disabled={page <= 1}
-              onClick={() => setQuery({ page: page - 1 })}
+            <Button
+              variant="secondary"
+              isDisabled={page <= 1}
+              onPress={() => setQuery({ page: page - 1 })}
             >
               上一页
-            </button>
+            </Button>
             <span className="mono subdued">
               {page} / {pages}
             </span>
-            <button
-              type="button"
-              className="btn"
-              disabled={page >= pages}
-              onClick={() => setQuery({ page: page + 1 })}
+            <Button
+              variant="secondary"
+              isDisabled={page >= pages}
+              onPress={() => setQuery({ page: page + 1 })}
             >
               下一页
-            </button>
+            </Button>
           </div>
         ) : null}
       </section>
@@ -280,36 +291,25 @@ export function StocksPage() {
   );
 }
 
-function PriceCell({ item }: { item: StockListItem }) {
-  return (
-    <td className={item.quoteFresh ? "num mono" : "num mono quote-stale"}>
-      {formatPrice(item.lastClose)}
-      {!item.quoteFresh && item.lastClose != null ? <span className="subdued"> 已知</span> : null}
-    </td>
-  );
-}
-
-function SortableHead({
+function SortButton({
   label,
   sort,
   active,
-  align,
   onSort,
 }: {
   label: string;
   sort: StockSort;
   active: StockSort;
-  align?: "right";
   onSort: (sort: StockSort) => void;
 }) {
   return (
-    <th
-      className={align === "right" ? "num" : undefined}
+    <button
+      type="button"
+      className="linkish"
       aria-sort={active === sort ? "descending" : "none"}
+      onClick={() => onSort(sort)}
     >
-      <button type="button" className="linkish" onClick={() => onSort(sort)}>
-        {label}
-      </button>
-    </th>
+      {label}
+    </button>
   );
 }

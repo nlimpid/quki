@@ -1,7 +1,27 @@
 @import "tailwindcss";
-@import "@heroui/styles";
+@import "tw-animate-css";
+@import "@heroui/styles/utilities";
+@import "@heroui/styles/variants";
+@import "@heroui/styles/themes/default";
+@import "@heroui/styles/components/button.css";
+@import "@heroui/styles/components/close-button.css";
+@import "@heroui/styles/components/drawer.css";
+@import "@heroui/styles/components/input.css";
+@import "@heroui/styles/components/label.css";
+@import "@heroui/styles/components/search-field.css";
+@import "@heroui/styles/components/alert.css";
+@import "@heroui/styles/components/card.css";
+@import "@heroui/styles/components/chip.css";
+@import "@heroui/styles/components/link.css";
+@import "@heroui/styles/components/skeleton.css";
+@import "@heroui/styles/components/table.css";
 @import "../../../design/tokens.css";
 @import "./fonts.css";
+
+:root {
+  --z-index-overlay: 100000;
+  --visual-viewport-height: 100dvh;
+}
 
 @theme inline {
   --font-sans: var(--qk-font-sans);
@@ -233,7 +253,7 @@ a {
   background: var(--qk-bg-surface);
   border: 1px solid var(--qk-border-default);
   border-radius: var(--qk-radius-lg);
-  box-shadow: var(--qk-shadow-sm);
+  box-shadow: none;
   min-width: 0;
   max-width: 100%;
 }
@@ -339,6 +359,62 @@ a {
 }
 .chart-attribution a {
   color: var(--qk-brand-accent);
+}
+.chart-key {
+  margin: 0 16px 8px;
+  font-size: 12px;
+  color: var(--qk-text-tertiary);
+}
+.range-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 0 16px 8px;
+  font-size: 12px;
+  color: var(--qk-text-secondary);
+}
+.range-control label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.range-control input[type="range"] {
+  width: 140px;
+  accent-color: var(--qk-brand-accent);
+}
+.range-reset {
+  min-height: 28px;
+  border: 1px solid var(--qk-border-default);
+  border-radius: var(--qk-radius-control, 8px);
+  background: var(--qk-bg-surface);
+  color: var(--qk-text-primary);
+  padding: 0 10px;
+}
+.pane-frame {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+  max-width: 100%;
+}
+.pane-labels {
+  width: 5.5rem;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  color: var(--qk-text-secondary);
+}
+.pane-label {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+.pane-frame .rot-chart {
+  flex: 1;
+  width: auto;
+  min-width: 0;
 }
 .chart-gap {
   color: var(--qk-text-tertiary);

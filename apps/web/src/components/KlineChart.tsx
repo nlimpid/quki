@@ -8,6 +8,7 @@ import {
   LineStyle,
   createChart,
   createSeriesMarkers,
+  type IChartApi,
   type MouseEventParams,
   type SeriesMarker,
 } from "lightweight-charts";
@@ -25,7 +26,8 @@ import {
 } from "../lib/format.js";
 import { useTheme } from "../lib/theme.js";
 import { ChartAttribution } from "./chartAttribution.js";
-import { lineWithGaps, splitPriceSeries } from "./klineModel.js";
+import { lineWithGaps, splitPriceSeries, volumeBars } from "./klineModel.js";
+import { VisibleRangeControl } from "./VisibleRangeControl.js";
 
 const CHART_TIERS = [85, 95, 105, 115] as const;
 
@@ -98,8 +100,10 @@ export function KlineChart({
   onToggleVolume: (value: boolean) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
   const { theme } = useTheme();
   const [readout, setReadout] = useState<string>("移动十字线查看开高低收。");
+  const [visible, setVisible] = useState<{ from: number; to: number; last: number } | null>(null);
   const asOfDate = overview.asOf.slice(0, 10);
   const start = rangeStart(asOfDate, range);
   const source = period === "W" ? overview.weekly : overview.daily;
@@ -165,6 +169,7 @@ export function KlineChart({
       handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
       kineticScroll: { touch: !reduce, mouse: false },
     });
+    chartRef.current = chart;
     const price = splitPriceSeries(candles);
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: up,
@@ -233,22 +238,18 @@ export function KlineChart({
     if (showVolume) {
       const volume = chart.addSeries(
         HistogramSeries,
-        { priceFormat: { type: "volume" }, priceLineVisible: false, lastValueVisible: false },
+        {
+          priceFormat: {
+            type: "custom",
+            minMove: 1,
+            formatter: (value: number) => formatVolume(value),
+          },
+          priceLineVisible: false,
+          lastValueVisible: false,
+        },
         1,
       );
-      volume.setData(
-        candles.flatMap((candle, index) => {
-          if (candle.volume == null) return [];
-          const prev = candles[index - 1]?.close ?? candle.open ?? candle.close;
-          return [
-            {
-              time: candle.time,
-              value: candle.volume,
-              color: candle.close >= prev ? cssVar("--qk-volume-up") : cssVar("--qk-volume-down"),
-            },
-          ];
-        }),
-      );
+      volume.setData(volumeBars(candles, cssVar("--qk-volume-up"), cssVar("--qk-volume-down")));
       chart.panes()[1]?.setHeight(72);
     }
     const onMove = (param: MouseEventParams) => {
@@ -278,14 +279,23 @@ export function KlineChart({
       );
     };
     chart.subscribeCrosshairMove(onMove);
+    const onRange = () => {
+      const logical = chart.timeScale().getVisibleLogicalRange();
+      if (!logical) return;
+      setVisible({ from: logical.from, to: logical.to, last: Math.max(0, candles.length - 1) });
+    };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(onRange);
+    onRange();
     const observer = new ResizeObserver(() => {
       chart.applyOptions({ width: el.clientWidth });
     });
     observer.observe(el);
     return () => {
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(onRange);
       chart.unsubscribeCrosshairMove(onMove);
       observer.disconnect();
       chart.remove();
+      chartRef.current = null;
     };
   }, [candles, maAligned, placed, percentiles, period, showVolume, theme, overview.temperature]);
 
@@ -309,9 +319,12 @@ export function KlineChart({
               <i className="sw-dash" />
               估值线 · 冷→热
             </span>
-            <span>▼ 已确认</span>
-            <span>■ 未确认</span>
+            <span>▼ 已确认低点（向下箭头）</span>
+            <span>■ 未确认低点（方块）</span>
           </div>
+          <p className="chart-key" id="kline-marker-key">
+            已确认和未确认用不同形状：已确认是向下箭头，未确认是方块。
+          </p>
         </div>
         <label className="chk">
           <input
@@ -325,6 +338,17 @@ export function KlineChart({
       <p className="chart-readout" data-chart-readout="kline">
         {readout}
       </p>
+      {visible ? (
+        <VisibleRangeControl
+          from={visible.from}
+          to={visible.to}
+          last={visible.last}
+          onChange={(from, to) =>
+            chartRef.current?.timeScale().setVisibleLogicalRange({ from, to })
+          }
+          onReset={() => chartRef.current?.timeScale().fitContent()}
+        />
+      ) : null}
       <div className="chart-body">
         {candles.length === 0 ? (
           <div className="state">暂无行情数据</div>
@@ -334,8 +358,11 @@ export function KlineChart({
             className={showVolume ? "chart-box with-volume" : "chart-box"}
             role="img"
             aria-label={`${overview.instrument.shortName} ${period === "W" ? "周线" : "日线"} K 线`}
+            aria-describedby="kline-marker-key"
             data-points={candles.length}
             data-markers={placed.length}
+            data-volume={candles.filter((candle) => candle.volume != null).length}
+            data-volume-missing={candles.filter((candle) => candle.volume == null).length}
             data-ohlc={
               candles.filter(
                 (candle) => candle.open != null && candle.high != null && candle.low != null,

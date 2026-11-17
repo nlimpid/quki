@@ -29,6 +29,28 @@ export function splitPriceSeries(candles: readonly Candle[]): {
   return { candles: ohlc, closeOnly };
 }
 
+/** Volume bars follow the volume field alone. A missing volume is a gap, never a zero. */
+export function volumeBars(
+  candles: readonly {
+    time: string;
+    open: number | null;
+    close: number;
+    volume: number | null;
+  }[],
+  up: string,
+  down: string,
+): ({ time: string } | { time: string; value: number; color: string })[] {
+  return candles.map((candle, index) => {
+    if (candle.volume == null) return { time: candle.time };
+    const previous = candles[index - 1]?.close ?? candle.open ?? candle.close;
+    return {
+      time: candle.time,
+      value: candle.volume,
+      color: candle.close >= previous ? up : down,
+    };
+  });
+}
+
 export function lineWithGaps(
   candles: readonly Candle[],
   values: readonly (number | null)[],

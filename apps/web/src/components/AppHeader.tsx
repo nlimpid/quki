@@ -1,3 +1,4 @@
+import { Button } from "@heroui/react";
 import { safeReturnTo } from "@quki/types";
 import { NavLink, useLocation } from "react-router";
 
@@ -64,14 +65,14 @@ export function AppHeader({
           </nav>
         </div>
         <div className="header-right">
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={toggle}
+          <Button
+            isIconOnly
+            variant="ghost"
+            onPress={toggle}
             aria-label={theme === "dark" ? "切换浅色模式" : "切换深色模式"}
           >
             {theme === "dark" ? "☀" : "☾"}
-          </button>
+          </Button>
           {control === "spinner" ? (
             <div className="auth-slot" aria-busy="true">
               <span className="auth-spinner" />

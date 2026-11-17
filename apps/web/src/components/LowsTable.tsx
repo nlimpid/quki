@@ -1,3 +1,4 @@
+import { Table } from "@heroui/react";
 import type { LowRow } from "@quki/types";
 
 import { formatLevel, formatPct } from "../lib/format.js";
@@ -32,30 +33,32 @@ export function LowsTable({ rows }: { rows: LowRow[] }) {
       ) : (
         <>
           <div className="lows-table table-scroll">
-            <table className="qk">
-              <thead>
-                <tr>
-                  <th>周末日期</th>
-                  <th>周低点</th>
-                  <th>MA55</th>
-                  <th>低点/MA55</th>
-                  <th>标记</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.weekEnd} className={row.confirmed ? undefined : "unconfirmed"}>
-                    <td className="num">{row.weekEnd}</td>
-                    <td className="num">{formatLevel(row.weekLow)}</td>
-                    <td className="num">{formatLevel(row.ma55)}</td>
-                    <td className="num">{formatPct(row.ratioPct)}</td>
-                    <td>
-                      <Marks row={row} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Table>
+              <Table.ScrollContainer>
+                <Table.Content aria-label="显著低点">
+                  <Table.Header>
+                    <Table.Column isRowHeader>周末日期</Table.Column>
+                    <Table.Column>周低点</Table.Column>
+                    <Table.Column>MA55</Table.Column>
+                    <Table.Column>低点/MA55</Table.Column>
+                    <Table.Column>标记</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {rows.map((row) => (
+                      <Table.Row key={row.weekEnd} id={row.weekEnd}>
+                        <Table.Cell className="num">{row.weekEnd}</Table.Cell>
+                        <Table.Cell className="num">{formatLevel(row.weekLow)}</Table.Cell>
+                        <Table.Cell className="num">{formatLevel(row.ma55)}</Table.Cell>
+                        <Table.Cell className="num">{formatPct(row.ratioPct)}</Table.Cell>
+                        <Table.Cell>
+                          <Marks row={row} />
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
           </div>
           <div className="lows-cards">
             {rows.map((row) => (
