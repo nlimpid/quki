@@ -7,6 +7,24 @@ export type AccountHolding = {
   version: string;
 };
 
+/** Account rows are shown only for the Clerk session key that the Worker already confirmed. */
+export function showAccountBook(input: {
+  phaseKind: string;
+  sessionKey: string;
+  confirmedSessionKey: string | null;
+}): boolean {
+  return input.phaseKind === "authenticated" && input.confirmedSessionKey === input.sessionKey;
+}
+
+/** A list response belongs to the screen only if that session key is still current. */
+export function acceptAccountList(input: {
+  cancelled: boolean;
+  requestedKey: string;
+  currentKey: string;
+}): boolean {
+  return !input.cancelled && input.requestedKey === input.currentKey;
+}
+
 /** Account rows leave the screen when the session ends. The browser book is a different value. */
 export function visibleAccountHoldings(
   signedIn: boolean,

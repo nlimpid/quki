@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   LOGIN_CHECK_FAILED_COPY,
+  LOGIN_PRIVACY_COPY,
   LOGIN_UNAVAILABLE_COPY,
+  clerkFlowRedirects,
   applyProbeFailure,
   applyProbeSuccess,
   applyProbeTimeout,
@@ -70,6 +72,14 @@ describe("auth view state", () => {
     expect(loginView(unknown).alert).toBe(LOGIN_CHECK_FAILED_COPY);
     expect(loginView(unknown).message).toBeNull();
     expect(portfolioSubtitle(unknown)).not.toContain("未登录");
+    expect(LOGIN_PRIVACY_COPY).toContain("旧持仓不会上传");
+    expect(LOGIN_PRIVACY_COPY).toContain("账户持仓保存在服务器");
+    expect(LOGIN_PRIVACY_COPY).not.toContain("持仓仍仅保存在此浏览器");
+    const redirects = clerkFlowRedirects("/portfolio?add=1");
+    expect(redirects.forceRedirectUrl).toBe("/portfolio?add=1");
+    expect(redirects.signUpForceRedirectUrl).toBe("/portfolio?add=1");
+    expect(redirects.signUpUrl).toBe("/login?returnTo=%2Fportfolio%3Fadd%3D1");
+    expect(redirects.signUpUrl.startsWith("/login?")).toBe(true);
     expect(portfolioSubtitle(unknown)).not.toContain("登录暂不可用");
   });
 

@@ -32,6 +32,10 @@ type AuthContextValue = {
   dismissExpiry: () => void;
   /** Clerk session JWT for this probe, or null. Holdings must send this bearer. */
   accessToken: () => Promise<string | null>;
+  /** Current Clerk identity. Changes before the Worker probe returns. */
+  sessionKey: string;
+  /** Session key that produced the current phase. Null until a probe succeeds. */
+  confirmedSessionKey: string | null;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -58,6 +62,7 @@ export function AuthProvider({
   const [generation, setGeneration] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const [expiryDismissed, setExpiryDismissed] = useState(false);
+  const [confirmedSessionKey, setConfirmedSessionKey] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const tokenRef = useRef(getAccessToken);
   const rejectedRef = useRef(onSessionRejected);
@@ -84,6 +89,7 @@ export function AuthProvider({
         });
         if (controller.signal.aborted) return;
         if (outcome.type === "ok") {
+          setConfirmedSessionKey(sessionKey);
           setPhase((current) => applyProbeSuccess(current, outcome.session));
           return;
         }
@@ -150,6 +156,8 @@ export function AuthProvider({
         logout,
         dismissExpiry: () => setExpiryDismissed(true),
         accessToken,
+        sessionKey,
+        confirmedSessionKey,
       }}
     >
       {children}

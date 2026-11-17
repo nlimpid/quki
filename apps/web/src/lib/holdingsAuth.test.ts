@@ -1,7 +1,8 @@
 import { HOLDINGS_STORAGE_KEY, type HoldingsState } from "@quki/analytics";
 import { describe, expect, it } from "vitest";
 
-import { visibleAccountHoldings } from "./accountHoldings.js";
+import { acceptAccountList, showAccountBook, visibleAccountHoldings } from "./accountHoldings.js";
+import { accountActionReady } from "./holdingIntent.js";
 import {
   bearerForUser,
   bearerHeader,
@@ -101,6 +102,37 @@ describe("holdings stay on this browser", () => {
     expect(bearerForUser("user-a", "user-a", "")).toBeNull();
     expect(visibleAccountHoldings(false, account)).toBeNull();
     expect(visibleAccountHoldings(true, account)).toEqual(account);
+    expect(
+      showAccountBook({
+        phaseKind: "authenticated",
+        sessionKey: "ready:user-a",
+        confirmedSessionKey: "ready:user-a",
+      }),
+    ).toBe(true);
+    expect(
+      showAccountBook({
+        phaseKind: "authenticated",
+        sessionKey: "ready:user-b",
+        confirmedSessionKey: "ready:user-a",
+      }),
+    ).toBe(false);
+    expect(accountActionReady("authenticated", "ready:user-b", "ready:user-a")).toBe(false);
+    expect(accountActionReady("authenticated", "ready:user-b", "ready:user-b")).toBe(true);
+    expect(accountActionReady("guest", "ready:guest", "ready:guest")).toBe(false);
+    expect(
+      acceptAccountList({
+        cancelled: false,
+        requestedKey: "ready:user-a",
+        currentKey: "ready:user-b",
+      }),
+    ).toBe(false);
+    expect(
+      acceptAccountList({
+        cancelled: true,
+        requestedKey: "ready:user-b",
+        currentKey: "ready:user-b",
+      }),
+    ).toBe(false);
   });
 
   it("sends the Clerk bearer on an account holding write", async () => {

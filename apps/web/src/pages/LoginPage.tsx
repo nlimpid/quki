@@ -7,7 +7,12 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { AppHeader } from "../components/AppHeader.js";
 import { useAuth } from "../lib/auth.js";
 import { usePageTitle } from "../lib/pageTitle.js";
-import { LOGIN_PRIVACY_COPY, LOGIN_UNAVAILABLE_COPY, loginView } from "../lib/authState.js";
+import {
+  LOGIN_PRIVACY_COPY,
+  LOGIN_UNAVAILABLE_COPY,
+  clerkFlowRedirects,
+  loginView,
+} from "../lib/authState.js";
 
 export function LoginPage() {
   const { phase, retry, retrying } = useAuth();
@@ -17,6 +22,7 @@ export function LoginPage() {
   const returnTo = safeReturnTo(params.get("returnTo"), window.location.origin);
   const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY?.trim() ?? "";
   const view = loginView(phase, params.get("error"));
+  const redirects = clerkFlowRedirects(returnTo);
   const showSignIn = publishableKey.length > 0 && view.mode === "ready";
   const showUnavailable = view.mode === "unavailable" || (view.mode === "ready" && !showSignIn);
   usePageTitle("登录 · quki");
@@ -52,8 +58,12 @@ export function LoginPage() {
             <SignIn
               path="/login"
               routing="path"
-              forceRedirectUrl={returnTo}
-              fallbackRedirectUrl={returnTo}
+              withSignUp
+              forceRedirectUrl={redirects.forceRedirectUrl}
+              fallbackRedirectUrl={redirects.fallbackRedirectUrl}
+              signUpUrl={redirects.signUpUrl}
+              signUpForceRedirectUrl={redirects.signUpForceRedirectUrl}
+              signUpFallbackRedirectUrl={redirects.signUpFallbackRedirectUrl}
             />
           ) : null}
           {showUnavailable ? <p className="auth-lead">{LOGIN_UNAVAILABLE_COPY}</p> : null}

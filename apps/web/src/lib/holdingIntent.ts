@@ -10,13 +10,25 @@ export function loginReturnHref(intentPath: string, origin: string): string {
   return `/login?returnTo=${encodeURIComponent(returnTo)}`;
 }
 
+export function accountActionReady(
+  phaseKind: string,
+  sessionKey: string,
+  confirmedSessionKey: string | null,
+): boolean {
+  return phaseKind === "authenticated" && confirmedSessionKey === sessionKey;
+}
+
 export function useHoldingIntent() {
-  const { phase, retry } = useAuth();
+  const { phase, retry, sessionKey, confirmedSessionKey } = useAuth();
   const navigate = useNavigate();
   const [notice, setNotice] = useState<string | null>(null);
 
   function request(intentPath: string): boolean {
     const decision = holdingMutation(phase);
+    if (decision === "allow" && !accountActionReady(phase.kind, sessionKey, confirmedSessionKey)) {
+      setNotice("正在确认登录状态…");
+      return false;
+    }
     if (decision === "allow") {
       setNotice(null);
       return true;

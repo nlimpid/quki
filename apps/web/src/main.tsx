@@ -66,7 +66,9 @@ function RootLayout() {
       routerPush={(to) => navigate(sameOriginPath(to))}
       routerReplace={(to) => navigate(sameOriginPath(to), { replace: true })}
       signInUrl="/login"
+      signUpUrl="/login"
       signInFallbackRedirectUrl="/"
+      signUpFallbackRedirectUrl="/"
     >
       <ClerkBoundAuth>{outlet}</ClerkBoundAuth>
     </ClerkProvider>

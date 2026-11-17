@@ -4,7 +4,26 @@ export const LOGIN_UNAVAILABLE_COPY =
   "登录暂不可用。访客仍可查看行情。此浏览器里的旧持仓只供查看。";
 export const LOGIN_CHECK_FAILED_COPY = "无法确认登录状态，请重试。";
 export const LOGIN_PRIVACY_COPY =
-  "登录不会上传或云同步你的本地持仓。持仓仍仅保存在此浏览器，清除站点数据会丢失。";
+  "此浏览器里的旧持仓不会上传、合并或删除。登录后的账户持仓保存在服务器。清除站点数据会丢失旧列表，不会删除账户持仓。";
+export const ACCOUNT_SAVE_COPY = "保存到账户。不会上传、合并或删除此浏览器里的旧持仓。";
+export const ACCOUNT_SAVE_LABEL = "保存到账户";
+
+/** Same-origin continuation for Clerk sign-in and the combined email sign-up flow. */
+export function clerkFlowRedirects(returnTo: string): {
+  forceRedirectUrl: string;
+  fallbackRedirectUrl: string;
+  signUpUrl: string;
+  signUpForceRedirectUrl: string;
+  signUpFallbackRedirectUrl: string;
+} {
+  return {
+    forceRedirectUrl: returnTo,
+    fallbackRedirectUrl: returnTo,
+    signUpForceRedirectUrl: returnTo,
+    signUpFallbackRedirectUrl: returnTo,
+    signUpUrl: `/login?returnTo=${encodeURIComponent(returnTo)}`,
+  };
+}
 
 /** What the last successful session response said about starting a new login. */
 export type LoginCapability =

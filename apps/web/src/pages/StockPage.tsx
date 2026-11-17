@@ -2,6 +2,7 @@ import type { DividendEventDto, DividendYears, StockDetailResponse } from "@quki
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 
+import { useAccountClock, commitAccountChange } from "../lib/accountBook.js";
 import { writeAccountHoldings } from "../lib/accountHoldings.js";
 import { useAuth } from "../lib/auth.js";
 import { useHoldingIntent } from "../lib/holdingIntent.js";
@@ -47,7 +48,8 @@ export function StockPage() {
   const held = heldCodes.has(code);
   const [shares, setShares] = useState("100");
   const [saved, setSaved] = useState<string | null>(null);
-  const { accessToken } = useAuth();
+  const { accessToken, sessionKey } = useAuth();
+  const { epoch, epochRef } = useAccountClock(sessionKey);
   const { phase, request: requestHolding } = useHoldingIntent();
 
   useEffect(() => {
@@ -152,8 +154,16 @@ export function StockPage() {
                     event.preventDefault();
                     if (!requestHolding(`/stock/${company.code}?add=1`)) return;
                     if (phase.kind !== "authenticated") return;
-                    void accessToken()
-                      .then((token) =>
+                    const ticket = epoch;
+                    void commitAccountChange(
+                      {
+                        note: () => epochRef.current,
+                        current: () => epochRef.current,
+                        still: (started) => started === epochRef.current,
+                      },
+                      accessToken,
+                      ticket,
+                      (token) =>
                         writeAccountHoldings(
                           {
                             code: company.code,
@@ -162,8 +172,10 @@ export function StockPage() {
                           },
                           token,
                         ),
-                      )
-                      .then(() => setSaved(null))
+                    )
+                      .then((result) => {
+                        if (result === "written") setSaved(null);
+                      })
                       .catch((reason: unknown) => {
                         setSaved(reason instanceof Error ? reason.message : "账户持仓没有保存");
                       });

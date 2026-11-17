@@ -6,12 +6,12 @@ import { Link, useSearchParams } from "react-router";
 
 import { useAuth } from "../lib/auth.js";
 import { usePageTitle } from "../lib/pageTitle.js";
-import { portfolioSubtitle } from "../lib/authState.js";
+import { ACCOUNT_SAVE_COPY, ACCOUNT_SAVE_LABEL, portfolioSubtitle } from "../lib/authState.js";
+import { useAccountBook } from "../lib/accountBook.js";
 import {
-  readAccountHoldings,
+  showAccountBook,
   visibleAccountHoldings,
   writeAccountHoldings,
-  type AccountHolding,
 } from "../lib/accountHoldings.js";
 import { useHoldingIntent } from "../lib/holdingIntent.js";
 import { readHoldings } from "../lib/holdingsStore.js";
@@ -49,28 +49,37 @@ export function PortfolioPage() {
   const loading = codeKey.length > 0 && loadedKey !== codeKey && quoteError === null;
   const shownQuotes = codeKey ? quotes : [];
   const [drawer, setDrawer] = useState<{ code: string; shares: string } | null>(null);
+  const [drawerEpoch, setDrawerEpoch] = useState<number | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const restoreFocus = useRef<HTMLElement | null>(null);
+  const { phase, retry, accessToken, sessionKey, confirmedSessionKey } = useAuth();
+  const signedIn = showAccountBook({
+    phaseKind: phase.kind,
+    sessionKey,
+    confirmedSessionKey,
+  });
+  const account = useAccountBook({ sessionKey, signedIn, accessToken });
+  const accountItems = account.items;
+  const accountError = account.error;
+  const shownAccount = visibleAccountHoldings(signedIn, accountItems);
+  if (drawer && drawerEpoch !== account.epoch) {
+    setDrawer(null);
+    setDrawerEpoch(null);
+    setPendingDelete(null);
+  }
   function openDrawer(next: { code: string; shares: string }, source?: Element | null) {
     const opener = source instanceof HTMLElement ? source.closest("button") : null;
     restoreFocus.current =
       opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    setDrawerEpoch(account.epoch);
     setDrawer(next);
   }
   function closeDrawer() {
     const target = restoreFocus.current;
     setDrawer(null);
+    setDrawerEpoch(null);
     window.setTimeout(() => target?.focus(), 0);
   }
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
-  const [accountItems, setAccountItems] = useState<AccountHolding[] | null>(null);
-  const [accountError, setAccountError] = useState<string | null>(null);
-  const { phase, retry, accessToken } = useAuth();
-  const signedIn = phase.kind === "authenticated";
-  if (!signedIn && (accountItems != null || accountError != null)) {
-    setAccountItems(null);
-    setAccountError(null);
-  }
-  const shownAccount = visibleAccountHoldings(signedIn, accountItems);
   const { notice, request } = useHoldingIntent();
   const [params, setParams] = useSearchParams();
   usePageTitle("我的持仓 · quki");
@@ -80,9 +89,12 @@ export function PortfolioPage() {
   const [openedIntent, setOpenedIntent] = useState("");
   if (intent && intent !== openedIntent) {
     setOpenedIntent(intent);
-    if (intent === "add") setDrawer({ code: "", shares: "" });
-    else {
+    if (intent === "add") {
+      setDrawerEpoch(account.epoch);
+      setDrawer({ code: "", shares: "" });
+    } else {
       const item = holdings.items.find((holding) => holding.code === intent);
+      setDrawerEpoch(account.epoch);
       setDrawer({ code: intent, shares: item ? String(item.shares) : "" });
     }
     const next = new URLSearchParams(params);
@@ -90,24 +102,6 @@ export function PortfolioPage() {
     next.delete("edit");
     setParams(next, { replace: true });
   }
-
-  useEffect(() => {
-    if (phase.kind !== "authenticated") return;
-    let cancel = false;
-    void accessToken()
-      .then((token) => readAccountHoldings(token))
-      .then((items) => {
-        if (cancel) return;
-        setAccountItems(items);
-      })
-      .catch((reason: unknown) => {
-        if (cancel) return;
-        setAccountError(reason instanceof Error ? reason.message : "账户持仓没有读取成功");
-      });
-    return () => {
-      cancel = true;
-    };
-  }, [accessToken, phase.kind]);
 
   useEffect(() => {
     if (!codeKey) return;
@@ -343,9 +337,14 @@ export function PortfolioPage() {
           onSave={(code, shares) => {
             if (!request("/portfolio")) return;
             if (phase.kind !== "authenticated") return;
-            void accessToken()
-              .then((token) => writeAccountHoldings({ code, shares, expectedVersion: null }, token))
-              .then(() => closeDrawer())
+            const ticket = drawerEpoch ?? account.epoch;
+            void account
+              .commit(ticket, (token) =>
+                writeAccountHoldings({ code, shares, expectedVersion: null }, token),
+              )
+              .then((result) => {
+                if (result === "written") closeDrawer();
+              })
               .catch((reason: unknown) => {
                 setQuoteError(reason instanceof Error ? reason.message : "账户持仓没有保存");
               });
@@ -454,16 +453,14 @@ function HoldingDrawer({
                 />
               </Label>
               {error ? <p className="yield-note">{error}</p> : null}
-              <p className="yield-note">
-                数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传或同步持仓。
-              </p>
+              <p className="yield-note">{ACCOUNT_SAVE_COPY}</p>
             </Drawer.Body>
             <Drawer.Footer>
               <Button variant="secondary" onPress={onClose}>
                 取消
               </Button>
               <Button variant="primary" onPress={save}>
-                保存到本机
+                {ACCOUNT_SAVE_LABEL}
               </Button>
             </Drawer.Footer>
           </Drawer.Dialog>
