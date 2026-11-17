@@ -23,6 +23,16 @@ describe("product shell stays visual", () => {
     expect(layout).toContain('onBacktest ? "qk-product" : "qk-index"');
     expect(read("apps/web/src/pages/DividendShell.tsx")).toContain("dividends-app qk-product");
     expect(read("apps/web/src/pages/RotationPage.tsx")).toContain('className="qk-product"');
+    const shell = read("apps/web/src/product-shell.css");
+    expect(shell).toMatch(/\.qk-product\.dividends-app \{[^}]*min-height: 100dvh;/s);
+    expect(shell).toContain(".qk-product .metric .v.quote-stale");
+    expect(shell).toContain(".qk-product .table__cell.quote-stale");
+    expect(shell.indexOf(".qk-product .metric .v.quote-stale")).toBeGreaterThan(
+      shell.indexOf(".qk-product .metric .v,"),
+    );
+    expect(read("apps/web/src/pages/LoginPage.tsx")).not.toContain("qk-product");
+    expect(read("design/tokens-dividends.css")).toContain(".auth-app {");
+    expect(read("apps/web/src/pages/IndexLayout.tsx")).toContain('"qk-index"');
   });
 
   it("covers remaining product words in the Source Han subset", () => {

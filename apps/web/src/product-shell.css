@@ -54,6 +54,15 @@
   background: var(--qk-paper);
   color: var(--qk-ink);
   font-synthesis: none;
+  /* Keep the last child's bottom margin inside this background. */
+  display: flow-root;
+}
+
+/* .dividends-app sets min-height: 100% later and wins on equal specificity,
+   so a short page ends and the cool body color shows below the shell. */
+.qk-product.dividends-app {
+  min-height: 100dvh;
+  background: var(--qk-paper);
 }
 
 [data-theme="dark"] .qk-product {
@@ -233,6 +242,10 @@
   color: var(--qk-ink);
 }
 
+.qk-product .metric .v.quote-stale {
+  color: var(--qk-fg-muted);
+}
+
 .qk-product .badge,
 .qk-product .badge-neutral {
   height: 22px;
@@ -324,6 +337,12 @@
   border-bottom: 1px solid var(--qk-rule);
   color: var(--qk-ink);
   white-space: nowrap;
+}
+
+.qk-product .table__cell.quote-stale,
+.qk-product .div-table td.quote-stale,
+.qk-product .stock-card .quote-stale {
+  color: var(--qk-fg-muted);
 }
 
 .qk-product .table__column,
