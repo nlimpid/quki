@@ -58,8 +58,8 @@ export function TierTable({ rows, lastClose }: { rows: TierRow[]; lastClose: num
                       <i className="tier-dot" style={{ background: DOT[row.tier] }} />
                       {row.tier}%
                     </Table.Cell>
-                    <Table.Cell>
-                      {row.label}
+                    <Table.Cell className="tier-meaning">
+                      <span className="tier-word">{row.label}</span>
                       {row.derived ? <span className="derived">派生</span> : null}
                     </Table.Cell>
                     <Table.Cell className="num">{formatLevel(row.level)}</Table.Cell>

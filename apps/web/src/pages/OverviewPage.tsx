@@ -12,6 +12,14 @@ import { fetchOverview } from "../lib/api.js";
 
 const RANGES = new Set<RangeKey>(["1Y", "3Y", "5Y", "10Y", "MAX"]);
 
+function ChartPending() {
+  return (
+    <section className="chart-panel" aria-busy="true">
+      <div className="chart-loading">加载中</div>
+    </section>
+  );
+}
+
 export function OverviewPage({
   onOverview,
 }: {
@@ -47,7 +55,7 @@ export function OverviewPage({
       })
       .catch((reason: unknown) => {
         if (cancelled) return;
-        setError(reason instanceof Error ? reason.message : "行情加载失败");
+        setError(reason instanceof Error ? reason.message : "数据暂时无法加载");
         onOverview(null, false);
       });
     return () => {
@@ -63,54 +71,61 @@ export function OverviewPage({
     return <Navigate to={`?${next.toString()}`} replace />;
   }
 
+  function setPeriod(nextPeriod: Period) {
+    const next = new URLSearchParams(params);
+    next.set("period", nextPeriod);
+    setParams(next);
+  }
+
+  function setRange(nextRange: RangeKey) {
+    const next = new URLSearchParams(params);
+    next.set("range", nextRange);
+    setParams(next);
+  }
+
   if (loading) {
     return (
-      <div className="layout-grid">
-        <section className="card chart-card">
-          <div className="skeleton" style={{ height: "var(--qk-chart-h)", margin: 16 }} />
+      <div className="index-stack" aria-busy="true">
+        <section className="judgment" aria-hidden="true">
+          <div className="temp-block">
+            <div className="skeleton temp-skel" />
+            <div className="skeleton meter-skel" />
+          </div>
+          <div className="skeleton stat-skel" />
+          <div className="skeleton stat-skel" />
+          <div className="disclose">
+            <div className="skeleton disclose-skel" />
+            <div className="skeleton disclose-skel" />
+            <div className="skeleton disclose-skel" />
+          </div>
         </section>
-        <div className="rail">
-          <section className="card pos">
-            <div className="skeleton" style={{ height: 18, width: 80, marginBottom: 12 }} />
-            <div className="skeleton" style={{ height: 36, width: 120 }} />
-          </section>
-        </div>
+        <ChartPending />
       </div>
     );
   }
 
   if (error || !overview) {
     return (
-      <section className="card">
-        <div className="state">
-          行情加载失败
-          <div className="hint">{error}</div>
-          <button
-            type="button"
-            className="text-btn"
-            onClick={() => setAttempt((value) => value + 1)}
-          >
-            重试
-          </button>
-        </div>
+      <section className="index-error">
+        <p>数据暂时无法加载</p>
+        <button type="button" className="text-btn" onClick={() => setAttempt((value) => value + 1)}>
+          重试
+        </button>
       </section>
     );
   }
 
   return (
-    <div className="layout-grid">
-      <Suspense
-        fallback={
-          <section className="card chart-card">
-            <div className="skeleton" style={{ height: "var(--qk-chart-h)", margin: 16 }} />
-          </section>
-        }
-      >
+    <div className="index-stack">
+      <PositionPanel overview={overview} />
+      <Suspense fallback={<ChartPending />}>
         <KlineChart
           overview={overview}
           period={period}
           range={range}
           showVolume={showVolume}
+          onPeriod={setPeriod}
+          onRange={setRange}
           onToggleVolume={(value) => {
             const next = new URLSearchParams(params);
             next.set("vol", value ? "1" : "0");
@@ -118,9 +133,6 @@ export function OverviewPage({
           }}
         />
       </Suspense>
-      <div className="rail">
-        <PositionPanel overview={overview} />
-      </div>
       <TierTable rows={overview.tiers} lastClose={overview.lastClose} />
       <LowsTable rows={overview.lows} />
     </div>
