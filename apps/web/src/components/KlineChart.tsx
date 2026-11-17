@@ -193,18 +193,24 @@ export function KlineChart({
       borderDownColor: cssVar(el, "--qk-candle-border-down"),
       wickUpColor: up,
       wickDownColor: down,
+      priceLineVisible: false,
+      lastValueVisible: false,
     });
     candleSeries.setData(price.candles);
     const closeSeries = chart.addSeries(LineSeries, {
       color: cssVar(el, "--qk-series-close") || cssVar(el, "--qk-text-secondary"),
       lineWidth: 1,
       pointMarkersVisible: true,
+      priceLineVisible: false,
+      lastValueVisible: false,
     });
     closeSeries.setData(price.closeOnly);
     const maSeries = chart.addSeries(LineSeries, {
       color: cssVar(el, "--qk-ma55"),
       lineWidth: 2,
       pointMarkersVisible: false,
+      priceLineVisible: false,
+      lastValueVisible: false,
     });
     maSeries.setData(lineWithGaps(candles, maAligned));
     for (const tier of TIER_RATIOS) {
