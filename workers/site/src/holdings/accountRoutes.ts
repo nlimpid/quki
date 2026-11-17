@@ -15,6 +15,45 @@ const UNAVAILABLE = {
   message: "账户持仓尚未开通，没有写入任何持仓。",
 } as const;
 
+async function mutationFields(
+  c: Context,
+  pathCode: string | null,
+): Promise<Record<string, unknown> | Response> {
+  const fields = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!fields || Array.isArray(fields) || "items" in fields) {
+    return c.json({ error: "invalid_holding", message: "不能用整表替换账户持仓。" }, 400);
+  }
+  const version = fields.expectedVersion;
+  if (c.req.method === "DELETE" && !validHoldingVersion(version)) {
+    return c.json({ error: "invalid_holding", message: "缺少持仓版本。" }, 400);
+  }
+  if (c.req.method === "PUT" && version !== null && !validHoldingVersion(version)) {
+    return c.json({ error: "invalid_holding", message: "缺少持仓版本。" }, 400);
+  }
+  if (c.req.method === "DELETE" && !pathCode) {
+    return c.json({ error: "invalid_holding", message: "股票代码不正确。" }, 400);
+  }
+  if (c.req.method === "PUT") {
+    const code = pathCode ?? fields.code;
+    if (pathCode && fields.code != null && fields.code !== pathCode) {
+      return c.json({ error: "invalid_holding", message: "股票代码不正确。" }, 400);
+    }
+    if (typeof code !== "string" || !/^\d{6}$/.test(code)) {
+      return c.json({ error: "invalid_holding", message: "股票代码不正确。" }, 400);
+    }
+    if (!validHoldingShares(fields.shares)) {
+      return c.json(
+        { error: "invalid_holding", message: "股数必须是 1 到 1000000000 的整数。" },
+        400,
+      );
+    }
+  }
+  if (pathCode && !/^\d{6}$/.test(pathCode)) {
+    return c.json({ error: "invalid_holding", message: "股票代码不正确。" }, 400);
+  }
+  return fields;
+}
+
 function noStore(c: { header: (name: string, value: string) => void }): void {
   c.header("cache-control", "no-store");
 }
@@ -52,44 +91,15 @@ async function handle(c: Context, auth: AuthRuntime, pathCode: string | null): P
   }
   const verified = await verifyClerkSessionToken(bearer, auth.clerk);
   if (!verified.ok) return c.json({ error: "unauthorized", message: "需要登录" }, 401);
-  let userId = "";
   let fields: Record<string, unknown> | null = null;
+  if (c.req.method !== "GET") {
+    const parsed = await mutationFields(c, pathCode);
+    if (parsed instanceof Response) return parsed;
+    fields = parsed;
+  }
+  let userId = "";
   try {
     userId = await auth.identities.resolve(verified.issuer, verified.subject, auth.now());
-    if (c.req.method !== "GET") {
-      fields = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
-      if (!fields || Array.isArray(fields) || "items" in fields) {
-        return c.json({ error: "invalid_holding", message: "不能用整表替换账户持仓。" }, 400);
-      }
-      const version = fields.expectedVersion;
-      if (c.req.method === "DELETE" && !validHoldingVersion(version)) {
-        return c.json({ error: "invalid_holding", message: "缺少持仓版本。" }, 400);
-      }
-      if (c.req.method === "PUT" && version !== null && !validHoldingVersion(version)) {
-        return c.json({ error: "invalid_holding", message: "缺少持仓版本。" }, 400);
-      }
-      if (c.req.method === "DELETE" && !pathCode) {
-        return c.json({ error: "invalid_holding", message: "股票代码不正确。" }, 400);
-      }
-      if (c.req.method === "PUT") {
-        const code = pathCode ?? fields.code;
-        if (pathCode && fields.code != null && fields.code !== pathCode) {
-          return c.json({ error: "invalid_holding", message: "股票代码不正确。" }, 400);
-        }
-        if (typeof code !== "string" || !/^\d{6}$/.test(code)) {
-          return c.json({ error: "invalid_holding", message: "股票代码不正确。" }, 400);
-        }
-        if (!validHoldingShares(fields.shares)) {
-          return c.json(
-            { error: "invalid_holding", message: "股数必须是 1 到 1000000000 的整数。" },
-            400,
-          );
-        }
-      }
-      if (pathCode && !/^\d{6}$/.test(pathCode)) {
-        return c.json({ error: "invalid_holding", message: "股票代码不正确。" }, 400);
-      }
-    }
   } catch (error) {
     if (error instanceof IdentityTableMissing) return c.json(UNAVAILABLE, 503);
     return c.json({ error: "auth_unavailable", message: "登录暂不可用" }, 503);

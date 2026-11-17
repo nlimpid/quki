@@ -53,7 +53,7 @@ export type HoldingStore = {
 export function validHoldingShares(value: unknown): value is number {
   return (
     typeof value === "number" &&
-    Number.isInteger(value) &&
+    Number.isSafeInteger(value) &&
     value >= HOLDING_SHARES_MIN &&
     value <= HOLDING_SHARES_MAX
   );

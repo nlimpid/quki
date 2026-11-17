@@ -95,6 +95,14 @@ export function useAccountBook(input: {
   const [items, setItems] = useState<AccountHolding[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [shownEpoch, setShownEpoch] = useState(epoch);
+  const inflight = useRef<number | null>(null);
+  const [busyTicket, setBusyTicket] = useState<number | null>(null);
+  if (busyTicket != null && busyTicket !== epoch) {
+    setBusyTicket(null);
+  }
+  useEffect(() => {
+    if (inflight.current != null && inflight.current !== epoch) inflight.current = null;
+  }, [epoch]);
   const [drawer, setDrawer] = useState<{ code: string; shares: number; ticket: number } | null>(
     null,
   );
@@ -145,12 +153,26 @@ export function useAccountBook(input: {
     return epochRef.current === ticket;
   }
 
+  function begin(ticket: number): boolean {
+    if (inflight.current != null) return false;
+    inflight.current = ticket;
+    setBusyTicket(ticket);
+    return true;
+  }
+
+  function finish(ticket: number) {
+    if (inflight.current === ticket) inflight.current = null;
+    if (!currentEnough(ticket)) return;
+    setBusyTicket((current) => (current === ticket ? null : current));
+  }
+
   async function save(change: {
     ticket: number;
     code: string;
     shares: number;
     expectedVersion: string | null;
   }): Promise<"written" | "dropped" | "conflict" | "failed"> {
+    if (!begin(change.ticket)) return "dropped";
     const saved = { row: null as AccountHolding | null };
     try {
       const result = await commit(change.ticket, async (token) => {
@@ -177,6 +199,8 @@ export function useAccountBook(input: {
       }
       setError(failure instanceof Error ? failure.message : "账户持仓没有保存");
       return "failed";
+    } finally {
+      finish(change.ticket);
     }
   }
 
@@ -185,6 +209,7 @@ export function useAccountBook(input: {
     code: string,
     expectedVersion: string,
   ): Promise<"written" | "dropped" | "conflict" | "failed"> {
+    if (!begin(ticket)) return "dropped";
     try {
       const result = await commit(ticket, (token) =>
         removeRef.current(code, expectedVersion, token),
@@ -201,6 +226,8 @@ export function useAccountBook(input: {
       }
       setError(failure instanceof Error ? failure.message : "账户持仓没有保存");
       return "failed";
+    } finally {
+      finish(ticket);
     }
   }
 
@@ -219,6 +246,7 @@ export function useAccountBook(input: {
 
   return {
     epoch,
+    busy: busyTicket === epoch,
     items: signedIn ? items : null,
     error: signedIn ? error : null,
     drawer,

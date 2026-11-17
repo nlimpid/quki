@@ -21,8 +21,12 @@ function installDom() {
   Object.assign(globalThis, {
     window,
     document: window.document,
-    HTMLElement: window.HTMLElement,
     Node: window.Node,
+    Element: window.Element,
+    HTMLElement: window.HTMLElement,
+    HTMLButtonElement: window.HTMLButtonElement,
+    HTMLInputElement: window.HTMLInputElement,
+    SVGElement: window.SVGElement,
     IS_REACT_ACT_ENVIRONMENT: true,
   });
 }
@@ -140,7 +144,7 @@ describe("portfolio account panel", () => {
       { token: "token-A", code: "600519", shares: 10, expectedVersion: null },
     ]);
     expect(document.getElementById("code-600519")?.textContent).toBe("600519");
-    expect(document.querySelector("[data-version='600519']")?.textContent).toBe("version-1");
+    expect(document.getElementById("code-600519")?.getAttribute("data-version")).toBe("version-1");
 
     await act(async () => {
       click("edit-600519");
@@ -158,10 +162,15 @@ describe("portfolio account panel", () => {
       shares: 12,
       expectedVersion: "version-1",
     });
-    expect(document.querySelector("[data-version='600519']")?.textContent).toBe("version-2");
+    expect(document.getElementById("code-600519")?.getAttribute("data-version")).toBe("version-2");
+    expect(document.getElementById("code-600519")?.textContent).not.toContain("version-2");
 
     await act(async () => {
       click("delete-600519");
+    });
+    expect(deletes).toEqual([]);
+    await act(async () => {
+      click("confirm-delete-600519");
     });
     await release(tokens, 3, "token-A");
     expect(deletes).toEqual([{ token: "token-A", code: "600519", expectedVersion: "version-2" }]);
@@ -194,7 +203,9 @@ describe("portfolio account panel", () => {
     await release(tokens, 1, "token-A");
     expect(writes[0]?.expectedVersion).toBe("stale-version");
     expect(document.getElementById("code-600519")?.textContent).toBe("600519");
-    expect(document.querySelector("[data-version='600519']")?.textContent).toBe("stale-version");
+    expect(document.getElementById("code-600519")?.getAttribute("data-version")).toBe(
+      "stale-version",
+    );
     expect(document.getElementById("account-error")?.textContent).toContain("持仓已变化");
     await act(async () => {
       root.unmount();
@@ -236,7 +247,47 @@ describe("portfolio account panel", () => {
     });
     expect(writes).toEqual([]);
     expect(document.getElementById("code-600519")?.textContent).toBe("600519");
-    expect(document.querySelector("[data-version='600519']")?.textContent).toBe("version-b");
+    expect(document.getElementById("code-600519")?.getAttribute("data-version")).toBe("version-b");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("does not delete until confirm, and a second save does not send another write", async () => {
+    const { root, reads, writes, deletes, tokens, show } = mount();
+    await act(async () => {
+      show("ready:A");
+    });
+    await release(tokens, 0, "token-A");
+    await act(async () => {
+      reads[0]?.resolve([row("600519", 10, "version-1")]);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      click("delete-600519");
+    });
+    expect(deletes).toEqual([]);
+    expect(tokens).toHaveLength(1);
+    await act(async () => {
+      click("cancel-delete-600519");
+    });
+    expect(deletes).toEqual([]);
+    expect(tokens).toHaveLength(1);
+    expect(document.getElementById("code-600519")?.textContent).toBe("600519");
+
+    await act(async () => {
+      click("edit-600519");
+    });
+    await act(async () => {
+      click("save-account");
+      click("save-account");
+    });
+    expect(tokens).toHaveLength(2);
+    await release(tokens, 1, "token-A");
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ expectedVersion: "version-1", shares: 10 });
 
     await act(async () => {
       root.unmount();

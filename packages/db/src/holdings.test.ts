@@ -8,6 +8,7 @@ import {
   HOLDING_SHARES_MIN,
   HoldingTableMissing,
   createHoldingStore,
+  validHoldingShares,
   validHoldingVersion,
 } from "./holdings.js";
 
@@ -66,6 +67,70 @@ describe("candidate fake database, not TiDB", () => {
       }),
     ).toEqual({ ok: false, reason: "invalid_shares" });
     expect(validHoldingVersion(1)).toBe(false);
+  });
+
+  it("rejects every unsafe share count before a statement, and accepts 1 and 1e9", async () => {
+    const memory = createCandidateHoldingMemoryConn(["600519"]);
+    const statements: string[] = [];
+    let index = 0;
+    const holdings = createHoldingStore(
+      () => ({
+        execute(sql: string, params?: unknown[]) {
+          statements.push(sql);
+          return memory.execute(sql, params);
+        },
+      }),
+      { newVersion: () => versions[index++] ?? versions[3]! },
+    );
+    const rejected = [
+      undefined,
+      null,
+      "10",
+      true,
+      false,
+      0,
+      -1,
+      1.5,
+      HOLDING_SHARES_MAX + 1,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ];
+    for (const shares of rejected) {
+      expect(validHoldingShares(shares)).toBe(false);
+      expect(
+        await holdings.create({ userId: "user-a", code: "600519", shares: shares as number, now }),
+      ).toEqual({ ok: false, reason: "invalid_shares" });
+      expect(
+        await holdings.update({
+          userId: "user-a",
+          code: "600519",
+          shares: shares as number,
+          expectedVersion: versions[0]!,
+          now,
+        }),
+      ).toEqual({ ok: false, reason: "invalid_shares" });
+    }
+    expect(statements).toEqual([]);
+    expect(validHoldingShares(HOLDING_SHARES_MIN)).toBe(true);
+    expect(validHoldingShares(HOLDING_SHARES_MAX)).toBe(true);
+    const created = await holdings.create({
+      userId: "user-a",
+      code: "600519",
+      shares: HOLDING_SHARES_MIN,
+      now,
+    });
+    expect(created).toMatchObject({ ok: true, row: { shares: HOLDING_SHARES_MIN } });
+    const updated = await holdings.update({
+      userId: "user-a",
+      code: "600519",
+      shares: HOLDING_SHARES_MAX,
+      expectedVersion: versions[0]!,
+      now,
+    });
+    expect(updated).toMatchObject({ ok: true, row: { shares: HOLDING_SHARES_MAX } });
+    expect(statements.some((sql) => sql.includes("INSERT INTO auth_holdings"))).toBe(true);
+    expect(statements.some((sql) => sql.includes("UPDATE auth_holdings"))).toBe(true);
   });
 
   it("lets one of two creates win and one of two updates win", async () => {
