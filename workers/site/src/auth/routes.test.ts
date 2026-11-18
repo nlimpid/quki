@@ -322,7 +322,9 @@ describe("auth routes", () => {
     expect(portfolio).not.toContain("writeHoldings");
     expect(stock).not.toContain("saveHolding");
     expect(stock).not.toContain("writeHoldings");
-    expect(portfolio).toContain("AccountBookPanel");
+    expect(portfolio).toContain("useAccountBook");
+    expect(portfolio).toContain("removeRow");
+    expect(portfolio).not.toContain("AccountBookPanel");
     expect(portfolio).toContain("此浏览器里的旧持仓");
     const panel = readFileSync(
       new URL("../../../../apps/web/src/lib/AccountBookPanel.tsx", import.meta.url),
