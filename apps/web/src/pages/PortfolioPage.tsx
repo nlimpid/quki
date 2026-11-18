@@ -2,12 +2,17 @@ import { portfolioDividendSummary, type HoldingsState } from "@quki/analytics";
 import { Button, Drawer, Input, Label, SearchField } from "@heroui/react";
 import type { StockListItem } from "@quki/types";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 
 import { useAuth } from "../lib/auth.js";
 import { usePageTitle } from "../lib/pageTitle.js";
-import { portfolioSubtitle } from "../lib/authState.js";
-import { deleteHolding, readHoldings, saveHolding } from "../lib/holdingsStore.js";
+import { ACCOUNT_SAVE_COPY, ACCOUNT_SAVE_LABEL, portfolioSubtitle } from "../lib/authState.js";
+import { AccountBookPanel } from "../lib/AccountBookPanel.js";
+import { LocalImportPanel } from "../lib/LocalImportPanel.js";
+import { useAccountBook } from "../lib/accountBook.js";
+import { showAccountBook } from "../lib/accountHoldings.js";
+import { useHoldingIntent } from "../lib/holdingIntent.js";
+import { readHoldings } from "../lib/holdingsStore.js";
 import { fetchStockBatch, fetchStockList } from "../lib/stockApi.js";
 import { formatCny, formatShares, formatYield, weightLabel } from "../lib/stockFormat.js";
 import { DividendShell } from "./DividendShell.js";
@@ -27,7 +32,7 @@ type Card = {
 
 export function PortfolioPage() {
   const [loaded] = useState(readHoldings);
-  const [holdings, setHoldings] = useState<HoldingsState>(loaded.state);
+  const [holdings] = useState<HoldingsState>(loaded.state);
   const storageError = loaded.error;
   const codeKey = holdings.items.map((item) => item.code).join(",");
   const [quotes, setQuotes] = useState<StockListItem[]>([]);
@@ -42,21 +47,72 @@ export function PortfolioPage() {
   const loading = codeKey.length > 0 && loadedKey !== codeKey && quoteError === null;
   const shownQuotes = codeKey ? quotes : [];
   const [drawer, setDrawer] = useState<{ code: string; shares: string } | null>(null);
+  const [drawerEpoch, setDrawerEpoch] = useState<number | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const restoreFocus = useRef<HTMLElement | null>(null);
+  const { phase, retry, accessToken, sessionKey, confirmedSessionKey } = useAuth();
+  const signedIn = showAccountBook({
+    phaseKind: phase.kind,
+    sessionKey,
+    confirmedSessionKey,
+  });
+  const account = useAccountBook({ sessionKey, signedIn, accessToken });
+  if (drawer && drawerEpoch !== account.epoch) {
+    setDrawer(null);
+    setDrawerEpoch(null);
+    setPendingDelete(null);
+  }
   function openDrawer(next: { code: string; shares: string }, source?: Element | null) {
     const opener = source instanceof HTMLElement ? source.closest("button") : null;
     restoreFocus.current =
       opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    setDrawerEpoch(account.epoch);
     setDrawer(next);
   }
   function closeDrawer() {
     const target = restoreFocus.current;
     setDrawer(null);
+    setDrawerEpoch(null);
     window.setTimeout(() => target?.focus(), 0);
   }
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
-  const { phase } = useAuth();
+  const { notice, request } = useHoldingIntent();
+  const [params, setParams] = useSearchParams();
   usePageTitle("我的持仓 · quki");
+  const addIntent = phase.kind === "authenticated" && params.get("add") === "1";
+  const editIntent = phase.kind === "authenticated" ? params.get("edit") : null;
+  const intent = addIntent ? "add" : editIntent && /^\d{6}$/.test(editIntent) ? editIntent : "";
+  const [openedIntent, setOpenedIntent] = useState("");
+  if (intent && intent !== openedIntent) {
+    if (signedIn && intent !== "add" && account.items == null) {
+      // Wait until the account list is loaded so the edit uses that row's version.
+    } else {
+      setOpenedIntent(intent);
+      if (intent === "add") {
+        if (signedIn) account.openEditor({ code: "", shares: "", expectedVersion: null });
+        else {
+          setDrawerEpoch(account.epoch);
+          setDrawer({ code: "", shares: "" });
+        }
+      } else if (signedIn) {
+        const item = account.items?.find((row) => row.code === intent);
+        if (item) {
+          account.openEditor({
+            code: item.code,
+            shares: String(item.shares),
+            expectedVersion: item.version,
+          });
+        }
+      } else {
+        const item = holdings.items.find((holding) => holding.code === intent);
+        setDrawerEpoch(account.epoch);
+        setDrawer({ code: intent, shares: item ? String(item.shares) : "" });
+      }
+      const next = new URLSearchParams(params);
+      next.delete("add");
+      next.delete("edit");
+      setParams(next, { replace: true });
+    }
+  }
 
   useEffect(() => {
     if (!codeKey) return;
@@ -118,24 +174,69 @@ export function PortfolioPage() {
         </div>
         <Button
           variant="primary"
-          onPress={(event) => openDrawer({ code: "", shares: "" }, event.target)}
+          onPress={(event) => {
+            if (!request("/portfolio?add=1")) return;
+            if (signedIn) {
+              account.openEditor({ code: "", shares: "", expectedVersion: null });
+              return;
+            }
+            openDrawer({ code: "", shares: "" }, event.target);
+          }}
         >
           ＋ 添加股票
         </Button>
       </div>
       {storageError ? <p className="yield-note">{storageError}</p> : null}
+      {notice ? (
+        <p className="yield-note">
+          {notice}{" "}
+          {notice.includes("重试") || notice.includes("无法确认") ? (
+            <button type="button" className="text-btn" onClick={() => retry()}>
+              重试
+            </button>
+          ) : null}
+        </p>
+      ) : null}
+      {signedIn ? <AccountBookPanel book={account} /> : null}
+      {signedIn ? (
+        <LocalImportPanel
+          rows={holdings.items}
+          accountRows={account.items}
+          epoch={account.epoch}
+          busy={account.busy}
+          onImport={async (writes) => {
+            const ticket = account.epoch;
+            for (const row of writes) {
+              const result = await account.save({ ticket, ...row });
+              if (result !== "written") return;
+            }
+          }}
+        />
+      ) : null}
       {quoteError ? <p className="yield-note">{quoteError}</p> : null}
+      {holdings.items.length > 0 && phase.kind === "authenticated" ? (
+        <h2 className="page-title" style={{ fontSize: 18 }}>
+          此浏览器里的旧持仓
+        </h2>
+      ) : null}
       {holdings.items.length === 0 ? (
-        <section className="div-card hero">
-          <h2 style={{ margin: "0 0 8px" }}>尚未添加持仓</h2>
-          <p className="page-sub">添加股票后，这里显示平均股息率和预估全年分红。</p>
-          <Button
-            variant="primary"
-            onPress={(event) => openDrawer({ code: "", shares: "" }, event.target)}
-          >
-            添加股票
-          </Button>
-        </section>
+        phase.kind === "authenticated" ? (
+          <p className="yield-note">此浏览器里没有旧持仓。</p>
+        ) : (
+          <section className="div-card hero">
+            <h2 style={{ margin: "0 0 8px" }}>尚未添加持仓</h2>
+            <p className="page-sub">添加股票后，这里显示平均股息率和预估全年分红。</p>
+            <Button
+              variant="primary"
+              onPress={(event) => {
+                if (!request("/portfolio?add=1")) return;
+                openDrawer({ code: "", shares: "" }, event.target);
+              }}
+            >
+              添加股票
+            </Button>
+          </section>
+        )
       ) : (
         <>
           <div className="summary-strip">
@@ -167,36 +268,39 @@ export function PortfolioPage() {
                       {card.exchange ? `${card.code}.${card.exchange}` : card.code}
                     </div>
                   </div>
-                  <div>
-                    <button
-                      type="button"
-                      className="icon-text"
-                      aria-label="编辑"
-                      onClick={(event) =>
-                        openDrawer(
-                          { code: card.code, shares: String(card.shares) },
-                          event.currentTarget,
-                        )
-                      }
-                    >
-                      ✎
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-text"
-                      aria-label={pendingDelete === card.code ? "确认删除" : "删除"}
-                      onClick={() => {
-                        if (pendingDelete !== card.code) {
-                          setPendingDelete(card.code);
-                          return;
-                        }
-                        setHoldings(deleteHolding(card.code));
-                        setPendingDelete(null);
-                      }}
-                    >
-                      {pendingDelete === card.code ? "确认" : "×"}
-                    </button>
-                  </div>
+                  {phase.kind === "authenticated" ? null : (
+                    <div>
+                      <button
+                        type="button"
+                        className="icon-text"
+                        aria-label="编辑"
+                        onClick={(event) => {
+                          if (!request(`/portfolio?edit=${card.code}`)) return;
+                          openDrawer(
+                            { code: card.code, shares: String(card.shares) },
+                            event.currentTarget,
+                          );
+                        }}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-text"
+                        aria-label={pendingDelete === card.code ? "确认删除" : "删除"}
+                        onClick={() => {
+                          if (!request("/portfolio")) return;
+                          if (pendingDelete !== card.code) {
+                            setPendingDelete(card.code);
+                            return;
+                          }
+                          setPendingDelete(null);
+                        }}
+                      >
+                        {pendingDelete === card.code ? "确认" : "×"}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="hold-shares">
                   持股 <span className="mono">{formatShares(card.shares)}</span> 股
@@ -241,8 +345,19 @@ export function PortfolioPage() {
           initialShares={drawer.shares}
           onClose={closeDrawer}
           onSave={(code, shares) => {
-            setHoldings(saveHolding(code, shares));
-            closeDrawer();
+            if (!request("/portfolio")) return;
+            if (!signedIn) return;
+            const ticket = drawerEpoch ?? account.epoch;
+            const expectedVersion =
+              account.items?.find((item) => item.code === code)?.version ?? null;
+            void account
+              .save({ ticket, code, shares, expectedVersion })
+              .then((result) => {
+                if (result === "written") closeDrawer();
+              })
+              .catch((reason: unknown) => {
+                setQuoteError(reason instanceof Error ? reason.message : "账户持仓没有保存");
+              });
           }}
         />
       ) : null}
@@ -348,16 +463,14 @@ function HoldingDrawer({
                 />
               </Label>
               {error ? <p className="yield-note">{error}</p> : null}
-              <p className="yield-note">
-                数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传或同步持仓。
-              </p>
+              <p className="yield-note">{ACCOUNT_SAVE_COPY}</p>
             </Drawer.Body>
             <Drawer.Footer>
               <Button variant="secondary" onPress={onClose}>
                 取消
               </Button>
               <Button variant="primary" onPress={save}>
-                保存到本机
+                {ACCOUNT_SAVE_LABEL}
               </Button>
             </Drawer.Footer>
           </Drawer.Dialog>

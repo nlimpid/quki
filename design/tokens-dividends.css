@@ -50,20 +50,20 @@
 .auth-app {
   --qk-font-sans: "Source Han Sans SC", "Noto Sans SC", "Source Han Sans CN", sans-serif;
   --qk-font-mono: "Source Code Pro", ui-monospace, monospace;
-  --qk-canvas: #eef1f4;
-  --qk-surface: #f7f8fa;
-  --qk-surface-muted: #e7ebf0;
-  --qk-border: #d5dbe3;
-  --qk-fg: #0f172a;
-  --qk-fg-secondary: #475569;
-  --qk-fg-muted: #71717a;
-  --qk-accent: #4f46e5;
-  --qk-accent-hover: #4338ca;
-  --qk-accent-muted: #eef2ff;
-  --qk-accent-fg: #3730a3;
+  --qk-canvas: #f4f1ea;
+  --qk-surface: #f4f1ea;
+  --qk-surface-muted: #ebe6dc;
+  --qk-border: #e4ded4;
+  --qk-fg: #1c1916;
+  --qk-fg-secondary: #5c574f;
+  --qk-fg-muted: #8a847a;
+  --qk-accent: #1c1916;
+  --qk-accent-hover: #5c574f;
+  --qk-accent-muted: #ebe6dc;
+  --qk-accent-fg: #1c1916;
   --qk-brand-accent: var(--qk-accent);
   --qk-brand-accent-muted: var(--qk-accent-muted);
-  --qk-border-focus: #c7d2fe;
+  --qk-border-focus: #1c1916;
   --qk-div-cash-bg: #eef2ff;
   --qk-div-cash-fg: #3730a3;
   --qk-div-cash-border: #c7d2fe;
@@ -84,7 +84,7 @@
   --qk-radius-card: 16px;
   --qk-radius-control: 8px;
   --qk-radius-pill: 999px;
-  --qk-div-shadow: 0 8px 24px rgba(24, 24, 27, 0.04);
+  --qk-div-shadow: none;
   --qk-danger: #dc2626;
   background: var(--qk-canvas);
   color: var(--qk-fg);
@@ -124,17 +124,17 @@
 }
 
 [data-theme="dark"] .auth-app {
-  --qk-canvas: #12141a;
-  --qk-surface: #1c1f26;
-  --qk-surface-muted: #16181e;
-  --qk-border: #2c313a;
-  --qk-fg: #fafafa;
-  --qk-fg-secondary: #a1a1aa;
-  --qk-fg-muted: #71717a;
-  --qk-accent: #818cf8;
-  --qk-accent-hover: #a5b4fc;
-  --qk-accent-muted: rgba(99, 102, 241, 0.18);
-  --qk-accent-fg: #c7d2fe;
+  --qk-canvas: #161513;
+  --qk-surface: #161513;
+  --qk-surface-muted: #2a2723;
+  --qk-border: #2e2b27;
+  --qk-fg: #f3efe8;
+  --qk-fg-secondary: #a8a29a;
+  --qk-fg-muted: #7a756e;
+  --qk-accent: #f3efe8;
+  --qk-accent-hover: #a8a29a;
+  --qk-accent-muted: #2a2723;
+  --qk-accent-fg: #f3efe8;
   --qk-div-cash-bg: rgba(99, 102, 241, 0.18);
   --qk-div-cash-fg: #c7d2fe;
   --qk-div-cash-border: rgba(129, 140, 248, 0.35);

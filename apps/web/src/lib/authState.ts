@@ -1,16 +1,34 @@
-import type { AuthSessionResponse, AuthUnavailableReason } from "@quki/types";
+import { safeReturnTo, type AuthSessionResponse, type AuthUnavailableReason } from "@quki/types";
 
-/**
- * Server `login.ready` and the on-screen sign-in control are separate.
- * The API may be ready before a provider and a real consent sentence exist.
- * Until both are chosen, the page must not offer a login button.
- */
-export const LOGIN_UI_ENABLED = false;
-
-export const LOGIN_UNAVAILABLE_COPY = "登录暂不可用。访客仍可查看行情，并在本机管理持仓。";
+export const LOGIN_UNAVAILABLE_COPY =
+  "登录暂不可用。访客仍可查看行情。此浏览器里的旧持仓只供查看。";
 export const LOGIN_CHECK_FAILED_COPY = "无法确认登录状态，请重试。";
 export const LOGIN_PRIVACY_COPY =
-  "登录不会上传或云同步你的本地持仓。持仓仍仅保存在此浏览器，清除站点数据会丢失。";
+  "此浏览器里的旧持仓不会上传、合并或删除。登录后的账户持仓保存在服务器。清除站点数据会丢失旧列表，不会删除账户持仓。";
+export const ACCOUNT_SAVE_COPY = "保存到账户。不会上传、合并或删除此浏览器里的旧持仓。";
+export const ACCOUNT_SAVE_LABEL = "保存到账户";
+
+/** Absolute same-origin URL after an explicit logout. External and /login targets become the site root. */
+export function logoutReturnUrl(pathAndSearch: string, origin: string): string {
+  return new URL(safeReturnTo(pathAndSearch, origin), origin).toString();
+}
+
+/** Same-origin continuation for Clerk sign-in and the combined email sign-up flow. */
+export function clerkFlowRedirects(returnTo: string): {
+  forceRedirectUrl: string;
+  fallbackRedirectUrl: string;
+  signUpUrl: string;
+  signUpForceRedirectUrl: string;
+  signUpFallbackRedirectUrl: string;
+} {
+  return {
+    forceRedirectUrl: returnTo,
+    fallbackRedirectUrl: returnTo,
+    signUpForceRedirectUrl: returnTo,
+    signUpFallbackRedirectUrl: returnTo,
+    signUpUrl: `/login?returnTo=${encodeURIComponent(returnTo)}`,
+  };
+}
 
 /** What the last successful session response said about starting a new login. */
 export type LoginCapability =
@@ -70,6 +88,12 @@ export function applyProbeSuccess(phase: AuthPhase, session: AuthSessionResponse
   return sessionToPhase(session);
 }
 
+/** A rejected bearer is not a transport failure. Drop the account view and probe again. */
+export function rejectCredential(phase: AuthPhase): AuthPhase {
+  if (phase.kind === "logoutPending") return phase;
+  return { kind: "initializing", login: unknownLogin };
+}
+
 export function applyProbeFailure(phase: AuthPhase): AuthPhase {
   if (
     phase.kind === "authenticated" ||
@@ -110,17 +134,14 @@ export function failLogout(phase: AuthPhase): AuthPhase {
   };
 }
 
-/** Header "登录" is a real sign-in link only after the product gate is on. Unknown still links to /login as a session check. */
-export function showLoginCta(phase: AuthPhase, uiEnabled = LOGIN_UI_ENABLED): boolean {
+/** Header "登录" appears for an unknown probe and for a guest whose Worker session is ready. */
+export function showLoginCta(phase: AuthPhase): boolean {
   if (phase.kind === "unknown") return true;
   if (phase.kind !== "guest") return false;
-  return uiEnabled && phase.login.state === "ready";
+  return phase.login.state === "ready";
 }
 
-export function headerControl(
-  phase: AuthPhase,
-  uiEnabled = LOGIN_UI_ENABLED,
-): "spinner" | "login" | "account" | "none" {
+export function headerControl(phase: AuthPhase): "spinner" | "login" | "account" | "none" {
   if (phase.kind === "initializing") return "spinner";
   if (
     phase.kind === "authenticated" ||
@@ -129,45 +150,52 @@ export function headerControl(
   ) {
     return "account";
   }
-  return showLoginCta(phase, uiEnabled) ? "login" : "none";
+  return showLoginCta(phase) ? "login" : "none";
 }
 
 export function showExpiryBanner(phase: AuthPhase, dismissed: boolean): boolean {
   return phase.kind === "guest" && phase.expired && !dismissed;
 }
 
-export function showRelogin(
-  phase: AuthPhase,
-  dismissed: boolean,
-  uiEnabled = LOGIN_UI_ENABLED,
-): boolean {
-  return showExpiryBanner(phase, dismissed) && uiEnabled && phase.login.state === "ready";
+export function showRelogin(phase: AuthPhase, dismissed: boolean): boolean {
+  return showExpiryBanner(phase, dismissed) && phase.login.state === "ready";
+}
+
+export type HoldingMutation = "allow" | "wait" | "retry" | "login";
+
+/** Local add, edit, and delete are closed unless the session is a confirmed account. */
+export function holdingMutation(phase: AuthPhase): HoldingMutation {
+  if (phase.kind === "authenticated") return "allow";
+  if (phase.kind === "initializing" || phase.kind === "logoutPending") return "wait";
+  if (phase.kind === "unknown" || phase.kind === "logoutFailed") return "retry";
+  return "login";
 }
 
 export function portfolioSubtitle(phase: AuthPhase): string {
-  if (
-    phase.kind === "authenticated" ||
-    phase.kind === "logoutPending" ||
-    phase.kind === "logoutFailed"
-  ) {
-    return "本地保存。持仓仍仅保存在此浏览器，不会因登录而同步到云端。";
+  if (phase.kind === "authenticated") {
+    return "账户持仓保存在服务器。此浏览器里的旧列表只供查看，不会自动上传。";
   }
-  if (phase.kind === "guest") {
-    return "本地保存 · 未登录。数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传本地持仓。";
+  if (phase.kind === "logoutPending" || phase.kind === "logoutFailed") {
+    return "正在确认账户。旧列表只供查看，不会因登录而同步到云端。";
   }
-  return "本地保存。数据仅保存在此浏览器，清除站点数据会丢失。登录不会上传本地持仓。";
+  if (phase.kind === "initializing") return "正在确认登录状态。旧列表只供查看。";
+  if (phase.kind === "unknown") return "无法确认登录状态。旧列表只供查看。";
+  return "未登录。此浏览器里的旧持仓只供查看，新增、修改和删除需要登录。";
 }
 
 export type LoginView = {
-  mode: "checking" | "returning" | "check_failed" | "unavailable";
+  mode: "checking" | "returning" | "check_failed" | "unavailable" | "ready";
   status: string | null;
   alert: string | null;
   message: string | null;
   retry: boolean;
 };
 
-/** Settled anonymous sessions stay on the unavailable card until a provider and consent exist. */
-export function loginView(phase: AuthPhase, loginFailed = false): LoginView {
+/** Ready guests get the Clerk form. Unconfigured guests get only the unavailable card. */
+export function loginView(
+  phase: AuthPhase,
+  loginFailed: boolean | string | null = false,
+): LoginView {
   if (phase.kind === "initializing") {
     return {
       mode: "checking",
@@ -197,6 +225,15 @@ export function loginView(phase: AuthPhase, loginFailed = false): LoginView {
       alert: LOGIN_CHECK_FAILED_COPY,
       message: null,
       retry: true,
+    };
+  }
+  if (phase.login.state === "ready") {
+    return {
+      mode: "ready",
+      status: null,
+      alert: loginFailed ? "登录失败，请重试。" : null,
+      message: null,
+      retry: false,
     };
   }
   return {

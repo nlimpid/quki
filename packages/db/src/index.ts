@@ -6,7 +6,25 @@ export {
   parseSqlDateTime,
   sessionRecordState,
 } from "./auth.js";
+export {
+  HOLDING_SHARES_MAX,
+  HOLDING_SHARES_MIN,
+  HoldingTableMissing,
+  LISTED_COMPANY_SQL,
+  createHoldingStore,
+  newHoldingVersion,
+  validHoldingShares,
+  validHoldingVersion,
+} from "./holdings.js";
+export type {
+  AccountHoldingRow,
+  HoldingDeleteResult,
+  HoldingStore,
+  HoldingWriteResult,
+} from "./holdings.js";
 export type { AuthStore, AuthUserRecord, SessionLookup, TransactionRecord } from "./auth.js";
+export { IdentityTableMissing, createIdentityStore } from "./identity.js";
+export type { IdentityStore } from "./identity.js";
 export {
   assertDividendAuditDatabase,
   dividendAuditUpdateSql,

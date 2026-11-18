@@ -5,17 +5,22 @@ import { describe, expect, it } from "vitest";
 const read = (path: string) => readFileSync(path, "utf8");
 
 describe("product shell stays visual", () => {
-  it("keeps login on the previous palette and moves dividend pages onto paper", () => {
+  it("keeps dividend pages on paper and uses that palette for login", () => {
     const css = read("design/tokens-dividends.css");
     const auth = css.slice(css.indexOf(".auth-app {"), css.indexOf("[data-theme"));
-    expect(auth).toContain("--qk-canvas: #eef1f4;");
-    expect(auth).toContain("--qk-accent: #4f46e5;");
-    expect(auth).not.toContain("#f4f1ea");
+    expect(auth).toContain("--qk-canvas: #f4f1ea;");
+    expect(auth).toContain("--qk-accent: #1c1916;");
+    expect(auth).not.toContain("#4f46e5");
+    expect(auth).not.toContain("#eef1f4");
     const dividends = css.slice(0, css.indexOf(".auth-app {"));
     expect(dividends).toContain("--qk-canvas: #f4f1ea;");
     expect(dividends).toContain("--qk-accent: #1c1916;");
-    expect(read("apps/web/src/pages/LoginPage.tsx")).toContain('className="auth-app"');
-    expect(read("apps/web/src/pages/LoginPage.tsx")).not.toContain("qk-product");
+    const login = read("apps/web/src/pages/LoginPage.tsx");
+    expect(login).toContain('className="auth-app qk-product"');
+    expect(login).toContain("<SignIn");
+    expect(login).not.toContain("Google");
+    expect(login).not.toContain("password");
+    expect(login).not.toContain("oauth");
   });
 
   it("applies the shared shell to backtest, rotation, and dividend pages only", () => {
@@ -30,7 +35,7 @@ describe("product shell stays visual", () => {
     expect(shell.indexOf(".qk-product .metric .v.quote-stale")).toBeGreaterThan(
       shell.indexOf(".qk-product .metric .v,"),
     );
-    expect(read("apps/web/src/pages/LoginPage.tsx")).not.toContain("qk-product");
+    expect(read("apps/web/src/pages/LoginPage.tsx")).toContain("qk-product");
     expect(read("design/tokens-dividends.css")).toContain(".auth-app {");
     expect(read("apps/web/src/pages/IndexLayout.tsx")).toContain('"qk-index"');
   });

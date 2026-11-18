@@ -29,6 +29,7 @@ import {
 import { Hono } from "hono";
 
 import { mountAuthRoutes } from "./auth/routes.js";
+import { mountAccountHoldingRoutes } from "./holdings/accountRoutes.js";
 import { unavailableAuth, type AuthRuntime } from "./auth/runtime.js";
 
 export type MarketSource = {
@@ -120,6 +121,7 @@ async function readOverviewTemperature(
 export function createApp(source: MarketSource, auth: AuthRuntime = unavailableAuth()) {
   const app = new Hono();
   mountAuthRoutes(app, auth);
+  mountAccountHoldingRoutes(app, auth);
 
   app.get("/api/health", async (c) => {
     try {

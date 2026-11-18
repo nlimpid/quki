@@ -9,9 +9,17 @@ TIDB_QUKI_DATABASE_URL=
 # Shared secret for POST /admin/ingest and POST /admin/backfill on the crawler worker.
 INGEST_TOKEN=replace-with-a-long-random-string
 
-# Login stays unavailable until all three OIDC values are set on the site Worker.
-# Names only. Do not put real values in git.
-# AUTH_OIDC_ISSUER=
-# AUTH_OIDC_CLIENT_ID=
-# AUTH_OIDC_CLIENT_SECRET=
-# AUTH_OIDC_SCOPES=openid
+# Site Worker local development. The crawler does not read these.
+# Public Clerk Frontend API origin. Leave blank to keep login unavailable.
+# Production deploys use the public value in workers/site/wrangler.jsonc.
+# A Clerk development instance looks like https://<name>.clerk.accounts.dev
+CLERK_JWT_ISSUER=
+
+# Optional local azp allowlist. Unset uses the code default.
+# CLERK_AUTHORIZED_PARTIES=http://127.0.0.1:5173
+
+# Web build only. `pnpm build:site` succeeds without this.
+# Set it on the production site build to mount the Clerk email form.
+# Vite inlines it. A Worker runtime variable does not change a build that omitted it.
+# Publishable-key placeholder. Do not commit a real key.
+# VITE_CLERK_PUBLISHABLE_KEY=pk_test_replace_me

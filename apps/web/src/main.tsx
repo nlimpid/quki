@@ -1,11 +1,14 @@
-import { StrictMode, Suspense } from "react";
+import { ClerkProvider, useAuth as useClerkAuth } from "@clerk/react";
+import { StrictMode, Suspense, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router";
 
-import { Navigate, Outlet } from "react-router";
+import { Navigate, Outlet, useNavigate } from "react-router";
 
 import { BacktestRoute, LayoutRoute, OverviewRoute, RootRedirect } from "./App.js";
 import { AuthProvider } from "./lib/auth.js";
+import { logoutReturnUrl } from "./lib/authState.js";
+import { bearerForUser } from "./lib/authClient.js";
 import { PortfolioPage } from "./pages/PortfolioPage.js";
 import { RotationPage } from "./pages/RotationPage.js";
 import { StockPage } from "./pages/StockPage.js";
@@ -17,13 +20,66 @@ import "./styles.css";
 import "./dividends.css";
 import "./auth.css";
 
-function RootLayout() {
+function sameOriginPath(to: string): string {
+  try {
+    const url = new URL(to, window.location.origin);
+    if (url.origin !== window.location.origin) return "/";
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return "/";
+  }
+}
+
+function ClerkBoundAuth({ children }: { children: React.ReactNode }) {
+  const { isLoaded, isSignedIn, getToken, userId, signOut } = useClerkAuth();
+  const userRef = useRef(userId);
+  useEffect(() => {
+    userRef.current = userId;
+  }, [userId]);
   return (
-    <AuthProvider>
-      <Suspense fallback={null}>
-        <Outlet />
-      </Suspense>
+    <AuthProvider
+      sessionKey={isLoaded ? `ready:${userId ?? "guest"}` : "loading"}
+      getAccessToken={async () => {
+        if (!isLoaded || !isSignedIn || !userId) return null;
+        const token = await getToken();
+        return bearerForUser(userId, userRef.current, token);
+      }}
+      onLogout={() =>
+        signOut({
+          redirectUrl: logoutReturnUrl(
+            `${window.location.pathname}${window.location.search}`,
+            window.location.origin,
+          ),
+        })
+      }
+      onSessionRejected={() => signOut()}
+    >
+      {children}
     </AuthProvider>
+  );
+}
+
+function RootLayout() {
+  const navigate = useNavigate();
+  const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+  const outlet = (
+    <Suspense fallback={null}>
+      <Outlet />
+    </Suspense>
+  );
+  if (!publishableKey) return <AuthProvider>{outlet}</AuthProvider>;
+  return (
+    <ClerkProvider
+      publishableKey={publishableKey}
+      routerPush={(to) => navigate(sameOriginPath(to))}
+      routerReplace={(to) => navigate(sameOriginPath(to), { replace: true })}
+      signInUrl="/login"
+      signUpUrl="/login"
+      signInFallbackRedirectUrl="/"
+      signUpFallbackRedirectUrl="/"
+    >
+      <ClerkBoundAuth>{outlet}</ClerkBoundAuth>
+    </ClerkProvider>
   );
 }
 
@@ -47,6 +103,7 @@ const router = createBrowserRouter([
       { path: "/portfolio", element: <PortfolioPage /> },
       { path: "/me", element: <Navigate to="/portfolio" replace /> },
       { path: "/login", element: <LoginPage /> },
+      { path: "/login/*", element: <LoginPage /> },
       ...(import.meta.env.DEV
         ? [
             {

@@ -1,7 +1,15 @@
 import { AUTH_PROBE_TIMEOUT_MS } from "@quki/types";
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
-import { fetchSession, logoutSession } from "./authClient.js";
+import { logoutSession, runAuthProbe } from "./authClient.js";
 import {
   applyProbeFailure,
   applyProbeSuccess,
@@ -9,6 +17,7 @@ import {
   beginLogout,
   failLogout,
   finishLogout,
+  rejectCredential,
   type AuthPhase,
 } from "./authState.js";
 
@@ -21,11 +30,31 @@ type AuthContextValue = {
   recheck: () => void;
   logout: () => Promise<void>;
   dismissExpiry: () => void;
+  /** Clerk session JWT for this probe, or null. Holdings must send this bearer. */
+  accessToken: () => Promise<string | null>;
+  /** Current Clerk identity. Changes before the Worker probe returns. */
+  sessionKey: string;
+  /** Session key that produced the current phase. Null until a probe succeeds. */
+  confirmedSessionKey: string | null;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({
+  children,
+  sessionKey = "static",
+  getAccessToken,
+  onLogout,
+  onSessionRejected,
+}: {
+  children: ReactNode;
+  /** `loading` waits. Any other change, including a new Clerk user id, starts a new probe. */
+  sessionKey?: string;
+  getAccessToken?: () => Promise<string | null>;
+  onLogout?: () => Promise<void>;
+  /** Clerk rejected the bearer. After this resolves, one anonymous probe runs with no token. */
+  onSessionRejected?: () => Promise<void>;
+}) {
   const [phase, setPhase] = useState<AuthPhase>({
     kind: "initializing",
     login: { state: "unknown" },
@@ -33,9 +62,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [generation, setGeneration] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const [expiryDismissed, setExpiryDismissed] = useState(false);
+  const [confirmedSessionKey, setConfirmedSessionKey] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const tokenRef = useRef(getAccessToken);
+  const rejectedRef = useRef(onSessionRejected);
+  useEffect(() => {
+    tokenRef.current = getAccessToken;
+    rejectedRef.current = onSessionRejected;
+  }, [getAccessToken, onSessionRejected]);
 
   useEffect(() => {
+    if (sessionKey === "loading") return;
     const startedAt = generation;
     const controller = new AbortController();
     abortRef.current = controller;
@@ -43,23 +80,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (controller.signal.aborted || startedAt !== generation) return;
       setPhase((current) => applyProbeTimeout(current));
     }, AUTH_PROBE_TIMEOUT_MS);
-    void fetchSession()
-      .then((session) => {
+    void (async () => {
+      try {
+        const outcome = await runAuthProbe({
+          signal: controller.signal,
+          getAccessToken: tokenRef.current,
+          onSessionRejected: rejectedRef.current,
+        });
         if (controller.signal.aborted) return;
-        setPhase((current) => applyProbeSuccess(current, session));
-      })
-      .catch(() => {
-        if (controller.signal.aborted) return;
+        if (outcome.type === "ok") {
+          setConfirmedSessionKey(sessionKey);
+          setPhase((current) => applyProbeSuccess(current, outcome.session));
+          return;
+        }
+        if (outcome.type === "rejected-unknown") {
+          setPhase((current) => applyProbeFailure(rejectCredential(current)));
+          return;
+        }
         setPhase((current) => applyProbeFailure(current));
-      })
-      .finally(() => {
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setPhase((current) => applyProbeFailure(current));
+      } finally {
         if (!controller.signal.aborted) setRetrying(false);
-      });
+      }
+    })();
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [generation]);
+  }, [generation, sessionKey]);
 
   const retry = () => {
     setRetrying(true);
@@ -74,13 +125,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setGeneration((current) => current + 1);
   };
 
+  const accessToken = useCallback(
+    () => (tokenRef.current ? tokenRef.current() : Promise.resolve(null)),
+    [],
+  );
+
   const logout = async () => {
     const pending = beginLogout(phase);
     if (pending.kind !== "logoutPending") return;
     abortRef.current?.abort();
     setPhase(pending);
     try {
-      await logoutSession(pending.csrfToken);
+      if (onLogout) await onLogout();
+      else await logoutSession(tokenRef.current ? await tokenRef.current() : null);
       setPhase(finishLogout(pending));
       setExpiryDismissed(false);
     } catch {
@@ -98,6 +155,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         recheck,
         logout,
         dismissExpiry: () => setExpiryDismissed(true),
+        accessToken,
+        sessionKey,
+        confirmedSessionKey,
       }}
     >
       {children}

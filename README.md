@@ -111,16 +111,15 @@ Lint and format are oxlint and oxfmt. The web bundler is `rolldown-vite`. Librar
 
 ## Secrets
 
-Never commit values. Names:
+Never commit secrets or the publishable key. Names:
 
-| Name                     | Where                                                                                                                                           |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TIDB_QUKI_DATABASE_URL` | Worker secret and local env. TiDB Serverless MySQL URL, for example `mysql://USER:PASSWORD@gateway01.<region>.prod.aws.tidbcloud.com:4000/quki` |
-| `INGEST_TOKEN`           | Crawler Worker secret. `Authorization: Bearer …` or `x-ingest-token` on `POST /admin/migrate` and `POST /admin/ingest`                          |
-| `AUTH_OIDC_ISSUER`       | Site Worker secret. HTTPS issuer URL of the OIDC provider the owner selects. No default provider.                                              |
-| `AUTH_OIDC_CLIENT_ID`    | Site Worker secret. OAuth client id for that issuer.                                                                                            |
-| `AUTH_OIDC_CLIENT_SECRET`| Site Worker secret. Confidential client secret. Not a session cookie.                                                                          |
-| `AUTH_OIDC_SCOPES`       | Optional site Worker secret. Must be exactly `openid` until the consent copy is replaced. Any other value keeps login unavailable.             |
+| Name                         | Where                                                                                                                                           |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TIDB_QUKI_DATABASE_URL`     | Worker secret and local env. TiDB Serverless MySQL URL, for example `mysql://USER:PASSWORD@gateway01.<region>.prod.aws.tidbcloud.com:4000/quki` |
+| `INGEST_TOKEN`               | Crawler Worker secret. `Authorization: Bearer …` or `x-ingest-token` on `POST /admin/migrate` and `POST /admin/ingest`                          |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Web build. `pnpm build:site` succeeds without it. Vite inlines it when present. Without it the page does not mount Clerk. A Worker runtime setting does not add it to that build. Publishable key only. This repository does not contain the key. |
+| `CLERK_JWT_ISSUER`           | Public site Worker variable in `workers/site/wrangler.jsonc`, value `https://clerk.quki.cc`. Not a secret. JWKS is fetched only from that origin. |
+| `CLERK_AUTHORIZED_PARTIES`   | Optional site Worker. Comma-separated `azp` origins. Defaults to `https://quki.cc,https://www.quki.cc`.                                         |
 
 ```bash
 # from workers/site and workers/crawler respectively
@@ -155,7 +154,7 @@ The CSV backfill stays a Node script: the seed files are not on the edge.
 
 ## A-share dividends
 
-`/stocks`, `/stock/:code`, and `/portfolio` are Shanghai and Shenzhen A-shares (main board, ChiNext, STAR). Beijing and delisted names are excluded. The stock page has no K-line. Holdings stay in this browser under `qk.holdings.v1`. `/me` redirects to `/portfolio`. Login is a provider-neutral shell: the header links to `/login`, but the sign-in control stays inert until an OIDC issuer is chosen. See `docs/auth.md`.
+`/stocks`, `/stock/:code`, and `/portfolio` are Shanghai and Shenzhen A-shares (main board, ChiNext, STAR). Beijing and delisted names are excluded. The stock page has no K-line. Holdings stay in this browser under `qk.holdings.v1`. `/me` redirects to `/portfolio`. Login is Clerk email. The header shows 登录 when the Worker session is ready, and `/login` shows the sign-in form only when the publishable key and that ready flag are both present. See `docs/auth.md`.
 
 近12月股息率 and a holding's 平均股息率 use the same formula: trailing 12 calendar months of pretax cash per share, divided by the latest close. Cash paid before a later bonus or transfer is divided by that split so it lines up with today's share count. Bonus and transfer shares are not cash. 「最近分红」is the ex-dividend date. A close the latest crawl did not refresh stays on the card in gray.
 
@@ -173,7 +172,9 @@ Create two Workers Builds projects on this repo. Leave the root directory empty 
 | Build command  | `pnpm build:site`                                    | `pnpm build:crawler`                                    |
 | Deploy command | `npx wrangler deploy -c workers/site/wrangler.jsonc` | `npx wrangler deploy -c workers/crawler/wrangler.jsonc` |
 
-`build:site` compiles `apps/web`. `build:crawler` is a no-op; Wrangler bundles the crawler during deploy. Paths in each `wrangler.jsonc` are relative to that config file, so deploy from the repo root still finds `workers/site/src/index.ts` and the assets directory `apps/web/dist`. Assets stay a binding. They are not inlined into the script. `npx wrangler` uses the Wrangler version pinned in the root `devDependencies`.
+`build:site` compiles `apps/web` whether or not `VITE_CLERK_PUBLISHABLE_KEY` is set. When the key is present, Vite inlines it and the page can mount Clerk. When it is absent, the build still succeeds and the page leaves Clerk unmounted. Setting the key only on the deployed Worker does not add it to a build that omitted it. Production should set the publishable key on the site build so the email-code form can render. This repository does not contain the key. `build:crawler` is a no-op; Wrangler bundles the crawler during deploy. Paths in each `wrangler.jsonc` are relative to that config file, so deploy from the repo root still finds `workers/site/src/index.ts` and the assets directory `apps/web/dist`. Assets stay a binding. They are not inlined into the script. `npx wrangler` uses the Wrangler version pinned in the root `devDependencies`.
+
+The site config sets the public variable `CLERK_JWT_ISSUER` to `https://clerk.quki.cc`. That value deploys with the site Worker. It is not a secret, and the crawler config does not set it.
 
 Account `a0eb1f96a32491ca1f70971c118831fd`, zone `quki.cc`. Custom domains `quki.cc` and `www.quki.cc` stay in the site config.
 

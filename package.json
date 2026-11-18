@@ -15,6 +15,7 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "migrate": "tsx scripts/migrate.ts",
+    "auth:sql:review": "tsx scripts/apply-reviewed-auth-sql.ts",
     "backfill": "tsx scripts/backfill.ts",
     "ingest": "tsx scripts/ingest.ts",
     "temperature:backtest": "tsx scripts/temperature-backtest.ts",

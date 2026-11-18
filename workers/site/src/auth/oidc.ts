@@ -1,11 +1,19 @@
 import { publicDisplayName } from "@quki/types";
 import * as oauth from "oauth4webapi";
 
+/**
+ * Discovery document issuer string. oauth4webapi compares an ID token `iss`
+ * to this value with `!==`. A scheme-less host is not this string.
+ */
+export const GOOGLE_ISSUER = "https://accounts.google.com";
+/** Sent to Google. `profile` may include `name`; `email` is not requested. */
+export const GOOGLE_OIDC_SCOPES = "openid profile" as const;
+
 export type OidcConfig = {
   issuer: URL;
   clientId: string;
   clientSecret: string;
-  scopes: "openid";
+  scopes: typeof GOOGLE_OIDC_SCOPES;
 };
 
 export type OidcIdentity = {
@@ -50,7 +58,37 @@ export type OidcEnv = {
   AUTH_OIDC_CLIENT_ID?: string;
   AUTH_OIDC_CLIENT_SECRET?: string;
   AUTH_OIDC_SCOPES?: string;
+  /** Must be the string `true` before any nonproduction origin is trusted. */
+  AUTH_ALLOW_NONPRODUCTION_ORIGINS?: string;
+  /** Comma-separated https origins. Ignored unless the flag above is `true`. */
+  AUTH_NONPRODUCTION_HTTPS_ORIGINS?: string;
 };
+
+export function isGoogleIssuerUrl(issuer: URL): boolean {
+  return (
+    issuer.protocol === "https:" &&
+    issuer.hostname === "accounts.google.com" &&
+    issuer.port === "" &&
+    (issuer.pathname === "/" || issuer.pathname === "") &&
+    issuer.search === "" &&
+    issuer.username === "" &&
+    issuer.password === "" &&
+    issuer.hash === ""
+  );
+}
+
+/** Exact `iss` claim accepted for a new account. */
+export function acceptedGoogleIdTokenIssuer(iss: string): boolean {
+  return iss === GOOGLE_ISSUER;
+}
+
+function confirmedGoogleScopes(value: string | undefined): typeof GOOGLE_OIDC_SCOPES | null {
+  const parts = (value ?? GOOGLE_OIDC_SCOPES).trim().split(/\s+/).filter(Boolean);
+  if (parts.length !== 2) return null;
+  const names = new Set(parts);
+  if (!names.has("openid") || !names.has("profile")) return null;
+  return GOOGLE_OIDC_SCOPES;
+}
 
 export function readOidcEnv(
   env: OidcEnv,
@@ -68,12 +106,44 @@ export function readOidcEnv(
   } catch {
     return { ok: false, reason: "auth_not_configured" };
   }
-  if (issuer.protocol !== "https:" || issuer.username || issuer.password || issuer.hash) {
-    return { ok: false, reason: "auth_not_configured" };
+  if (!isGoogleIssuerUrl(issuer)) return { ok: false, reason: "auth_not_configured" };
+  const scopes = confirmedGoogleScopes(env.AUTH_OIDC_SCOPES);
+  if (!scopes) return { ok: false, reason: "scopes_not_confirmed" };
+  return { ok: true, config: { issuer, clientId, clientSecret, scopes } };
+}
+
+/** Production origins always stay. Extra https origins require an explicit nonproduction flag. */
+export function trustedAuthOrigins(env: OidcEnv = {}): readonly string[] {
+  const origins: string[] = [...PRODUCTION_AUTH_ORIGINS];
+  if (env.AUTH_ALLOW_NONPRODUCTION_ORIGINS !== "true") return origins;
+  for (const entry of (env.AUTH_NONPRODUCTION_HTTPS_ORIGINS ?? "").split(",")) {
+    const text = entry.trim();
+    if (!text) continue;
+    let url: URL;
+    try {
+      url = new URL(text);
+    } catch {
+      continue;
+    }
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash)
+      continue;
+    if (url.pathname !== "/" && url.pathname !== "") continue;
+    if (!origins.includes(url.origin)) origins.push(url.origin);
   }
-  const scopes = (env.AUTH_OIDC_SCOPES ?? "openid").trim();
-  if (scopes !== "openid") return { ok: false, reason: "scopes_not_confirmed" };
-  return { ok: true, config: { issuer, clientId, clientSecret, scopes: "openid" } };
+  return origins;
+}
+
+export function classifyOidcFailure(
+  error: unknown,
+): "provider_rejected" | "provider_unreachable" | "login_failed" {
+  if (
+    error instanceof oauth.AuthorizationResponseError ||
+    (error instanceof Error && error.name === "AuthorizationResponseError")
+  ) {
+    return "provider_rejected";
+  }
+  if (error instanceof TypeError) return "provider_unreachable";
+  return "login_failed";
 }
 
 export async function buildAuthorizationUrl(
@@ -125,7 +195,9 @@ export function createOidcClient(config: OidcConfig): OidcClient {
       });
       const claims = oauth.getValidatedIdTokenClaims(result);
       if (!claims?.sub || typeof claims.iss !== "string") throw new Error("missing_identity");
-      const claimName = claims.name ?? claims.preferred_username;
+      if (!acceptedGoogleIdTokenIssuer(claims.iss)) throw new Error("issuer");
+      if (claims.aud !== config.clientId) throw new Error("audience");
+      const claimName = typeof claims.name === "string" ? claims.name : null;
       return { issuer: claims.iss, subject: claims.sub, displayName: publicDisplayName(claimName) };
     },
   };

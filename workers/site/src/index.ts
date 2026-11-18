@@ -28,8 +28,14 @@ export interface Env {
   AUTH_OIDC_ISSUER?: string;
   AUTH_OIDC_CLIENT_ID?: string;
   AUTH_OIDC_CLIENT_SECRET?: string;
-  /** Must stay `openid` until the consent copy is replaced. Other scopes fail closed. */
+  /** Omit, or `openid profile`. `email` and any other set keep login unavailable. */
   AUTH_OIDC_SCOPES?: string;
+  AUTH_ALLOW_NONPRODUCTION_ORIGINS?: string;
+  AUTH_NONPRODUCTION_HTTPS_ORIGINS?: string;
+  /** Exact https origin of the Clerk Frontend API. Example: https://example.clerk.accounts.dev */
+  CLERK_JWT_ISSUER?: string;
+  /** Comma-separated origins allowed in the session token azp claim. */
+  CLERK_AUTHORIZED_PARTIES?: string;
   ASSETS: { fetch: (request: Request) => Promise<Response> };
 }
 

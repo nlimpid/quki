@@ -10,7 +10,7 @@ export type AuthSessionUser = {
   displayName: string | null;
 };
 
-export type AuthLoginMethod = "oidc";
+export type AuthLoginMethod = "oidc" | "clerk";
 
 export type AuthUnavailableReason =
   | "auth_not_configured"
@@ -123,7 +123,7 @@ export function parseAuthSessionResponse(value: unknown): AuthSessionResponse | 
   if (!body.login || typeof body.login !== "object" || Array.isArray(body.login)) return null;
   const login = body.login as Record<string, unknown>;
   if (typeof login.ready !== "boolean") return null;
-  if (login.method != null && login.method !== "oidc") return null;
+  if (login.method != null && login.method !== "oidc" && login.method !== "clerk") return null;
   const reasonValue = login.reason;
   const reason =
     reasonValue === "auth_not_configured" ||
@@ -132,7 +132,8 @@ export function parseAuthSessionResponse(value: unknown): AuthSessionResponse | 
       ? reasonValue
       : null;
   if (reasonValue != null && reason == null) return null;
-  if (login.ready !== (login.method === "oidc" && reason == null)) return null;
+  const methodReady = login.method === "oidc" || login.method === "clerk";
+  if (login.ready !== (methodReady && reason == null)) return null;
   return {
     status,
     authenticated: body.authenticated,
@@ -141,7 +142,7 @@ export function parseAuthSessionResponse(value: unknown): AuthSessionResponse | 
     csrfToken,
     login: {
       ready: login.ready,
-      method: login.method === "oidc" ? "oidc" : null,
+      method: login.method === "oidc" || login.method === "clerk" ? login.method : null,
       reason,
     },
   };

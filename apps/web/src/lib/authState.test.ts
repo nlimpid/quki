@@ -7,8 +7,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   LOGIN_CHECK_FAILED_COPY,
-  LOGIN_UI_ENABLED,
+  LOGIN_PRIVACY_COPY,
   LOGIN_UNAVAILABLE_COPY,
+  clerkFlowRedirects,
   applyProbeFailure,
   applyProbeSuccess,
   applyProbeTimeout,
@@ -16,7 +17,10 @@ import {
   failLogout,
   finishLogout,
   headerControl,
+  rejectCredential,
+  holdingMutation,
   loginView,
+  logoutReturnUrl,
   panelTabLeaves,
   portfolioSubtitle,
   showExpiryBanner,
@@ -39,7 +43,7 @@ function session(
     expired: false,
     user: null,
     csrfToken: ready ? "csrf" : null,
-    login: { ready, method: ready ? "oidc" : null, reason: ready ? null : reason },
+    login: { ready, method: ready ? "clerk" : null, reason: ready ? null : reason },
     ...extra,
   };
 }
@@ -51,15 +55,32 @@ function guest(reason: AuthUnavailableReason): AuthPhase {
 describe("auth view state", () => {
   it("keeps a probe failure unknown and does not call that logged out", () => {
     expect(AUTH_PROBE_TIMEOUT_MS).toBe(4_000);
-    expect(LOGIN_UI_ENABLED).toBe(false);
     const unknown = applyProbeTimeout(initializing);
     expect(unknown).toEqual({ kind: "unknown", login: unknownLogin });
     expect(headerControl(unknown)).toBe("login");
     expect(showLoginCta(unknown)).toBe(true);
     expect(applyProbeFailure(initializing)).toEqual(unknown);
+    const signedIn = {
+      kind: "authenticated" as const,
+      displayName: "林",
+      csrfToken: "csrf",
+      login: { state: "ready" as const },
+    };
+    expect(rejectCredential(signedIn)).toEqual({ kind: "initializing", login: unknownLogin });
+    expect(rejectCredential({ ...signedIn, kind: "logoutPending" })).toMatchObject({
+      kind: "logoutPending",
+    });
     expect(loginView(unknown).alert).toBe(LOGIN_CHECK_FAILED_COPY);
     expect(loginView(unknown).message).toBeNull();
     expect(portfolioSubtitle(unknown)).not.toContain("未登录");
+    expect(LOGIN_PRIVACY_COPY).toContain("旧持仓不会上传");
+    expect(LOGIN_PRIVACY_COPY).toContain("账户持仓保存在服务器");
+    expect(LOGIN_PRIVACY_COPY).not.toContain("持仓仍仅保存在此浏览器");
+    const redirects = clerkFlowRedirects("/portfolio?add=1");
+    expect(redirects.forceRedirectUrl).toBe("/portfolio?add=1");
+    expect(redirects.signUpForceRedirectUrl).toBe("/portfolio?add=1");
+    expect(redirects.signUpUrl).toBe("/login?returnTo=%2Fportfolio%3Fadd%3D1");
+    expect(redirects.signUpUrl.startsWith("/login?")).toBe(true);
     expect(portfolioSubtitle(unknown)).not.toContain("登录暂不可用");
   });
 
@@ -74,32 +95,32 @@ describe("auth view state", () => {
       expect(phase).toMatchObject({ kind: "guest", login: { state: "unavailable", reason } });
       expect(headerControl(phase)).toBe("none");
       expect(showLoginCta(phase)).toBe(false);
-      expect(showLoginCta(phase, true)).toBe(false);
+      expect(loginView(phase).mode).toBe("unavailable");
       expect(loginView(phase).message).toBe(LOGIN_UNAVAILABLE_COPY);
       expect(loginView(phase).retry).toBe(true);
+      expect(loginView(phase, "login_failed").alert).toBe("登录失败，请重试。");
+      expect(loginView(phase, "login_failed").message).toBe(LOGIN_UNAVAILABLE_COPY);
       const expired = applyProbeSuccess(
         initializing,
         session(false, reason, { expired: true, status: "anonymous" }),
       );
       expect(showExpiryBanner(expired, false)).toBe(true);
       expect(showRelogin(expired, false)).toBe(false);
-      expect(showRelogin(expired, false, true)).toBe(false);
     }
   });
 
-  it("does not offer a sign-in button when the API is ready but consent is not", () => {
+  it("offers login when the Worker session is ready", () => {
     const phase = applyProbeSuccess(initializing, session(true, null, { status: "anonymous" }));
     expect(phase).toMatchObject({ kind: "guest", login: { state: "ready" } });
-    expect(headerControl(phase)).toBe("none");
-    expect(showLoginCta(phase)).toBe(false);
-    expect(showLoginCta(phase, true)).toBe(true);
-    expect(loginView(phase).mode).toBe("unavailable");
-    expect(loginView(phase).message).toBe(LOGIN_UNAVAILABLE_COPY);
+    expect(headerControl(phase)).toBe("login");
+    expect(showLoginCta(phase)).toBe(true);
+    expect(loginView(phase).mode).toBe("ready");
+    expect(loginView(phase).message).toBeNull();
+    expect(loginView(phase).retry).toBe(false);
     const expired = { ...phase, expired: true } as AuthPhase;
     expect(showExpiryBanner(expired, false)).toBe(true);
-    expect(showRelogin(expired, false)).toBe(false);
-    expect(showRelogin(expired, false, true)).toBe(true);
-    expect(showRelogin(expired, true, true)).toBe(false);
+    expect(showRelogin(expired, false)).toBe(true);
+    expect(showRelogin(expired, true)).toBe(false);
   });
 
   it("keeps an existing account usable when new login is unavailable", () => {
@@ -131,6 +152,12 @@ describe("auth view state", () => {
     expect(headerControl(finishLogout(pending))).toBe("none");
     expect(portfolioSubtitle(failed)).toContain("不会因登录而同步到云端");
     expect(portfolioSubtitle(guest("auth_not_configured"))).toContain("未登录");
+    expect(holdingMutation(signedIn)).toBe("allow");
+    expect(holdingMutation(pending)).toBe("wait");
+    expect(holdingMutation(failed)).toBe("retry");
+    expect(holdingMutation(guest("auth_not_configured"))).toBe("login");
+    expect(holdingMutation(initializing)).toBe("wait");
+    expect(holdingMutation({ kind: "unknown", login: unknownLogin })).toBe("retry");
   });
 
   it("accepts a late session after the probe timed out", () => {
@@ -143,6 +170,13 @@ describe("auth view state", () => {
       login: { ready: false, method: null, reason: "storage_unconfigured" },
     });
     expect(late).toMatchObject({ kind: "authenticated", displayName: null });
+  });
+
+  it("keeps logout on this site", () => {
+    const origin = "https://quki.cc";
+    expect(logoutReturnUrl("/portfolio?add=1", origin)).toBe("https://quki.cc/portfolio?add=1");
+    expect(logoutReturnUrl("https://evil.example/steal", origin)).toBe("https://quki.cc/");
+    expect(logoutReturnUrl("/login?returnTo=/portfolio", origin)).toBe("https://quki.cc/");
   });
 
   it("lets Tab leave the account panel instead of wrapping focus", () => {
