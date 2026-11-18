@@ -5,13 +5,13 @@ import { accountLabel, parseAuthSessionResponse, publicDisplayName, safeReturnTo
 const origin = "https://quki.cc";
 
 describe("safeReturnTo", () => {
-  it("keeps same-origin path and search and drops the hash", () => {
+  it("keeps same-origin path, search, and hash", () => {
     expect(safeReturnTo("/portfolio", origin)).toBe("/portfolio");
     expect(safeReturnTo("/portfolio?edit=1", origin)).toBe("/portfolio?edit=1");
     expect(safeReturnTo("/index/H30269?period=W&range=5Y", origin)).toBe(
       "/index/H30269?period=W&range=5Y",
     );
-    expect(safeReturnTo("/portfolio?edit=1#secret", origin)).toBe("/portfolio?edit=1");
+    expect(safeReturnTo("/portfolio?edit=1#holdings", origin)).toBe("/portfolio?edit=1#holdings");
     expect(safeReturnTo("/", origin)).toBe("/");
   });
 

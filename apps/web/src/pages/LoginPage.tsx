@@ -1,8 +1,8 @@
 import { SignIn } from "@clerk/react";
 import { Alert, Button } from "@heroui/react";
-import { DIVIDEND_DISCLAIMER, safeReturnTo } from "@quki/types";
+import { DIVIDEND_DISCLAIMER } from "@quki/types";
 import { useEffect, useRef } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 
 import { AppHeader } from "../components/AppHeader.js";
 import { useAuth } from "../lib/auth.js";
@@ -11,15 +11,22 @@ import {
   LOGIN_PRIVACY_COPY,
   LOGIN_UNAVAILABLE_COPY,
   clerkFlowRedirects,
+  loginReturnTarget,
   loginView,
 } from "../lib/authState.js";
 
 export function LoginPage() {
   const { phase, retry, retrying } = useAuth();
   const [params, setParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const returnTo = safeReturnTo(params.get("returnTo"), window.location.origin);
+  const returnTo = loginReturnTarget(
+    location.search,
+    location.pathname,
+    window.location.origin,
+    window.sessionStorage,
+  );
   const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY?.trim() ?? "";
   const view = loginView(phase, params.get("error"));
   const redirects = clerkFlowRedirects(returnTo);

@@ -47,7 +47,7 @@ function ClerkBoundAuth({ children }: { children: React.ReactNode }) {
       onLogout={() =>
         signOut({
           redirectUrl: logoutReturnUrl(
-            `${window.location.pathname}${window.location.search}`,
+            `${window.location.pathname}${window.location.search}${window.location.hash}`,
             window.location.origin,
           ),
         })
