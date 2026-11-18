@@ -18,7 +18,8 @@ CLERK_JWT_ISSUER=
 # Optional local azp allowlist. Unset uses the code default.
 # CLERK_AUTHORIZED_PARTIES=http://127.0.0.1:5173
 
-# Web build only. Set this in the process that runs `pnpm build:site`.
+# Web build only. `pnpm build:site` succeeds without this.
+# Set it on the production site build to mount the Clerk email form.
 # Vite inlines it. A Worker runtime variable does not change a build that omitted it.
 # Publishable-key placeholder. Do not commit a real key.
 # VITE_CLERK_PUBLISHABLE_KEY=pk_test_replace_me

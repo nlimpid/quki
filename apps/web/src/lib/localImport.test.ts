@@ -1,6 +1,6 @@
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { Window } from "../../../../node_modules/.pnpm/happy-dom@21.0.4/node_modules/happy-dom/lib/index.js";
+import { Window } from "happy-dom";
 import { describe, expect, it } from "vitest";
 
 import { LocalImportPanel } from "./LocalImportPanel.js";
