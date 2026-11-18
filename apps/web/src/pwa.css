@@ -1,0 +1,30 @@
+.pwa-notices {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding-top: env(safe-area-inset-top);
+}
+
+.pwa-note {
+  margin: 0;
+  padding: 8px 16px;
+  background: var(--qk-chip, #ebe6dc);
+  color: var(--qk-ink, #1c1916);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.qk-product {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.qk-drawer {
+  max-height: 100dvh;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+.qk-drawer input {
+  scroll-margin-bottom: 30vh;
+}

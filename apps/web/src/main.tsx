@@ -16,9 +16,12 @@ import { StocksPage } from "./pages/StocksPage.js";
 import { ThemeProvider } from "./lib/theme.js";
 import { LoginPage } from "./pages/LoginPage.js";
 
+import { PwaNotice } from "./pwa/PwaNotice.js";
+
 import "./styles.css";
 import "./dividends.css";
 import "./auth.css";
+import "./pwa.css";
 
 function sameOriginPath(to: string): string {
   try {
@@ -63,9 +66,12 @@ function RootLayout() {
   const navigate = useNavigate();
   const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
   const outlet = (
-    <Suspense fallback={null}>
-      <Outlet />
-    </Suspense>
+    <>
+      <PwaNotice />
+      <Suspense fallback={null}>
+        <Outlet />
+      </Suspense>
+    </>
   );
   if (!publishableKey) return <AuthProvider>{outlet}</AuthProvider>;
   return (
