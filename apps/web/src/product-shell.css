@@ -505,6 +505,41 @@
   box-shadow: none;
 }
 
+/* One thin field edge. The inner search input must not add a second box. */
+.qk-product .search-field__group {
+  border: 1px solid var(--qk-rule-2);
+  box-shadow: none;
+  background: var(--qk-paper);
+  align-items: center;
+}
+
+.qk-product .search-field__input {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  min-width: 0;
+}
+
+.qk-product .search-field__group:focus-within {
+  outline: 2px solid var(--qk-focus);
+  outline-offset: 2px;
+}
+
+.qk-product .search-field__input:focus,
+.qk-product .search-field__input:focus-visible,
+.qk-product .input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.qk-product .input:focus-visible {
+  outline: 2px solid var(--qk-focus);
+  outline-offset: 2px;
+}
+
 .qk-product a:focus-visible,
 .qk-product button:focus-visible,
 .qk-product input:focus-visible,
