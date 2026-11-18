@@ -13,6 +13,40 @@ export function logoutReturnUrl(pathAndSearch: string, origin: string): string {
   return new URL(safeReturnTo(pathAndSearch, origin), origin).toString();
 }
 
+export const LOGIN_RETURN_KEY = "qk.login.return";
+
+type LoginReturnStore = {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+};
+
+/**
+ * Clerk's nested /login/create and /login/factor paths drop the query.
+ * Remember the validated return target for those paths only.
+ * A rejected returnTo clears the remembered value.
+ */
+export function loginReturnTarget(
+  search: string,
+  pathname: string,
+  origin: string,
+  storage: LoginReturnStore,
+): string {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  if (params.has("returnTo")) {
+    const raw = params.get("returnTo");
+    const safe = safeReturnTo(raw, origin);
+    if (safe === "/" && raw !== "/" && raw !== "%2F") {
+      storage.removeItem(LOGIN_RETURN_KEY);
+      return "/";
+    }
+    storage.setItem(LOGIN_RETURN_KEY, safe);
+    return safe;
+  }
+  if (pathname !== "/login" && !pathname.startsWith("/login/")) return "/";
+  return safeReturnTo(storage.getItem(LOGIN_RETURN_KEY), origin);
+}
+
 /** Same-origin continuation for Clerk sign-in and the combined email sign-up flow. */
 export function clerkFlowRedirects(returnTo: string): {
   forceRedirectUrl: string;

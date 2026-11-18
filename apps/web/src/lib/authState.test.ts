@@ -19,6 +19,7 @@ import {
   headerControl,
   rejectCredential,
   holdingMutation,
+  loginReturnTarget,
   loginView,
   logoutReturnUrl,
   panelTabLeaves,
@@ -175,8 +176,51 @@ describe("auth view state", () => {
   it("keeps logout on this site", () => {
     const origin = "https://quki.cc";
     expect(logoutReturnUrl("/portfolio?add=1", origin)).toBe("https://quki.cc/portfolio?add=1");
+    expect(logoutReturnUrl("/portfolio?add=1#holdings", origin)).toBe(
+      "https://quki.cc/portfolio?add=1#holdings",
+    );
     expect(logoutReturnUrl("https://evil.example/steal", origin)).toBe("https://quki.cc/");
     expect(logoutReturnUrl("/login?returnTo=/portfolio", origin)).toBe("https://quki.cc/");
+    expect(logoutReturnUrl("/login/create/verify-email-address", origin)).toBe("https://quki.cc/");
+  });
+
+  it("keeps a safe return target across Clerk nested sign-in and sign-up paths", () => {
+    const origin = "https://quki.cc";
+    const storage = new Map<string, string>();
+    const store = {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        storage.set(key, value);
+      },
+      removeItem: (key: string) => {
+        storage.delete(key);
+      },
+    };
+    expect(loginReturnTarget("?returnTo=%2Fportfolio", "/login", origin, store)).toBe("/portfolio");
+    for (const path of [
+      "/login/create",
+      "/login/create/verify-email-address",
+      "/login/factor-one",
+      "/login/verify-email-address",
+    ]) {
+      expect(loginReturnTarget("", path, origin, store)).toBe("/portfolio");
+      expect(clerkFlowRedirects(loginReturnTarget("", path, origin, store)).forceRedirectUrl).toBe(
+        "/portfolio",
+      );
+    }
+    expect(
+      loginReturnTarget("?returnTo=%2Fportfolio%3Fadd%3D1%23holdings", "/login", origin, store),
+    ).toBe("/portfolio?add=1#holdings");
+    expect(
+      loginReturnTarget("", "/login/create/verify-email-address", origin, store),
+    ).toBe("/portfolio?add=1#holdings");
+    expect(loginReturnTarget("?returnTo=https://evil.example", "/login", origin, store)).toBe("/");
+    expect(storage.size).toBe(0);
+    expect(loginReturnTarget("", "/login/create/verify-email-address", origin, store)).toBe("/");
+    expect(loginReturnTarget("?returnTo=%2F%2Fevil.example", "/login", origin, store)).toBe("/");
+    expect(loginReturnTarget("?returnTo=%2Fportfolio", "/login", origin, store)).toBe("/portfolio");
+    storage.set("qk.login.return", "https://evil.example/phish");
+    expect(loginReturnTarget("", "/login/factor-one", origin, store)).toBe("/");
   });
 
   it("lets Tab leave the account panel instead of wrapping focus", () => {

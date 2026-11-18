@@ -62,7 +62,7 @@ export function accountLabel(displayName?: string | null): string {
 const ENCODED_DANGER = /%2f|%5c|%3a%2f%2f/i;
 
 /**
- * Same-origin path + search, or `/`.
+ * Same-origin path, search, and hash, or `/`.
  * The caller passes the `returnTo` value after the HTTP stack's single percent-decode.
  * A value that still contains `%` is decoded once more and rejected if that decode
  * leaves an encoded slash, backslash, or scheme.
@@ -92,7 +92,8 @@ export function safeReturnTo(value: unknown, origin: string): string {
   }
   if (target.origin !== base.origin) return "/";
   if (target.pathname === "/login" || target.pathname.startsWith("/login/")) return "/";
-  const next = `${target.pathname}${target.search}`;
+  const hash = target.hash === "#" ? "" : target.hash;
+  const next = `${target.pathname}${target.search}${hash}`;
   if (!next.startsWith("/") || next.startsWith("//") || next.length > 512) return "/";
   return next;
 }
