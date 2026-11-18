@@ -109,7 +109,7 @@ export function PortfolioPage() {
   }
 
   useEffect(() => {
-    if (signedIn || !codeKey) return;
+    if (phase.kind !== "guest" || !codeKey) return;
     const cancelled = { current: false };
     const key = codeKey;
     fetchStockBatch(key.split(","))
@@ -127,7 +127,7 @@ export function PortfolioPage() {
     return () => {
       cancelled.current = true;
     };
-  }, [codeKey, signedIn]);
+  }, [codeKey, phase.kind]);
 
   const quotesByCode = new Map(shownQuotes.map((item) => [item.code, item]));
   const cards: Card[] = (signedIn ? [] : holdings.items).map((holding) => {
@@ -198,6 +198,7 @@ export function PortfolioPage() {
           accountRows={account.items}
           epoch={account.epoch}
           busy={account.busy}
+          readFailed={account.error != null}
           onImport={async (writes) => {
             const ticket = account.epoch;
             for (const row of writes) {
