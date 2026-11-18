@@ -165,4 +165,48 @@ describe("signed-in portfolio shows account dividend figures from the quote pipe
       root.unmount();
     });
   });
+
+  it("shows the account read failure without a loading line", async () => {
+    installDom();
+    localStorage.setItem(
+      "qk.holdings.v1",
+      JSON.stringify({
+        version: 1,
+        items: [{ code: "000002", shares: 5, updatedAt: "2026-11-18T00:00:00.000Z" }],
+      }),
+    );
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/auth/session")) return Response.json(session);
+      if (url.includes("/api/holdings")) {
+        return Response.json({ message: "登录暂不可用" }, { status: 503 });
+      }
+      return new Response("no", { status: 404 });
+    }) as typeof fetch;
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root: Root = createRoot(host);
+    await act(async () => {
+      root.render(
+        <ThemeProvider>
+          <MemoryRouter initialEntries={["/portfolio"]}>
+            <AuthProvider sessionKey="ready:fixture" getAccessToken={async () => "fixture-token"}>
+              <PortfolioPage />
+            </AuthProvider>
+          </MemoryRouter>
+        </ThemeProvider>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("登录暂不可用");
+    expect(text).not.toContain("正在读取账户持仓");
+    expect(text).not.toContain("尚未添加持仓");
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

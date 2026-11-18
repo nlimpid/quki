@@ -111,7 +111,9 @@ export function PortfolioPage() {
 
   const quoteKey = signedIn
     ? (account.items ?? []).map((item) => item.code).join(",")
-    : codeKey;
+    : phase.kind === "guest"
+      ? codeKey
+      : "";
   const [seenQuoteKey, setSeenQuoteKey] = useState(quoteKey);
   if (seenQuoteKey !== quoteKey) {
     setSeenQuoteKey(quoteKey);
@@ -231,6 +233,7 @@ export function PortfolioPage() {
           accountRows={account.items}
           epoch={account.epoch}
           busy={account.busy}
+          readFailed={account.error != null}
           onImport={async (writes) => {
             const ticket = account.epoch;
             for (const row of writes) {

@@ -9,12 +9,15 @@ export function LocalImportPanel({
   accountRows,
   epoch,
   busy,
+  readFailed = false,
   onImport,
 }: {
   rows: readonly { code: string; shares: number }[];
   accountRows: readonly { code: string; version: string }[] | null;
   epoch: number;
   busy: boolean;
+  /** The account list failed. Do not describe that as still loading, and do not offer a save. */
+  readFailed?: boolean;
   onImport: (writes: readonly LocalImportWrite[]) => Promise<void>;
 }) {
   const [armedEpoch, setArmedEpoch] = useState<number | null>(null);
@@ -32,8 +35,8 @@ export function LocalImportPanel({
   return (
     <section className="div-card" aria-label="保存旧持仓">
       <p className="page-sub">此浏览器里的旧持仓不会自动上传。</p>
-      {plan == null ? <p className="page-sub">正在读取账户持仓…</p> : null}
-      {plan && plan.length > 0 && !armed ? (
+      {!readFailed && plan == null ? <p className="page-sub">正在读取账户持仓…</p> : null}
+      {!readFailed && plan && plan.length > 0 && !armed ? (
         <Button
           id="arm-import"
           variant="secondary"
@@ -43,7 +46,7 @@ export function LocalImportPanel({
           保存到账户
         </Button>
       ) : null}
-      {plan && plan.length > 0 && armed ? (
+      {!readFailed && plan && plan.length > 0 && armed ? (
         <>
           <ul id="import-preview">
             {plan.map((row) => (
