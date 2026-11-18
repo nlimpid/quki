@@ -7,7 +7,8 @@ import { Link, useSearchParams } from "react-router";
 import { useAuth } from "../lib/auth.js";
 import { usePageTitle } from "../lib/pageTitle.js";
 import { ACCOUNT_SAVE_COPY, ACCOUNT_SAVE_LABEL, portfolioSubtitle } from "../lib/authState.js";
-import { HoldingBoard } from "../lib/holdingBoard.js";
+import { HoldingBoard, type HoldingMetric } from "../lib/holdingBoard.js";
+import { portfolioPresentation } from "../lib/portfolioView.js";
 import { LocalImportPanel } from "../lib/LocalImportPanel.js";
 import { useAccountBook } from "../lib/accountBook.js";
 import { showAccountBook } from "../lib/accountHoldings.js";
@@ -108,10 +109,18 @@ export function PortfolioPage() {
     }
   }
 
+  const quoteKey = signedIn
+    ? (account.items ?? []).map((item) => item.code).join(",")
+    : codeKey;
+  const [seenQuoteKey, setSeenQuoteKey] = useState(quoteKey);
+  if (seenQuoteKey !== quoteKey) {
+    setSeenQuoteKey(quoteKey);
+    setQuoteError(null);
+  }
   useEffect(() => {
-    if (signedIn || !codeKey) return;
+    if (!quoteKey) return;
     const cancelled = { current: false };
-    const key = codeKey;
+    const key = quoteKey;
     fetchStockBatch(key.split(","))
       .then((body) => {
         if (cancelled.current) return;
@@ -127,8 +136,32 @@ export function PortfolioPage() {
     return () => {
       cancelled.current = true;
     };
-  }, [codeKey, signedIn]);
+  }, [quoteKey]);
 
+  const accountQuotes = quoteKey.length > 0 && loadedKey === quoteKey ? quotes : [];
+  const accountView =
+    signedIn && account.items && account.items.length > 0
+      ? portfolioPresentation(account.items, accountQuotes)
+      : null;
+  const accountMetrics = accountView
+    ? {
+        summary: accountView.summary,
+        byCode: new Map(
+          accountView.cards.map((card) => [
+            card.code,
+            {
+              name: card.name,
+              exchange: card.exchange,
+              price: card.price,
+              quoteFresh: card.quoteFresh,
+              yieldPct: card.yieldPct,
+              annual: card.annual,
+              missing: card.missing,
+            } satisfies HoldingMetric,
+          ]),
+        ),
+      }
+    : null;
   const quotesByCode = new Map(shownQuotes.map((item) => [item.code, item]));
   const cards: Card[] = (signedIn ? [] : holdings.items).map((holding) => {
     const quote = quotesByCode.get(holding.code);
@@ -214,12 +247,13 @@ export function PortfolioPage() {
       {signedIn && account.items && account.items.length === 0 ? (
         <section className="div-card hero" aria-label="账户持仓">
           <h2 style={{ margin: "0 0 8px" }}>尚未添加持仓</h2>
-          <p className="page-sub">添加股票后，持仓会列在这里。</p>
+          <p className="page-sub">添加股票后，这里显示平均股息率和预估全年分红。</p>
         </section>
       ) : null}
       {signedIn && account.items && account.items.length > 0 ? (
         <HoldingBoard
           rows={account.items}
+          metrics={accountMetrics}
           pendingDelete={pendingDelete}
           deleteId={(code) => `delete-${code}`}
           onEdit={(row, source) => {

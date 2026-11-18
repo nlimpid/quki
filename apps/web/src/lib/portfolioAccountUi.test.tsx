@@ -39,11 +39,11 @@ const session = {
   login: { ready: true, method: "clerk", reason: null },
 };
 
-describe("signed-in portfolio lists account rows without dividend figures", () => {
-  it("keeps the dividend summary out of the account row component", () => {
+describe("signed-in portfolio shows account dividend figures from the quote pipeline", () => {
+  it("renders dividend figures only when metrics are passed in", () => {
     const board = readFileSync(new URL("./holdingBoard.tsx", import.meta.url), "utf8");
-    expect(board).not.toContain("预估全年分红");
-    expect(board).not.toContain("portfolioDividendSummary");
+    expect(board).toContain("metrics ?");
+    expect(board).toContain("预估全年分红");
     expect(board).toContain("hold-grid");
     expect(board).toContain("icon-text");
   });
@@ -74,7 +74,23 @@ describe("signed-in portfolio lists account rows without dividend figures", () =
         return Response.json({ items: holdings.current });
       }
       if (url.includes("/api/stocks/batch")) {
-        return Response.json({ items: [], isSample: true });
+        return Response.json({
+          items: [
+            {
+              code: "000001",
+              name: "名称000001",
+              exchange: "SZ",
+              board: "main",
+              lastClose: 10,
+              quoteFresh: true,
+              trailingYieldPct: 20,
+              ttmCashPerShare: 2,
+              lastCashDivDate: null,
+              lastCashPer10: null,
+            },
+          ],
+          isSample: true,
+        });
       }
       return new Response("no", { status: 404 });
     }) as typeof fetch;
@@ -113,15 +129,14 @@ describe("signed-in portfolio lists account rows without dividend figures", () =
       await Promise.resolve();
     });
     const text = document.body.textContent ?? "";
-    expect(text).toContain("000001");
+    expect(text).toContain("名称000001");
     expect(text).toContain("10");
-    expect(text).not.toContain("预估全年分红");
-    expect(text).not.toContain("组合平均股息率");
-    expect(text).not.toContain("¥20.00");
+    expect(text).toContain("预估全年分红");
+    expect(text).toContain("组合平均股息率");
+    expect(text).toContain("¥20.00");
+    expect(text).not.toContain("¥0.00");
     expect(text).not.toContain("添加账户持仓");
-    expect(text).not.toContain("此浏览器里没有旧持仓。添加股票");
-    expect(document.querySelectorAll("button").length).toBeGreaterThan(0);
-    expect(calls.some((call) => call.url.includes("/api/stocks/batch"))).toBe(false);
+    expect(calls.some((call) => call.url.includes("/api/stocks/batch"))).toBe(true);
     expect(calls.some((call) => call.method === "PUT" || call.method === "DELETE")).toBe(false);
 
     expect(document.querySelector('button[aria-label="编辑"]')).toBeTruthy();
