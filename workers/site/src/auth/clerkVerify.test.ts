@@ -6,6 +6,7 @@ import {
   bearerFromAuthorization,
   clearClerkJwksCache,
   jwksUrlForIssuer,
+  readClerkEnv,
   verifyClerkSessionToken,
   type ClerkVerifyConfig,
 } from "./clerkVerify.js";
@@ -75,6 +76,10 @@ describe("clerk session token crypto, not a mocked auth result", () => {
       { body: { azp: undefined }, reason: "authorized-party" },
       { body: { azp: "https://evil.example" }, reason: "authorized-party" },
       { body: { iss: "https://evil.example" }, reason: "issuer" },
+      { body: { aud: "https://evil.example" }, reason: "audience" },
+      { body: { aud: ["https://quki.cc", "https://evil.example"] }, reason: "audience" },
+      { body: { aud: [] }, reason: "audience" },
+      { body: { aud: 1 }, reason: "audience" },
       { body: { exp: Math.floor(now / 1000) - 30 }, reason: "expired" },
       { body: { nbf: Math.floor(now / 1000) + 30 }, reason: "not-before" },
       { body: { iat: Math.floor(now / 1000) + 30 }, reason: "issued-at" },
@@ -114,6 +119,15 @@ describe("clerk session token crypto, not a mocked auth result", () => {
     const result = await verifyClerkSessionToken(token, config, jwksFetch(key.jwks, hits), now);
     expect(result).toMatchObject({ ok: false, reason: "issuer" });
     expect(hits).toEqual(["https://trusted.example/.well-known/jwks.json"]);
+    for (const aud of [issuer, "https://quki.cc", ["https://www.quki.cc"]]) {
+      const accepted = await verifyClerkSessionToken(
+        signSessionToken(key.privateKey, payload({ aud })),
+        config,
+        jwksFetch(key.jwks, hits),
+        now,
+      );
+      expect(accepted.ok).toBe(true);
+    }
     expect(bearerFromAuthorization("Bearer ")).toBeNull();
     expect(bearerFromAuthorization(null)).toBeNull();
   });
@@ -135,5 +149,26 @@ describe("clerk session token crypto, not a mocked auth result", () => {
     const result = await verifyClerkSessionToken(token, config, fetchImpl, now);
     expect(result.ok).toBe(true);
     expect(hits).toHaveLength(2);
+  });
+
+  it("accepts only origin allowlists and the public production issuer", () => {
+    expect(readClerkEnv({ CLERK_JWT_ISSUER: "https://clerk.quki.cc" })?.authorizedParties).toEqual([
+      "https://quki.cc",
+      "https://www.quki.cc",
+    ]);
+    expect(
+      readClerkEnv({
+        CLERK_JWT_ISSUER: "https://clerk.quki.cc",
+        CLERK_AUTHORIZED_PARTIES: "http://127.0.0.1:5173,http://localhost:5173",
+      })?.authorizedParties,
+    ).toEqual(["http://127.0.0.1:5173", "http://localhost:5173"]);
+    for (const parties of ["*", "https://quki.cc/path", "http://evil.example", "https://user:pw@quki.cc"]) {
+      expect(
+        readClerkEnv({
+          CLERK_JWT_ISSUER: "https://clerk.quki.cc",
+          CLERK_AUTHORIZED_PARTIES: parties,
+        }),
+      ).toBeNull();
+    }
   });
 });

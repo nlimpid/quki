@@ -20,6 +20,7 @@ import {
   rejectCredential,
   holdingMutation,
   loginView,
+  logoutReturnUrl,
   panelTabLeaves,
   portfolioSubtitle,
   showExpiryBanner,
@@ -169,6 +170,13 @@ describe("auth view state", () => {
       login: { ready: false, method: null, reason: "storage_unconfigured" },
     });
     expect(late).toMatchObject({ kind: "authenticated", displayName: null });
+  });
+
+  it("keeps logout on this site", () => {
+    const origin = "https://quki.cc";
+    expect(logoutReturnUrl("/portfolio?add=1", origin)).toBe("https://quki.cc/portfolio?add=1");
+    expect(logoutReturnUrl("https://evil.example/steal", origin)).toBe("https://quki.cc/");
+    expect(logoutReturnUrl("/login?returnTo=/portfolio", origin)).toBe("https://quki.cc/");
   });
 
   it("lets Tab leave the account panel instead of wrapping focus", () => {

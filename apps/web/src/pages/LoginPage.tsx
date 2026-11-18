@@ -44,7 +44,7 @@ export function LoginPage() {
   };
 
   return (
-    <div className="auth-app">
+    <div className="auth-app qk-product">
       <AppHeader />
       <main className="auth-main">
         <section className="auth-card">

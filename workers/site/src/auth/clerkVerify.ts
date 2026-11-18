@@ -35,6 +35,7 @@ export type ClerkVerifyFailure =
   | "algorithm"
   | "signature"
   | "issuer"
+  | "audience"
   | "authorized-party"
   | "expired"
   | "not-before"
@@ -70,10 +71,42 @@ export function readClerkEnv(env: {
   if (url.pathname !== "/" && url.pathname !== "") return null;
   const parties = (env.CLERK_AUTHORIZED_PARTIES ?? "https://quki.cc,https://www.quki.cc")
     .split(",")
+    .map((item) => partyOrigin(item.trim()))
+    .filter((item): item is string => item != null);
+  const rawCount = (env.CLERK_AUTHORIZED_PARTIES ?? "https://quki.cc,https://www.quki.cc")
+    .split(",")
     .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-  if (parties.length === 0) return null;
+    .filter((item) => item.length > 0).length;
+  if (parties.length === 0 || parties.length !== rawCount) return null;
   return { issuer: url.origin, authorizedParties: parties };
+}
+
+function partyOrigin(value: string): string | null {
+  if (!value) return null;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.username || url.password || url.search || url.hash) return null;
+  if (url.pathname !== "/" && url.pathname !== "") return null;
+  if (value !== url.origin) return null;
+  if (url.protocol === "https:") return url.origin;
+  const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  if (url.protocol === "http:" && local) return url.origin;
+  return null;
+}
+
+function acceptedAudience(value: unknown, config: ClerkVerifyConfig): boolean {
+  if (value == null) return true;
+  const values = typeof value === "string" ? [value] : Array.isArray(value) ? value : null;
+  if (!values || values.length === 0) return false;
+  return values.every(
+    (item) =>
+      typeof item === "string" &&
+      (item === config.issuer || config.authorizedParties.includes(item)),
+  );
 }
 
 export function jwksUrlForIssuer(issuer: string): string {
@@ -155,6 +188,7 @@ export async function verifyClerkSessionToken(
   );
   if (!signed) return { ok: false, reason: "signature" };
   if (jwt.payload.iss !== config.issuer) return { ok: false, reason: "issuer" };
+  if (!acceptedAudience(jwt.payload.aud, config)) return { ok: false, reason: "audience" };
   const azp = jwt.payload.azp;
   if (typeof azp !== "string" || !config.authorizedParties.includes(azp)) {
     return { ok: false, reason: "authorized-party" };

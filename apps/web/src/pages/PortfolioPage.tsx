@@ -8,6 +8,7 @@ import { useAuth } from "../lib/auth.js";
 import { usePageTitle } from "../lib/pageTitle.js";
 import { ACCOUNT_SAVE_COPY, ACCOUNT_SAVE_LABEL, portfolioSubtitle } from "../lib/authState.js";
 import { AccountBookPanel } from "../lib/AccountBookPanel.js";
+import { LocalImportPanel } from "../lib/LocalImportPanel.js";
 import { useAccountBook } from "../lib/accountBook.js";
 import { showAccountBook } from "../lib/accountHoldings.js";
 import { useHoldingIntent } from "../lib/holdingIntent.js";
@@ -197,6 +198,21 @@ export function PortfolioPage() {
         </p>
       ) : null}
       {signedIn ? <AccountBookPanel book={account} /> : null}
+      {signedIn ? (
+        <LocalImportPanel
+          rows={holdings.items}
+          accountRows={account.items}
+          epoch={account.epoch}
+          busy={account.busy}
+          onImport={async (writes) => {
+            const ticket = account.epoch;
+            for (const row of writes) {
+              const result = await account.save({ ticket, ...row });
+              if (result !== "written") return;
+            }
+          }}
+        />
+      ) : null}
       {quoteError ? <p className="yield-note">{quoteError}</p> : null}
       {holdings.items.length > 0 && phase.kind === "authenticated" ? (
         <h2 className="page-title" style={{ fontSize: 18 }}>

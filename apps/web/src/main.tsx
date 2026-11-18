@@ -7,6 +7,7 @@ import { Navigate, Outlet, useNavigate } from "react-router";
 
 import { BacktestRoute, LayoutRoute, OverviewRoute, RootRedirect } from "./App.js";
 import { AuthProvider } from "./lib/auth.js";
+import { logoutReturnUrl } from "./lib/authState.js";
 import { bearerForUser } from "./lib/authClient.js";
 import { PortfolioPage } from "./pages/PortfolioPage.js";
 import { RotationPage } from "./pages/RotationPage.js";
@@ -43,7 +44,14 @@ function ClerkBoundAuth({ children }: { children: React.ReactNode }) {
         const token = await getToken();
         return bearerForUser(userId, userRef.current, token);
       }}
-      onLogout={() => signOut()}
+      onLogout={() =>
+        signOut({
+          redirectUrl: logoutReturnUrl(
+            `${window.location.pathname}${window.location.search}`,
+            window.location.origin,
+          ),
+        })
+      }
       onSessionRejected={() => signOut()}
     >
       {children}
