@@ -76,7 +76,7 @@ export function RotationPage() {
   if (!pairId) return <Navigate to={`/rotation/h00922-h20903?range=${range}`} replace />;
   if (!pair) {
     return (
-      <>
+      <div className="qk-product">
         <AppHeader code="H30269" search="" activeNav="rotation" />
         <main className="page-main">
           <section className="card">
@@ -90,7 +90,7 @@ export function RotationPage() {
             </div>
           </section>
         </main>
-      </>
+      </div>
     );
   }
 
@@ -104,7 +104,7 @@ export function RotationPage() {
   const latest = view?.latest;
 
   return (
-    <>
+    <div className="qk-product">
       <AppHeader code="H30269" search="?period=W&range=5Y&vol=0" activeNav="rotation" />
       <main className="page-main">
         <header className="index-head">
@@ -224,6 +224,6 @@ export function RotationPage() {
           。市场有风险，决策需独立判断。
         </footer>
       </main>
-    </>
+    </div>
   );
 }

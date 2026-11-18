@@ -22,6 +22,7 @@
 @import "../../../design/tokens.css";
 @import "./fonts.css";
 @import "./index-page.css";
+@import "./product-shell.css";
 
 :root {
   --z-index-overlay: 100000;
