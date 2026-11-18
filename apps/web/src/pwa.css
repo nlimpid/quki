@@ -1,19 +1,54 @@
 .pwa-notices {
+  --qk-paper: #f4f1ea;
+  --qk-ink: #1c1916;
+  --qk-ink-2: #5c574f;
+  --qk-rule-2: #d5cfc4;
+  --qk-chip: #ebe6dc;
   position: sticky;
   top: 0;
   z-index: 20;
   padding-top: env(safe-area-inset-top);
+  background: var(--qk-chip);
+  color: var(--qk-ink);
+}
+
+[data-theme="dark"] .pwa-notices {
+  --qk-paper: #161513;
+  --qk-ink: #f3efe8;
+  --qk-ink-2: #a8a29a;
+  --qk-rule-2: #3a3631;
+  --qk-chip: #2a2723;
 }
 
 .pwa-note {
   margin: 0;
   padding: 8px 16px;
-  background: var(--qk-chip, #ebe6dc);
-  color: var(--qk-ink, #1c1916);
+  background: var(--qk-chip);
+  color: var(--qk-ink);
   display: flex;
   gap: 12px;
   align-items: center;
   justify-content: space-between;
+}
+
+.pwa-note span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pwa-notices button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--qk-rule-2);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--qk-ink-2);
+  box-shadow: none;
+  font: inherit;
+  font-weight: 400;
 }
 
 .qk-product {

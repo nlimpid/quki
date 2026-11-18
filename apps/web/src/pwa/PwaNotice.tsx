@@ -66,7 +66,7 @@ export function PwaNotice() {
     <div className="pwa-notices">
       {showIosHint ? (
         <p className="pwa-note" role="status">
-          用 Safari 打开本站，点分享，再选「添加到主屏幕」。
+          <span>用 Safari 打开本站，点分享，再选「添加到主屏幕」。</span>
           <button
             type="button"
             className="text-btn"
@@ -94,7 +94,7 @@ export function PwaNotice() {
       ) : null}
       {action !== "idle" ? (
         <p className="pwa-note" role="status">
-          {action === "hold" ? "有新版本。请先关掉正在编辑的持仓，再更新。" : "有新版本。"}
+          <span>{action === "hold" ? "有新版本。请先关掉正在编辑的持仓，再更新。" : "有新版本。"}</span>
           <button
             type="button"
             className="text-btn"
