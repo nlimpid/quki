@@ -1,0 +1,666 @@
+/* Shared paper/charcoal shell for stocks, portfolio, backtest, and rotation.
+   Index keeps .qk-index, including its hero and the repaired range slider.
+   Chart series colors stay on their own variables. */
+
+.qk-product {
+  --qk-paper: #f4f1ea;
+  --qk-ink: #1c1916;
+  --qk-ink-2: #5c574f;
+  --qk-ink-3: #8a847a;
+  --qk-ink-4: #b4afa6;
+  --qk-rule: #e4ded4;
+  --qk-rule-2: #d5cfc4;
+  --qk-chip: #ebe6dc;
+  --qk-chart-grid: #e4ded4;
+  --qk-chart-axis: #8a847a;
+  --qk-chart-crosshair: #8a847a;
+  --qk-focus: #1c1916;
+  --qk-track: #c9c2b6;
+  --qk-track-on: #5c574f;
+
+  --qk-bg-canvas: var(--qk-paper);
+  --qk-bg-surface: var(--qk-paper);
+  --qk-bg-surface-muted: var(--qk-chip);
+  --qk-text-primary: var(--qk-ink);
+  --qk-text-secondary: var(--qk-ink-2);
+  --qk-text-tertiary: var(--qk-ink-3);
+  --qk-text-link: var(--qk-ink-2);
+  --qk-border-default: var(--qk-rule);
+  --qk-border-muted: var(--qk-rule);
+  --qk-border-strong: var(--qk-rule-2);
+  --qk-shadow-sm: none;
+  --qk-shadow-focus: none;
+  --accent: var(--qk-ink);
+  --accent-foreground: var(--qk-paper);
+  --accent-hover: var(--qk-ink-2);
+  --focus: var(--qk-ink);
+  --background: var(--qk-paper);
+  --foreground: var(--qk-ink);
+  --surface: var(--qk-paper);
+  --surface-foreground: var(--qk-ink);
+  --overlay: var(--qk-paper);
+  --overlay-foreground: var(--qk-ink);
+  --muted: var(--qk-ink-3);
+  --border: var(--qk-rule);
+  --separator: var(--qk-rule);
+  --default: var(--qk-chip);
+  --default-foreground: var(--qk-ink);
+  --default-hover: var(--qk-rule);
+  --field: var(--qk-paper);
+  --field-foreground: var(--qk-ink);
+  --field-placeholder: var(--qk-ink-3);
+
+  min-height: 100dvh;
+  background: var(--qk-paper);
+  color: var(--qk-ink);
+  font-synthesis: none;
+  /* Keep the last child's bottom margin inside this background. */
+  display: flow-root;
+}
+
+/* .dividends-app sets min-height: 100% later and wins on equal specificity,
+   so a short page ends and the cool body color shows below the shell. */
+.qk-product.dividends-app {
+  min-height: 100dvh;
+  background: var(--qk-paper);
+}
+
+[data-theme="dark"] .qk-product {
+  --qk-paper: #161513;
+  --qk-ink: #f3efe8;
+  --qk-ink-2: #a8a29a;
+  --qk-ink-3: #7a756e;
+  --qk-ink-4: #5a564f;
+  --qk-rule: #2e2b27;
+  --qk-rule-2: #3a3631;
+  --qk-chip: #2a2723;
+  --qk-chart-grid: #2e2b27;
+  --qk-chart-axis: #7a756e;
+  --qk-chart-crosshair: #a8a29a;
+  --qk-focus: #f3efe8;
+  --qk-track: #4a453f;
+  --qk-track-on: #a8a29a;
+  --accent-foreground: #161513;
+}
+
+.qk-product .app-header {
+  background: var(--qk-paper);
+  border-bottom: 1px solid var(--qk-rule);
+  height: 56px;
+  padding-left: max(20px, calc((100% - 1160px) / 2));
+  padding-right: max(20px, calc((100% - 1160px) / 2));
+}
+
+.qk-product .brand-name {
+  color: var(--qk-ink);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.qk-product .brand-sub {
+  display: inline;
+  color: var(--qk-ink-3);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.qk-product .main-nav {
+  gap: 28px;
+  margin-left: 36px;
+}
+
+.qk-product .main-nav a {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--qk-ink-2);
+  padding: 4px 0;
+  border-bottom: 0;
+  text-decoration: none;
+}
+
+.qk-product .main-nav a.active {
+  color: var(--qk-ink);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 6px;
+  border-bottom-color: transparent;
+}
+
+.qk-product .nav-split {
+  background: var(--qk-rule-2);
+}
+
+.qk-product .theme-toggle {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--qk-rule-2);
+  background: transparent;
+  color: var(--qk-ink-2);
+  box-shadow: none;
+}
+
+.qk-product .auth-header-btn {
+  color: var(--qk-ink-2);
+  border-color: transparent;
+}
+
+.qk-product .page-main,
+.qk-product .div-main {
+  width: min(1160px, calc(100% - 40px));
+  max-width: none;
+  margin: 28px auto 48px;
+  padding: 0;
+}
+
+.qk-product .div-foot {
+  width: min(1160px, calc(100% - 40px));
+  max-width: none;
+  margin: 0 auto 40px;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--qk-rule);
+  color: var(--qk-ink-4);
+}
+
+.qk-product .div-foot strong {
+  color: var(--qk-ink-3);
+  font-weight: 500;
+}
+
+.qk-product .index-head,
+.qk-product .page-head {
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.qk-product .index-head h1,
+.qk-product .page-title {
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.15;
+  color: var(--qk-ink);
+}
+
+.qk-product .index-head p,
+.qk-product .index-head .asof,
+.qk-product .page-sub,
+.qk-product .yield-note,
+.qk-product .crumb {
+  font-size: 13px;
+  color: var(--qk-ink-2);
+}
+
+.qk-product .index-head .asof,
+.qk-product .asof {
+  color: var(--qk-ink-3);
+}
+
+.qk-product .index-head .asof strong,
+.qk-product .asof strong {
+  color: var(--qk-ink-2);
+  font-weight: 500;
+}
+
+.qk-product .card,
+.qk-product .div-card {
+  background: transparent;
+  border: 1px solid var(--qk-rule);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.qk-product .card-hd {
+  padding: 14px 16px 8px;
+  border-bottom: 0;
+}
+
+.qk-product .card-title,
+.qk-product .hero-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--qk-ink);
+}
+
+.qk-product .hero-name {
+  font-size: 22px;
+}
+
+.qk-product .stat-value,
+.qk-product .metric .v,
+.qk-product .summary-strip .v,
+.qk-product .hold-metric .v {
+  font-family: var(--qk-font-mono);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--qk-ink);
+}
+
+.qk-product .metric .v.quote-stale {
+  color: var(--qk-fg-muted);
+}
+
+.qk-product .badge,
+.qk-product .badge-neutral {
+  height: 22px;
+  border-color: transparent;
+  background: var(--qk-chip);
+  color: var(--qk-ink-2);
+  font-weight: 500;
+}
+
+.qk-product .text-btn,
+.qk-product .btn {
+  border-radius: 2px;
+  border-color: var(--qk-rule-2);
+  background: transparent;
+  color: var(--qk-ink-2);
+  font-weight: 400;
+  box-shadow: none;
+}
+
+.qk-product .btn.primary,
+.qk-product .button--primary {
+  background: var(--qk-ink);
+  border-color: var(--qk-ink);
+  color: var(--qk-paper);
+}
+
+.qk-product .button {
+  border-radius: 2px;
+  box-shadow: none;
+  font-weight: 500;
+}
+
+.qk-product .toggle-button-group {
+  background: var(--qk-chip);
+  border: 1px solid var(--qk-rule);
+  border-radius: 2px;
+  padding: 2px;
+  box-shadow: none;
+  gap: 2px;
+}
+
+.qk-product .toggle-button-group .toggle-button {
+  height: 28px;
+  min-height: 28px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--qk-ink-3);
+  font-size: 13px;
+  font-weight: 400;
+  box-shadow: none;
+  --toggle-button-bg: transparent;
+  --toggle-button-bg-hover: transparent;
+  --toggle-button-bg-pressed: transparent;
+  --toggle-button-fg: var(--qk-ink-3);
+  --toggle-button-bg-selected: var(--qk-paper);
+  --toggle-button-bg-selected-hover: var(--qk-paper);
+  --toggle-button-bg-selected-pressed: var(--qk-paper);
+  --toggle-button-fg-selected: var(--qk-ink);
+}
+
+.qk-product .toggle-button-group .toggle-button[data-selected="true"] {
+  color: var(--qk-ink);
+  font-weight: 500;
+}
+
+.qk-product .table-root,
+.qk-product .table-root--primary,
+.qk-product .table__content,
+.qk-product .table__header,
+.qk-product .table__body,
+.qk-product .table__column,
+.qk-product .table__cell {
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.qk-product .table-root--primary {
+  padding: 0;
+}
+
+.qk-product .table__column,
+.qk-product .table__cell,
+.qk-product .div-table th,
+.qk-product .div-table td,
+.qk-product table.qk th,
+.qk-product table.qk td {
+  border-bottom: 1px solid var(--qk-rule);
+  color: var(--qk-ink);
+  white-space: nowrap;
+}
+
+.qk-product .table__cell.quote-stale,
+.qk-product .div-table td.quote-stale,
+.qk-product .stock-card .quote-stale {
+  color: var(--qk-fg-muted);
+}
+
+.qk-product .table__column,
+.qk-product .div-table th,
+.qk-product table.qk th {
+  color: var(--qk-ink-3);
+  font-weight: 500;
+  background: transparent;
+}
+
+.qk-product .table__body tr:first-child td,
+.qk-product .table__body tr:last-child td {
+  border-radius: 0;
+}
+
+.qk-product .table__scroll-container,
+.qk-product .div-table-wrap,
+.qk-product .table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.qk-product .disc {
+  border-top-color: var(--qk-rule);
+  color: var(--qk-ink-4);
+}
+
+.qk-product .disc strong {
+  color: var(--qk-ink-3);
+  font-weight: 500;
+}
+
+.qk-product .skeleton {
+  background: var(--qk-rule);
+  border-radius: 2px;
+}
+
+.qk-product .state,
+.qk-product .state-block {
+  color: var(--qk-ink-3);
+}
+
+.qk-product .chart-attribution a {
+  color: var(--qk-ink-3);
+}
+
+.qk-product .legend,
+.qk-product .chart-key,
+.qk-product .chart-readout,
+.qk-product .rot-note {
+  color: var(--qk-ink-3);
+}
+
+.qk-product .range-control {
+  margin: 10px 0 0;
+  gap: 8px 16px;
+  color: var(--qk-ink-3);
+  overflow: visible;
+}
+
+.qk-product .range-slider,
+.qk-product .range-control .slider {
+  min-width: 0;
+  overflow: visible;
+  gap: 0;
+}
+
+.qk-product .range-control .slider__track,
+.qk-product .range-control .slider[data-orientation="horizontal"] .slider__track,
+.qk-product .range-control .slider__track[data-fill-start="true"],
+.qk-product .range-control .slider__track[data-fill-end="true"] {
+  height: 28px;
+  background: transparent;
+  border-style: solid;
+  border-width: 0 14px;
+  border-color: transparent;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.qk-product .range-control .slider__track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: var(--qk-track);
+}
+
+.qk-product .range-control .slider__fill {
+  top: 50%;
+  height: 2px;
+  margin: 0;
+  transform: translateY(-50%);
+  background: var(--qk-track-on);
+  border-radius: 999px;
+}
+
+.qk-product .range-control .slider[data-orientation="horizontal"] .slider__thumb,
+.qk-product .range-control .slider__thumb.range-thumb-start,
+.qk-product .range-control .slider__thumb.range-thumb-end {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  top: 50%;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+}
+
+.qk-product .range-control .slider__thumb::before {
+  content: none;
+  display: none;
+}
+
+.qk-product .range-control .slider__thumb::after {
+  content: "";
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, -50%);
+  border: 1.5px solid var(--qk-ink-2);
+  border-radius: 50%;
+  background: var(--qk-paper);
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.qk-product .range-control[data-tight="true"] .range-thumb-start {
+  margin-inline-start: -16px;
+}
+
+.qk-product .range-control[data-tight="true"] .range-thumb-end {
+  margin-inline-start: 16px;
+}
+
+.qk-product .range-readout {
+  font-size: 12px;
+  color: var(--qk-ink-3);
+}
+
+.qk-product .range-all {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--qk-ink-3);
+  font-size: 13px;
+  font-weight: 400;
+  box-shadow: none;
+}
+
+.qk-product a:focus-visible,
+.qk-product button:focus-visible,
+.qk-product input:focus-visible,
+.qk-product .button[data-focus-visible="true"],
+.qk-product .toggle-button[data-focus-visible="true"],
+.qk-product .range-control .slider__thumb[data-focus-visible="true"],
+.qk-product .theme-toggle[data-focus-visible="true"] {
+  outline: 2px solid var(--qk-focus);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.qk-product .button[aria-disabled="true"],
+.qk-product .btn:disabled {
+  opacity: 0.45;
+}
+
+/* HeroUI drawer portals to the document, so the panel carries its own palette. */
+.drawer__backdrop {
+  --qk-paper: #f4f1ea;
+  --qk-ink: #1c1916;
+  --qk-ink-2: #5c574f;
+  --qk-ink-3: #8a847a;
+  --qk-rule: #e4ded4;
+  --qk-rule-2: #d5cfc4;
+  --qk-chip: #ebe6dc;
+  --qk-font-sans: "Source Han Sans SC", "Noto Sans SC", "Source Han Sans CN", sans-serif;
+  --qk-font-mono: "Source Code Pro", ui-monospace, monospace;
+  --accent: var(--qk-ink);
+  --accent-foreground: var(--qk-paper);
+  --accent-hover: var(--qk-ink-2);
+  --focus: var(--qk-ink);
+  --foreground: var(--qk-ink);
+  --overlay: var(--qk-paper);
+  --overlay-foreground: var(--qk-ink);
+  --muted: var(--qk-ink-3);
+  --border: var(--qk-rule);
+  --separator: var(--qk-rule);
+  --default: var(--qk-chip);
+  --default-foreground: var(--qk-ink);
+  --default-hover: var(--qk-rule);
+  --field: var(--qk-paper);
+  --field-foreground: var(--qk-ink);
+  --field-placeholder: var(--qk-ink-3);
+  --backdrop: rgba(28, 25, 22, 0.32);
+  background: var(--backdrop);
+}
+
+[data-theme="dark"] .drawer__backdrop {
+  --qk-paper: #161513;
+  --qk-ink: #f3efe8;
+  --qk-ink-2: #a8a29a;
+  --qk-ink-3: #7a756e;
+  --qk-rule: #2e2b27;
+  --qk-rule-2: #3a3631;
+  --qk-chip: #2a2723;
+  --accent-foreground: #161513;
+  --backdrop: rgba(0, 0, 0, 0.55);
+}
+
+.drawer__dialog {
+  background: var(--qk-paper);
+  color: var(--qk-ink);
+  border-inline-start: 1px solid var(--qk-rule);
+  box-shadow: none;
+  font-family: var(--qk-font-sans);
+}
+
+.drawer__heading {
+  color: var(--qk-ink);
+  font-weight: 500;
+}
+
+.drawer__body,
+.drawer__footer {
+  color: var(--qk-ink-2);
+}
+
+.drawer__dialog .button {
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+.drawer__dialog .button--primary {
+  background: var(--qk-ink);
+  color: var(--qk-paper);
+}
+
+.drawer__dialog :focus-visible,
+.drawer__dialog [data-focus-visible="true"] {
+  outline: 2px solid var(--qk-ink);
+  outline-offset: 2px;
+}
+
+@media (max-width: 800px) {
+  .qk-product .index-head,
+  .qk-product .page-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .qk-product .index-head .asof,
+  .qk-product .asof {
+    text-align: left;
+  }
+
+  .qk-product .index-head h1,
+  .qk-product .page-title {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 720px) {
+  .qk-product .app-header {
+    position: relative;
+    height: auto;
+    min-height: 0;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 10px 20px 0;
+  }
+
+  .qk-product .header-left {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .qk-product .header-right {
+    position: absolute;
+    top: 8px;
+    right: 20px;
+  }
+
+  .qk-product .main-nav {
+    flex-basis: 100%;
+    margin-left: 0;
+    gap: 0 18px;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .qk-product .main-nav a {
+    font-size: 13px;
+    padding: 10px 0 8px;
+  }
+
+  .qk-product .brand-name {
+    font-size: 15px;
+  }
+
+  .qk-product .brand-sub {
+    font-size: 11px;
+  }
+
+  .qk-product .page-main,
+  .qk-product .div-main {
+    margin-top: 18px;
+  }
+}

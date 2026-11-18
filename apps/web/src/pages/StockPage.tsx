@@ -189,8 +189,10 @@ export function StockPage() {
                     style={{
                       width: 96,
                       height: 36,
-                      borderRadius: 8,
+                      borderRadius: 2,
                       border: "1px solid var(--qk-border)",
+                      background: "var(--qk-surface)",
+                      color: "inherit",
                       padding: "0 8px",
                     }}
                   />

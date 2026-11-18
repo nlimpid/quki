@@ -18,16 +18,12 @@ import { rangeStart } from "../lib/format.js";
 import { useTheme } from "../lib/theme.js";
 import { BandFillPrimitive } from "./bandFill.js";
 import { ChartAttribution } from "./chartAttribution.js";
-import {
-  nextVisibleWindow,
-  rangeNeedsApply,
-  VisibleRangeControl,
-} from "./VisibleRangeControl.js";
+import { nextVisibleWindow, rangeNeedsApply, VisibleRangeControl } from "./VisibleRangeControl.js";
 
 type Point = RotationView["points"][number];
 
-function cssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+function cssVar(el: HTMLElement, name: string): string {
+  return getComputedStyle(el).getPropertyValue(name).trim();
 }
 
 function lineData(
@@ -66,12 +62,12 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
     if (!el || points.length === 0) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     document.documentElement.dataset.theme = theme;
-    const axis = cssVar("--qk-chart-axis");
-    const text = cssVar("--qk-text-primary");
-    const secondary = cssVar("--qk-text-secondary");
-    const blue = cssVar("--qk-brand-accent");
-    const red = cssVar("--qk-market-up");
-    const ma = cssVar("--qk-brand-primary");
+    const axis = cssVar(el, "--qk-chart-axis");
+    const text = cssVar(el, "--qk-text-primary");
+    const secondary = cssVar(el, "--qk-text-secondary");
+    const blue = cssVar(el, "--qk-brand-accent");
+    const red = cssVar(el, "--qk-market-up");
+    const ma = cssVar(el, "--qk-brand-primary");
     const chart = createChart(el, {
       width: el.clientWidth,
       height: el.clientHeight,
@@ -79,19 +75,19 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
         textColor: axis,
-        fontFamily: cssVar("--qk-font-tabular"),
+        fontFamily: cssVar(el, "--qk-font-tabular"),
         attributionLogo: true,
       },
       grid: {
-        vertLines: { color: cssVar("--qk-chart-grid") },
-        horzLines: { color: cssVar("--qk-chart-grid") },
+        vertLines: { color: cssVar(el, "--qk-chart-grid") },
+        horzLines: { color: cssVar(el, "--qk-chart-grid") },
       },
       crosshair: {
-        vertLine: { color: cssVar("--qk-chart-crosshair"), style: LineStyle.Dashed },
-        horzLine: { color: cssVar("--qk-chart-crosshair"), style: LineStyle.Dashed },
+        vertLine: { color: cssVar(el, "--qk-chart-crosshair"), style: LineStyle.Dashed },
+        horzLine: { color: cssVar(el, "--qk-chart-crosshair"), style: LineStyle.Dashed },
       },
-      rightPriceScale: { borderColor: cssVar("--qk-chart-grid") },
-      timeScale: { borderColor: cssVar("--qk-chart-grid") },
+      rightPriceScale: { borderColor: cssVar(el, "--qk-chart-grid") },
+      timeScale: { borderColor: cssVar(el, "--qk-chart-grid") },
       handleScroll: {
         mouseWheel: true,
         pressedMouseMove: true,
@@ -129,7 +125,7 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
       .setData(lineData(points, (point) => point.upper));
     const relative = chart.addSeries(LineSeries, { ...shared, color: blue, lineWidth: 2 }, 1);
     relative.setData(lineData(points, (point) => point.r));
-    const fill = cssVar("--qk-brand-accent-muted");
+    const fill = cssVar(el, "--qk-brand-accent-muted");
     relative.attachPrimitive(
       new BandFillPrimitive(
         points.map((point) => ({ time: point.date, upper: point.upper, lower: point.lower })),
@@ -169,7 +165,7 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
       LineSeries,
       {
         ...shared,
-        color: cssVar("--qk-brand-primary"),
+        color: cssVar(el, "--qk-brand-primary"),
         lineWidth: 2,
         autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
       },
@@ -186,7 +182,7 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
         time: marker.date,
         position: marker.kind === "band-above" ? "aboveBar" : "belowBar",
         shape: marker.kind === "band-above" ? "arrowUp" : "arrowDown",
-        color: marker.kind === "band-above" ? red : cssVar("--qk-market-down"),
+        color: marker.kind === "band-above" ? red : cssVar(el, "--qk-market-down"),
         text: marker.label,
       }));
     createSeriesMarkers(relative, bandMarkers);
@@ -208,7 +204,7 @@ export function RotationChart({ view, range }: { view: RotationView; range: Rang
           time: marker.date,
           position: "aboveBar" as const,
           shape: marker.kind === "spread-extreme" ? "square" : "circle",
-          color: marker.kind === "spread-extreme" ? cssVar("--qk-warning") : red,
+          color: marker.kind === "spread-extreme" ? cssVar(el, "--qk-warning") : red,
           text: showLabel ? marker.label : undefined,
           price: marker.value,
         };

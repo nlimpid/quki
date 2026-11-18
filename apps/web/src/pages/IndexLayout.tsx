@@ -13,7 +13,7 @@ export function IndexLayout() {
   const { code = "" } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
   const [asOf, setAsOf] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const instrument = PHASE1_INSTRUMENTS.find((item) => item.symbol === code);
@@ -44,7 +44,7 @@ export function IndexLayout() {
   }
 
   return (
-    <>
+    <div className={onBacktest ? "qk-product" : "qk-index"}>
       <AppHeader
         code={known ? code : "H30269"}
         search={location.search}
@@ -74,24 +74,7 @@ export function IndexLayout() {
             </p>
           </header>
         ) : null}
-        {known && !onBacktest ? (
-          <Toolbar
-            code={code}
-            period={period}
-            range={range}
-            onCode={(next) => go(next)}
-            onPeriod={(next) => {
-              const search = new URLSearchParams(params);
-              search.set("period", next);
-              setParams(search);
-            }}
-            onRange={(next) => {
-              const search = new URLSearchParams(params);
-              search.set("range", next);
-              setParams(search);
-            }}
-          />
-        ) : null}
+        {known && !onBacktest ? <Toolbar code={code} onCode={(next) => go(next)} /> : null}
         {known ? (
           <Outlet context={{ onOverview }} />
         ) : (
@@ -117,7 +100,7 @@ export function IndexLayout() {
           。市场有风险，决策需独立判断。数据可能存在延迟或遗漏，请以官方与交易通道披露为准。
         </footer>
       </main>
-    </>
+    </div>
   );
 }
 

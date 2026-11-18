@@ -12,7 +12,7 @@ export function DividendShell({
   children: ReactNode;
 }) {
   return (
-    <div className="dividends-app">
+    <div className="dividends-app qk-product">
       <AppHeader activeNav={activeNav} />
       <main className="div-main">{children}</main>
       <footer className="div-foot">

@@ -85,7 +85,7 @@ export function VisibleRangeControl({
   return (
     <div className="range-control" data-tight={tight ? "true" : undefined} ref={rootRef}>
       <Slider
-        aria-label="可见区间"
+        aria-label="选择可见K线区间"
         className="range-slider"
         minValue={0}
         maxValue={max}
@@ -117,7 +117,7 @@ export function VisibleRangeControl({
       <span className="qk-tabular range-readout">
         {start + 1}–{end + 1} / {last + 1}
       </span>
-      <Button size="sm" variant="secondary" onPress={onReset}>
+      <Button className="range-all" size="sm" variant="ghost" onPress={onReset}>
         显示全部
       </Button>
     </div>

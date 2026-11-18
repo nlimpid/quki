@@ -18,5 +18,9 @@
   ],
   "vars": {
     "CLERK_JWT_ISSUER": "https://clerk.quki.cc"
-  }
+  },
+  // Required by `wrangler preview` (Workers Builds on non-production branches).
+  // Empty on purpose: assets and compatibility stay above, and this block does
+  // not copy production routes, the TiDB URL, or OIDC secrets.
+  "previews": {},
 }

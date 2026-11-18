@@ -26,12 +26,9 @@ import {
 } from "../lib/format.js";
 import { useTheme } from "../lib/theme.js";
 import { ChartAttribution } from "./chartAttribution.js";
+import { FilterGroup } from "./FilterGroup.js";
 import { lineWithGaps, splitPriceSeries, volumeBars } from "./klineModel.js";
-import {
-  nextVisibleWindow,
-  rangeNeedsApply,
-  VisibleRangeControl,
-} from "./VisibleRangeControl.js";
+import { nextVisibleWindow, rangeNeedsApply, VisibleRangeControl } from "./VisibleRangeControl.js";
 
 const CHART_TIERS = [85, 95, 105, 115] as const;
 
@@ -45,9 +42,17 @@ const TIER_RATIOS: { tier: TierLevel; ratio: number; name: string }[] = [
   { tier: 115, ratio: 1.15, name: "115% 顶部区域" },
 ];
 
-function cssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+function cssVar(el: Element, name: string): string {
+  return getComputedStyle(el).getPropertyValue(name).trim();
 }
+
+const RANGES: { id: RangeKey; label: string }[] = [
+  { id: "1Y", label: "1年" },
+  { id: "3Y", label: "3年" },
+  { id: "5Y", label: "5年" },
+  { id: "10Y", label: "10年" },
+  { id: "MAX", label: "全部" },
+];
 
 function markerTime(marker: LowRow, candles: Candle[], period: Period): string | null {
   if (period === "W")
@@ -96,12 +101,16 @@ export function KlineChart({
   range,
   showVolume,
   onToggleVolume,
+  onPeriod,
+  onRange,
 }: {
   overview: Overview;
   period: Period;
   range: RangeKey;
   showVolume: boolean;
   onToggleVolume: (value: boolean) => void;
+  onPeriod?: (period: Period) => void;
+  onRange?: (range: RangeKey) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -140,30 +149,32 @@ export function KlineChart({
     if (!el || candles.length === 0) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     document.documentElement.dataset.theme = theme;
-    const axisColor = cssVar("--qk-chart-axis");
-    const up = cssVar("--qk-candle-up");
-    const down = cssVar("--qk-candle-down");
+    const axisColor = cssVar(el, "--qk-chart-axis");
+    const up = cssVar(el, "--qk-candle-up");
+    const down = cssVar(el, "--qk-candle-down");
+    const cold = cssVar(el, "--qk-val-cold") || cssVar(el, "--qk-tier-85-stroke");
+    const hot = cssVar(el, "--qk-val-hot") || cssVar(el, "--qk-tier-105-stroke");
     const chart = createChart(el, {
       autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
         textColor: axisColor,
-        fontFamily: cssVar("--qk-font-tabular"),
+        fontFamily: cssVar(el, "--qk-font-tabular"),
         attributionLogo: true,
       },
       grid: {
-        vertLines: { color: cssVar("--qk-chart-grid") },
-        horzLines: { color: cssVar("--qk-chart-grid") },
+        vertLines: { color: cssVar(el, "--qk-chart-grid") },
+        horzLines: { color: cssVar(el, "--qk-chart-grid") },
       },
       crosshair: {
-        vertLine: { color: cssVar("--qk-chart-crosshair") },
-        horzLine: { color: cssVar("--qk-chart-crosshair") },
+        vertLine: { color: cssVar(el, "--qk-chart-crosshair") },
+        horzLine: { color: cssVar(el, "--qk-chart-crosshair") },
       },
       rightPriceScale: {
-        borderColor: cssVar("--qk-chart-grid"),
+        borderColor: cssVar(el, "--qk-chart-grid"),
         scaleMargins: { top: 0.06, bottom: 0.06 },
       },
-      timeScale: { borderColor: cssVar("--qk-chart-grid") },
+      timeScale: { borderColor: cssVar(el, "--qk-chart-grid") },
       handleScroll: {
         mouseWheel: true,
         pressedMouseMove: true,
@@ -178,28 +189,34 @@ export function KlineChart({
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: up,
       downColor: down,
-      borderUpColor: cssVar("--qk-candle-border-up"),
-      borderDownColor: cssVar("--qk-candle-border-down"),
+      borderUpColor: cssVar(el, "--qk-candle-border-up"),
+      borderDownColor: cssVar(el, "--qk-candle-border-down"),
       wickUpColor: up,
       wickDownColor: down,
+      priceLineVisible: false,
+      lastValueVisible: false,
     });
     candleSeries.setData(price.candles);
     const closeSeries = chart.addSeries(LineSeries, {
-      color: cssVar("--qk-text-secondary"),
+      color: cssVar(el, "--qk-series-close") || cssVar(el, "--qk-text-secondary"),
       lineWidth: 1,
       pointMarkersVisible: true,
+      priceLineVisible: false,
+      lastValueVisible: false,
     });
     closeSeries.setData(price.closeOnly);
     const maSeries = chart.addSeries(LineSeries, {
-      color: cssVar("--qk-ma55"),
+      color: cssVar(el, "--qk-ma55"),
       lineWidth: 2,
       pointMarkersVisible: false,
+      priceLineVisible: false,
+      lastValueVisible: false,
     });
     maSeries.setData(lineWithGaps(candles, maAligned));
     for (const tier of TIER_RATIOS) {
       if (!CHART_TIERS.includes(tier.tier as (typeof CHART_TIERS)[number])) continue;
       const series = chart.addSeries(LineSeries, {
-        color: cssVar(`--qk-tier-${tier.tier}-stroke`),
+        color: tier.ratio < 1 ? cold : hot,
         lineWidth: 1,
         lineStyle: LineStyle.Dashed,
         pointMarkersVisible: false,
@@ -222,7 +239,9 @@ export function KlineChart({
       time,
       position: "belowBar",
       shape: marker.confirmed ? "arrowDown" : "square",
-      color: marker.confirmed ? cssVar("--qk-marker-confirmed") : cssVar("--qk-marker-unconfirmed"),
+      color: marker.confirmed
+        ? cssVar(el, "--qk-marker-confirmed")
+        : cssVar(el, "--qk-marker-unconfirmed"),
       size: 2,
     });
     createSeriesMarkers(
@@ -253,8 +272,11 @@ export function KlineChart({
         },
         1,
       );
-      volume.setData(volumeBars(candles, cssVar("--qk-volume-up"), cssVar("--qk-volume-down")));
-      chart.panes()[1]?.setHeight(72);
+      volume.setData(
+        volumeBars(candles, cssVar(el, "--qk-volume-up"), cssVar(el, "--qk-volume-down")),
+      );
+      const volumeHeight = Number.parseFloat(cssVar(el, "--qk-volume-h"));
+      chart.panes()[1]?.setHeight(Number.isFinite(volumeHeight) ? volumeHeight : 42);
     }
     const onMove = (param: MouseEventParams) => {
       const time = typeof param.time === "string" ? param.time : "";
@@ -283,20 +305,20 @@ export function KlineChart({
       );
     };
     chart.subscribeCrosshairMove(onMove);
-    const onRange = () => {
+    const syncVisible = () => {
       const logical = chart.timeScale().getVisibleLogicalRange();
       if (!logical) return;
       const last = Math.max(0, candles.length - 1);
       setVisible((previous) => nextVisibleWindow(previous, logical, last));
     };
-    chart.timeScale().subscribeVisibleLogicalRangeChange(onRange);
-    onRange();
+    chart.timeScale().subscribeVisibleLogicalRangeChange(syncVisible);
+    syncVisible();
     const observer = new ResizeObserver(() => {
       chart.applyOptions({ width: el.clientWidth });
     });
     observer.observe(el);
     return () => {
-      chart.timeScale().unsubscribeVisibleLogicalRangeChange(onRange);
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(syncVisible);
       chart.unsubscribeCrosshairMove(onMove);
       observer.disconnect();
       chart.remove();
@@ -304,36 +326,70 @@ export function KlineChart({
     };
   }, [candles, maAligned, placed, percentiles, period, showVolume, theme, overview.temperature]);
 
+  const volumeToggle = (
+    <Checkbox className="volume-toggle" isSelected={showVolume} onChange={onToggleVolume}>
+      <Checkbox.Control>
+        <Checkbox.Indicator />
+      </Checkbox.Control>
+      <Checkbox.Content>成交量</Checkbox.Content>
+    </Checkbox>
+  );
+
   return (
-    <section className="card chart-card">
-      <div className="card-hd">
-        <div className="card-title">K 线 · MA55 与估值分位</div>
-        <Checkbox className="volume-toggle" isSelected={showVolume} onChange={onToggleVolume}>
-          <Checkbox.Control>
-            <Checkbox.Indicator />
-          </Checkbox.Control>
-          <Checkbox.Content>成交量</Checkbox.Content>
-        </Checkbox>
+    <section className="chart-panel">
+      <div className="chart-tools">
+        <div className="chart-tools-main">
+          <div className="chart-title">K 线 · MA55 与估值分位</div>
+          <div className="legend">
+            <span>
+              <i className="sw" style={{ background: "var(--qk-candle-up)" }} />涨
+            </span>
+            <span>
+              <i className="sw" style={{ background: "var(--qk-candle-down)" }} />跌
+            </span>
+            <span>
+              <i className="sw-line" />
+              MA55
+            </span>
+            <span>
+              <i className="sw-dash" />
+              估值线
+            </span>
+          </div>
+        </div>
+        {onPeriod && onRange ? (
+          <div className="chart-tools-controls">
+            <div className="chart-period-row">
+              <FilterGroup
+                appearance="chip"
+                label="周期"
+                value={period}
+                options={[
+                  { id: "D", label: "日" },
+                  { id: "W", label: "周" },
+                ]}
+                onChange={onPeriod}
+              />
+              {volumeToggle}
+            </div>
+            <FilterGroup
+              appearance="chip"
+              label="窗口"
+              value={range}
+              options={RANGES}
+              onChange={onRange}
+            />
+          </div>
+        ) : (
+          volumeToggle
+        )}
       </div>
       <p className="chart-readout" data-chart-readout="kline">
         {readout}
       </p>
-      {visible ? (
-        <VisibleRangeControl
-          from={visible.from}
-          to={visible.to}
-          last={visible.last}
-          onChange={(from, to) => {
-            const scale = chartRef.current?.timeScale();
-            if (!scale || !rangeNeedsApply(scale.getVisibleLogicalRange(), from, to)) return;
-            scale.setVisibleLogicalRange({ from, to });
-          }}
-          onReset={() => chartRef.current?.timeScale().fitContent()}
-        />
-      ) : null}
       <div className="chart-body">
         {candles.length === 0 ? (
-          <div className="state">暂无行情数据</div>
+          <div className="state">暂无数据</div>
         ) : (
           <div
             ref={host}
@@ -358,31 +414,23 @@ export function KlineChart({
           />
         )}
       </div>
-      <details className="chart-help">
-        <summary>图例与读法</summary>
-        <div className="legend">
-          <span>
-            <i className="sw" style={{ background: "var(--qk-candle-up)" }} />涨
-          </span>
-          <span>
-            <i className="sw" style={{ background: "var(--qk-candle-down)" }} />跌
-          </span>
-          <span>
-            <i className="sw-line" />
-            MA55（周）
-          </span>
-          <span>
-            <i className="sw-dash" />
-            估值线 · 冷→热
-          </span>
-          <span>▼ 已确认低点（向下箭头）</span>
-          <span>■ 未确认低点（方块）</span>
-        </div>
-        <p className="chart-key" id="kline-marker-key">
-          已确认和未确认用不同形状：已确认是向下箭头，未确认是方块。涨为红色，跌为绿色。
-        </p>
-      </details>
+      {visible ? (
+        <VisibleRangeControl
+          from={visible.from}
+          to={visible.to}
+          last={visible.last}
+          onChange={(from, to) => {
+            const scale = chartRef.current?.timeScale();
+            if (!scale || !rangeNeedsApply(scale.getVisibleLogicalRange(), from, to)) return;
+            scale.setVisibleLogicalRange({ from, to });
+          }}
+          onReset={() => chartRef.current?.timeScale().fitContent()}
+        />
+      ) : null}
       <ChartAttribution />
+      <p className="chart-key" id="kline-marker-key">
+        已确认和未确认用不同形状：已确认是向下箭头，未确认是方块。涨为红色，跌为绿色。
+      </p>
       <details className="data-fallback">
         <summary>查看数据表</summary>
         <Table>
