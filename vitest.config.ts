@@ -8,6 +8,7 @@ export default defineConfig({
       "workers/**/*.test.ts",
       "scripts/**/*.test.ts",
       "apps/web/src/**/*.test.ts",
+      "apps/web/src/**/*.test.tsx",
     ],
   },
 });
