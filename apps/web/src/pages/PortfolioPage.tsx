@@ -16,6 +16,7 @@ import { useHoldingIntent } from "../lib/holdingIntent.js";
 import { readHoldings } from "../lib/holdingsStore.js";
 import { fetchStockBatch, fetchStockList } from "../lib/stockApi.js";
 import { formatCny, formatShares, formatYield, weightLabel } from "../lib/stockFormat.js";
+import { setPwaEditDirty } from "../pwa/editGuard.js";
 import { DividendShell } from "./DividendShell.js";
 
 type Card = {
@@ -467,6 +468,11 @@ function HoldingDrawer({
     return () => window.clearTimeout(handle);
   }, [query, locked]);
   const visibleHits = !locked && query.length > 0 ? hits : [];
+  useEffect(() => {
+    const dirty = shares !== initialShares || (!locked && q !== "");
+    setPwaEditDirty(dirty);
+    return () => setPwaEditDirty(false);
+  }, [shares, initialShares, locked, q]);
 
   function save() {
     const chosen = locked ? initialCode : code;
@@ -485,7 +491,7 @@ function HoldingDrawer({
       }}
     >
       <Drawer.Backdrop>
-        <Drawer.Content placement="right">
+          <Drawer.Content placement="right" className="qk-drawer">
           <Drawer.Dialog aria-label={locked ? "编辑持仓" : "添加股票"}>
             <Drawer.Header>
               <Drawer.Heading>{locked ? "编辑持仓" : "添加股票"}</Drawer.Heading>
