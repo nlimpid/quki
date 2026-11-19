@@ -8,6 +8,7 @@ coverage/
 .DS_Store
 .idea/
 *.log
+.amp/portals/
 .env
 .env.*
 !.env.example

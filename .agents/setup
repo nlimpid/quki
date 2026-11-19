@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Prepare a fresh Amp orb for the quki pnpm workspace.
+# Idempotent: safe to run again on a snapshot that already has dependencies.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+step() {
+  local label="$1"
+  shift
+  local started=$SECONDS
+  echo "==> ${label}"
+  "$@"
+  echo "    ${label} ($((SECONDS - started))s)"
+}
+
+PINNED_PNPM="10.33.4"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "node is required; Amp orbs include it" >&2
+  exit 1
+fi
+
+# Orbs ship pnpm, but a stale image may not match packageManager.
+if ! command -v pnpm >/dev/null 2>&1 || [[ "$(pnpm --version)" != "$PINNED_PNPM" ]]; then
+  step "install pnpm@${PINNED_PNPM}" npm install -g "pnpm@${PINNED_PNPM}"
+else
+  echo "==> pnpm@${PINNED_PNPM} already installed"
+fi
+
+if [[ "$(pnpm --version)" != "$PINNED_PNPM" ]]; then
+  echo "pnpm $(pnpm --version) does not match packageManager pnpm@${PINNED_PNPM}" >&2
+  exit 1
+fi
+
+step "install workspace dependencies" pnpm install --frozen-lockfile
+
+# Example files hold placeholders only. Never overwrite a real env file.
+copy_example() {
+  local example="$1"
+  local dest="$2"
+  if [[ -f "$dest" ]]; then
+    echo "==> ${dest} already exists; leaving it"
+    return 0
+  fi
+  if [[ ! -f "$example" ]]; then
+    echo "missing env example ${example}" >&2
+    exit 1
+  fi
+  mkdir -p "$(dirname "$dest")"
+  cp -- "$example" "$dest"
+  echo "==> copied ${example} -> ${dest}"
+}
+
+copy_example .dev.vars.example .dev.vars
+copy_example workers/site/.dev.vars.example workers/site/.dev.vars
+copy_example workers/crawler/.dev.vars.example workers/crawler/.dev.vars
+
+echo "==> setup complete (node $(node --version), pnpm $(pnpm --version))"
