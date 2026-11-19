@@ -59,6 +59,7 @@ function freshnessFields(report: MarketFreshness | null) {
     quotesStale: report?.quotesStale ?? null,
     indexStale: report?.indexStale ?? null,
     stale: report?.stale ?? null,
+    alert: report?.alert ?? null,
     calendarKnown: report?.calendarKnown ?? null,
   };
 }
@@ -127,7 +128,20 @@ export function createApp(source: MarketSource, auth: AuthRuntime = unavailableA
     try {
       const instruments = await source.countInstruments();
       const freshness = await readFreshness(source);
-      return c.json({ ok: true, storage: source.mode, instruments, ...freshnessFields(freshness) });
+      // Storage answering is not the same as the session being written.
+      // `stale: true` is 503 with `ok: false`, so a monitor that only checks
+      // HTTP 200 cannot treat a missing session as all-clear. `alert` is true
+      // only after the 20:30 retry window; before that, 503 still means "not fresh".
+      const dataStale = freshness?.stale === true;
+      return c.json(
+        {
+          ok: !dataStale,
+          storage: source.mode,
+          instruments,
+          ...freshnessFields(freshness),
+        },
+        dataStale ? 503 : 200,
+      );
     } catch {
       return c.json(
         { ok: false, storage: source.mode, instruments: null, ...freshnessFields(null) },

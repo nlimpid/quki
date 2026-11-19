@@ -19,3 +19,12 @@ export function scheduledIngest(cron: string, stale: boolean | null): boolean {
   if (!isCatchUpCron(cron)) return true;
   return stale !== false;
 }
+
+/**
+ * Page only from the 20:30 catch-up, and only when the session is still missing
+ * after that retry. 16:30 and 18:00 hit CSI before it publishes; they must not alert.
+ * A null report (freshness read failed) is not a page: there is nothing to send.
+ */
+export function shouldAlertAfterCron(cron: string, report: { stale: boolean } | null): boolean {
+  return isCatchUpCron(cron) && report?.stale === true;
+}

@@ -12,16 +12,24 @@ import {
 } from "@quki/db";
 import { Hono } from "hono";
 
+import { ALERT_WEBHOOK_ENV, postStaleAlert } from "./alert.js";
+
 import alterSql from "../../../db/migrations/0002_bars_nullable_ohlc.sql";
 import auditSql from "../../../db/migrations/0005_dividend_audit.sql";
 import benchmarkSql from "../../../db/migrations/0003_rotation_benchmarks.sql";
 import dividendSql from "../../../db/migrations/0004_dividends.sql";
 import initSql from "../../../db/migrations/0001_init.sql";
-import { isCatchUpCron, scheduledIngest } from "./schedule.js";
+import { isCatchUpCron, scheduledIngest, shouldAlertAfterCron } from "./schedule.js";
 
 export interface Env {
   TIDB_QUKI_DATABASE_URL?: string;
   INGEST_TOKEN?: string;
+  /**
+   * Optional HTTPS URL. After the 20:30 catch-up, a still-stale session POSTs
+   * one JSON page here. Unset means the failure is logged and the cron stays failed.
+   * Not a secret in the repo; set it with `wrangler secret put ALERT_WEBHOOK_URL`.
+   */
+  ALERT_WEBHOOK_URL?: string;
 }
 
 function authorized(request: Request, env: Env): boolean {
@@ -137,6 +145,7 @@ async function runIncremental(databaseUrl: string, cron: string): Promise<void> 
     });
     for (const symbol of bars.failedSymbols) failures.push(`bars: ${symbol}`);
     failures.push(...bars.failedSteps);
+    for (const symbol of bars.sessionMissing) failures.push(`session: ${symbol}`);
   } catch (error) {
     const message = errorText(error);
     failures.push(`bars: ${message}`);
@@ -185,7 +194,51 @@ async function runScheduled(cron: string, env: Env): Promise<void> {
       });
     }
   }
-  await runIncremental(databaseUrl, cron);
+  try {
+    await runIncremental(databaseUrl, cron);
+  } catch (error) {
+    // Primary slots (16:30, 18:00) often land before CSI publishes. Do not page
+    // then. Only the 20:30 catch-up, and only when the session is still missing.
+    if (isCatchUpCron(cron)) await alertIfStillStale(databaseUrl, cron, env);
+    throw error;
+  }
+  if (isCatchUpCron(cron)) await alertIfStillStale(databaseUrl, cron, env);
+}
+
+/**
+ * The retry already ran. A previous-session CSI payload can still leave the
+ * book stale. Page once, and only from this slot.
+ */
+async function alertIfStillStale(databaseUrl: string, cron: string, env: Env): Promise<void> {
+  let freshness: MarketFreshness;
+  try {
+    freshness = await readMarketFreshness(connectTiDb(databaseUrl));
+  } catch (error) {
+    logEvent("error", {
+      message: "post-retry freshness read failed",
+      cron,
+      error: errorText(error),
+    });
+    return;
+  }
+  if (!shouldAlertAfterCron(cron, freshness)) return;
+  logEvent("error", {
+    message: "still stale after the 20:30 retry",
+    cron,
+    expectedSession: freshness.expectedSession,
+    indexThrough: freshness.indexThrough,
+    asOf: freshness.asOf,
+    quotesStale: freshness.quotesStale,
+    indexStale: freshness.indexStale,
+  });
+  const delivered = await postStaleAlert({
+    webhookUrl: env.ALERT_WEBHOOK_URL,
+    report: freshness,
+    cron,
+  });
+  if (!delivered && !env.ALERT_WEBHOOK_URL) {
+    logEvent("error", { message: `set ${ALERT_WEBHOOK_ENV} to deliver the stale alert`, cron });
+  }
 }
 
 export default {
