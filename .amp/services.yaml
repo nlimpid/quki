@@ -1,0 +1,15 @@
+# Local fixture stack. `pnpm dev` serves seed CSVs and does not need TiDB.
+# Vite's config pins 5173 and proxies /api to 127.0.0.1:8787. The portal
+# service binds Vite to $PORT and starts the API without PORT so it stays on
+# 8787. No production auth bypass.
+services:
+  web:
+    command: >-
+      pnpm exec concurrently -k -n api,web -c green,cyan
+      "env -u PORT tsx scripts/dev-api.ts"
+      "pnpm --filter @quki/web exec vite --host 0.0.0.0 --port $PORT --strictPort"
+    health: /api/health
+    portal:
+      url: /index/H30269?period=W&range=5Y&vol=0
+      title: quki
+      description: Fixture seed data. Login stays unavailable unless Clerk keys are set in Amp project settings.

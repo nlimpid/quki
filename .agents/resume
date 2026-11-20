@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Fast reconnect check after an orb wakes. Do not install dependencies here.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+if ! command -v node >/dev/null 2>&1 || ! command -v pnpm >/dev/null 2>&1; then
+  echo "node or pnpm missing; run .agents/setup" >&2
+  exit 1
+fi
+
+if [[ "$(pnpm --version)" != "10.33.4" ]]; then
+  echo "pnpm $(pnpm --version) is not the pinned 10.33.4; run .agents/setup" >&2
+  exit 1
+fi
+
+if [[ ! -d node_modules ]]; then
+  echo "node_modules missing; run .agents/setup" >&2
+  exit 1
+fi
+
+echo "resume ok (node $(node --version), pnpm $(pnpm --version))"
