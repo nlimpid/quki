@@ -9,6 +9,10 @@ TIDB_QUKI_DATABASE_URL=
 # Shared secret for POST /admin/ingest and POST /admin/backfill on the crawler worker.
 INGEST_TOKEN=replace-with-a-long-random-string
 
+# Optional crawler secret. HTTPS URL for one POST after the 20:30 retry
+# when the trading session is still stale. Leave unset to log only.
+# ALERT_WEBHOOK_URL=
+
 # Site Worker local development. The crawler does not read these.
 # Public Clerk Frontend API origin. Leave blank to keep login unavailable.
 # Production deploys use the public value in workers/site/wrangler.jsonc.

@@ -2,6 +2,7 @@ import {
   TEMPERATURE_BROADS,
   TEMPERATURE_FAMILIES,
   buildSignalRows,
+  crawlSessionStatus,
   lastBarDate,
   latestAlignedSession,
   productionCandidate,
@@ -23,13 +24,13 @@ import {
   upsertBars,
 } from "./repo.js";
 
-function shanghaiToday(): string {
+function shanghaiToday(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date());
+  }).format(now);
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -74,13 +75,14 @@ export async function ingestSymbol(
   conn: SqlConn,
   symbol: string,
   mode: "incremental" | "backfill",
-): Promise<{ rows: number; through: string | null }> {
+  now = new Date(),
+): Promise<{ rows: number; through: string | null; sessionMissing: boolean }> {
   const id = await instrumentId(conn, symbol);
   if (!id) throw new Error(`Instrument ${symbol} is not seeded. Run pnpm migrate first.`);
   const meta = findInstrument(symbol);
   const stored = await latestDailyDate(conn, id);
   const start = mode === "backfill" || !stored ? (meta?.baseDate ?? "2004-12-31") : stored;
-  const end = shanghaiToday();
+  const end = shanghaiToday(now);
   const bars = await fetchCsindexDaily({
     symbol,
     startDate: start,
@@ -91,30 +93,44 @@ export async function ingestSymbol(
   const daily = await loadDailyBars(conn, id);
   await recomputeAnalytics(conn, id, daily);
   const through = daily[daily.length - 1]?.date ?? null;
+  // A 200 from CSIndex that only repeats the previous session is not a completed crawl.
+  // Keep the bars, but do not write crawl_bars_daily success — that job is what freshness
+  // reads as lastSuccess, and a late publish must not look all-clear.
+  const session = crawlSessionStatus({ mode, through, now });
   await recordCrawl(conn, {
     jobName: mode === "backfill" ? "crawl_bars_backfill" : "crawl_bars_daily",
     symbol,
     instrumentId: id,
-    status: "success",
+    status: session.status,
     rows,
     watermark: through,
+    error: session.sessionMissing ? `missing session ${session.expectedSession}` : undefined,
   });
-  return { rows, through };
+  return { rows, through, sessionMissing: session.sessionMissing };
 }
 
 export async function ingestAll(
   conn: SqlConn,
   mode: "incremental" | "backfill",
   symbols?: string[],
-  options?: { rotation?: "full" | "incremental" | "skip" },
-): Promise<{ failedSymbols: string[]; failedSteps: string[] }> {
+  options?: { rotation?: "full" | "incremental" | "skip"; now?: Date },
+): Promise<{ failedSymbols: string[]; failedSteps: string[]; sessionMissing: string[] }> {
   const failedSymbols: string[] = [];
   const failedSteps: string[] = [];
+  const sessionMissing: string[] = [];
+  const now = options?.now ?? new Date();
   const known = symbols ?? (await listInstrumentIds(conn)).map((row) => row.symbol);
   for (const symbol of known) {
     try {
-      const result = await ingestSymbol(conn, symbol, mode);
-      console.log(`ingest ${symbol} ${mode}: ${result.rows} rows through ${result.through}`);
+      const result = await ingestSymbol(conn, symbol, mode, now);
+      if (result.sessionMissing) {
+        sessionMissing.push(symbol);
+        console.error(
+          `ingest ${symbol} ${mode}: ${result.rows} rows through ${result.through}; missing expected session`,
+        );
+      } else {
+        console.log(`ingest ${symbol} ${mode}: ${result.rows} rows through ${result.through}`);
+      }
     } catch (error) {
       const id = await instrumentId(conn, symbol).catch(() => null);
       const message = error instanceof Error ? error.message : String(error);
@@ -154,7 +170,7 @@ export async function ingestAll(
     failedSteps.push(`temperature: ${message}`);
     console.error(`temperature recompute failed: ${message}`);
   }
-  return { failedSymbols, failedSteps };
+  return { failedSymbols, failedSteps, sessionMissing };
 }
 
 export async function recomputeTemperature(

@@ -47,6 +47,12 @@ const KNOWN_CALENDAR_YEARS = new Set([2026]);
 /** 18:30 Asia/Shanghai. The 18:00 UTC+8 retry has finished by then on observed runs. */
 export const CRAWL_READY_MINUTES = 18 * 60 + 30;
 
+/**
+ * 20:30 Asia/Shanghai. Matches the crawler's `30 12 * * MON-FRI` catch-up.
+ * A late CSI publish is expected until this slot has run.
+ */
+export const CRAWL_RETRY_MINUTES = 20 * 60 + 30;
+
 export type CrawlSuccess = {
   job: string;
   at: string;
@@ -62,6 +68,11 @@ export type MarketFreshness = {
   quotesStale: boolean;
   indexStale: boolean;
   stale: boolean;
+  /**
+   * True only after the 20:30 catch-up on a trading day, while `stale` is still true.
+   * Before that window a late CSI publish is not an alert.
+   */
+  alert: boolean;
   /** False when the session year is outside the checked-in SSE closure list. */
   calendarKnown: boolean;
 };
@@ -110,6 +121,21 @@ export function expectedTradingSession(now: Date): string {
   return previousTradingDay(clock.date);
 }
 
+/**
+ * True once the 20:30 catch-up should have finished on this Shanghai trading day.
+ * Earlier slots (16:30, 18:00) and the minutes before 20:30 are not an alert window:
+ * CSI often publishes the session after those crons.
+ */
+export function retryWindowClosed(now: Date): boolean {
+  const clock = shanghaiClock(now);
+  return isShanghaiTradingDay(clock.date) && clock.minutes >= CRAWL_RETRY_MINUTES;
+}
+
+/** A stored session covers the expected day only when it is that day or later. */
+export function sessionCovers(through: string | null, expectedSession: string): boolean {
+  return through != null && through >= expectedSession;
+}
+
 function addDays(isoDate: string, days: number): string {
   const [year, month, day] = isoDate.split("-").map(Number);
   if (!year || !month || !day) throw new Error(`bad date ${isoDate}`);
@@ -137,6 +163,7 @@ export function assessFreshness(input: {
     input.indexIncomplete || input.indexThrough == null || input.indexThrough < expectedSession;
   const todayYear = Number(shanghaiClock(input.now).date.slice(0, 4));
   const sessionYear = Number(expectedSession.slice(0, 4));
+  const stale = quotesStale || indexStale;
   return {
     asOf: input.asOf,
     expectedSession,
@@ -144,7 +171,8 @@ export function assessFreshness(input: {
     lastSuccess: input.lastSuccess ?? null,
     quotesStale,
     indexStale,
-    stale: quotesStale || indexStale,
+    stale,
+    alert: stale && retryWindowClosed(input.now),
     calendarKnown: KNOWN_CALENDAR_YEARS.has(todayYear) && KNOWN_CALENDAR_YEARS.has(sessionYear),
   };
 }

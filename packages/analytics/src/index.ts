@@ -120,13 +120,17 @@ export {
   validShareCount,
 } from "./holdings.js";
 export type { HoldingRecord, HoldingsState } from "./holdings.js";
+export { crawlSessionStatus } from "./crawlSession.js";
 export {
   CRAWL_READY_MINUTES,
+  CRAWL_RETRY_MINUTES,
   SSE_CLOSED_DATES_2026,
   assessFreshness,
   expectedTradingSession,
   isShanghaiTradingDay,
   previousTradingDay,
+  retryWindowClosed,
+  sessionCovers,
   shanghaiClock,
 } from "./freshness.js";
 export type { CrawlSuccess, MarketFreshness } from "./freshness.js";

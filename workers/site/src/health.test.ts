@@ -11,6 +11,7 @@ const emptyFreshness = {
   quotesStale: null,
   indexStale: null,
   stale: null,
+  alert: null,
   calendarKnown: null,
 };
 
@@ -22,6 +23,7 @@ const fridayMiss: MarketFreshness = {
   quotesStale: true,
   indexStale: true,
   stale: true,
+  alert: true,
   calendarKnown: true,
 };
 
@@ -60,7 +62,7 @@ describe("/api/health", () => {
     });
   });
 
-  it("reports a missed trading session without failing the storage check", async () => {
+  it("fails the probe when the expected session is missing", async () => {
     const app = createApp(
       source({
         mode: "tidb",
@@ -73,17 +75,41 @@ describe("/api/health", () => {
       }),
     );
     const response = await app.request("http://quki.test/api/health");
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(503);
     const body = await response.json();
     expect(body).toMatchObject({
-      ok: true,
+      ok: false,
       instruments: 8,
       asOf: "2026-11-12T10:08:49.000Z",
       expectedSession: "2026-11-13",
       indexThrough: "2026-11-11",
       stale: true,
+      alert: true,
     });
     expect(JSON.stringify(body)).not.toContain("mysql://");
+  });
+
+  it("stays 200 when the session is present and not an alert", async () => {
+    const app = createApp(
+      source({
+        mode: "tidb",
+        async countInstruments() {
+          return 8;
+        },
+        async getFreshness() {
+          return {
+            ...fridayMiss,
+            stale: false,
+            quotesStale: false,
+            indexStale: false,
+            alert: false,
+          };
+        },
+      }),
+    );
+    const response = await app.request("http://quki.test/api/health");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, stale: false, alert: false });
   });
 
   it("keeps storage ok when the freshness query throws", async () => {

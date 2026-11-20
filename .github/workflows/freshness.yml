@@ -47,6 +47,8 @@ jobs:
           if report.get("ok") is not True:
               print("health ok is not true", file=sys.stderr)
               sys.exit(1)
+          # A missing session is HTTP 503. curl -f already exits before this
+          # check; the body check stays so a 200 with ok:true cannot hide stale.
           if report.get("stale") is not False:
               print(
                   "trading-day increment is missing or not reported; stale must be false",
