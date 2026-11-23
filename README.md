@@ -1,11 +1,14 @@
 # quki.cc
 
-Daily (and longer) index history, a 55-week moving-average study, and the charts for it. Phase 1 is two CSI price indices:
+Daily (and longer) index history, a 55-week moving-average study, and the charts for it. The chart switch lists five CSI price indices. Total-return twins are seeded and crawled, and stay off the switch.
 
-| Code   | Name     | Total-return twin (seeded, not on the phase-1 chart) |
-| ------ | -------- | ---------------------------------------------------- |
-| H30269 | 红利低波 | H20269                                               |
-| 000922 | 中证红利 | H00922                                               |
+| Code   | Name     | Total-return twin                  |
+| ------ | -------- | ---------------------------------- |
+| H30269 | 红利低波 | H20269                             |
+| 000922 | 中证红利 | H00922                             |
+| 000300 | 沪深300  | H00300（接口名「300收益」）        |
+| 000905 | 中证500  | H00905（接口名「500收益」）        |
+| 000852 | 中证1000 | H00852（接口名「中证1000全收益」） |
 
 The page is the product. There is no separate written report.
 
@@ -20,7 +23,7 @@ packages/analytics  Weekly bars, MA55, percentile, significant lows, backtest ho
 packages/ingest     CSV seed reader and the CSIndex fetcher (swap this to change source)
 packages/db         TiDB client, migrations, upserts
 db/migrations       Schema
-data/seed           Full-history CSVs through 2026-11-03
+data/seed           Full-history CSVs. Dividend and broad-market files stop at 2026-11-03; CSI 300 / 500 / 1000 stop at 2026-11-20.
 data/SOURCES.md     Endpoint notes and quirks
 design              SPEC, tokens, HTML mockups
 ```

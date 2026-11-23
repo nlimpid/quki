@@ -1,4 +1,4 @@
-import { PHASE1_INSTRUMENTS, type Overview, type Period, type RangeKey } from "@quki/types";
+import { CHART_INSTRUMENTS, type Overview, type Period, type RangeKey } from "@quki/types";
 import { useCallback, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 
@@ -16,7 +16,7 @@ export function IndexLayout() {
   const [params] = useSearchParams();
   const [asOf, setAsOf] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
-  const instrument = PHASE1_INSTRUMENTS.find((item) => item.symbol === code);
+  const instrument = CHART_INSTRUMENTS.find((item) => item.symbol === code);
   const known = instrument != null;
   const onBacktest = location.pathname.endsWith("/backtest");
   usePageTitle(

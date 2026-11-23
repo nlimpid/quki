@@ -1,4 +1,4 @@
-import { PHASE1_INSTRUMENTS } from "@quki/types";
+import { CHART_INSTRUMENTS } from "@quki/types";
 
 import { FilterGroup } from "./FilterGroup.js";
 
@@ -9,7 +9,7 @@ export function Toolbar({ code, onCode }: { code: string; onCode: (code: string)
         appearance="underline"
         label="指数"
         value={code}
-        options={PHASE1_INSTRUMENTS.map((item) => ({
+        options={CHART_INSTRUMENTS.map((item) => ({
           id: item.symbol,
           label: (
             <>

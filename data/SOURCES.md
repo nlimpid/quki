@@ -175,6 +175,9 @@ Fetched 2026-11-04 via the same `index-perf` endpoint. Units unchanged (volume=�
 | --- | --- | --- | --- |
 | 中证A股 / CSI China A Share | **930903** | **H20903** (Reuters `.CSIH20903`; also net-return **N20903**) | Official factsheet PDF `930903factsheet.pdf` on `oss-ch.csindex.com.cn` — “衍生指数 / 全收益指数 代码 H20903”. API returns `indexNameCn=中证A股全收益`. |
 | 中证全指 / CSI All Share | **000985** | **H00985** (Reuters `.CSIH00985`; also net-return **N00985**) | Official factsheet PDF `000985factsheet.pdf` — “全收益指数 代码 H00985”. API returns `indexNameCn=中证全指全收益`. |
+| 沪深300 / CSI 300 | **000300** | **H00300** | `index-perf` 2026-11-20: price `indexNameCn=沪深300`, total return `indexNameCn=300收益`. |
+| 中证500 / CSI 500 | **000905** | **H00905** | `index-perf` 2026-11-20: price `indexNameCn=中证500`, total return `indexNameCn=500收益`. |
+| 中证1000 / CSI 1000 | **000852** | **H00852** | `index-perf` 2026-11-20: price `indexNameCn=中证1000`, total return `indexNameCn=中证1000全收益`. |
 
 Base dates (factsheet): **930903 / H20903 = 1999-12-31** (基值 1000); **000985 / H00985 = 2004-12-31** (基值 1000).  
 Note: 930903 *methodology* PDF says 基日 **1999-12-30**; factsheet + `index-perf` use **1999-12-31**. No `19991230` row in the API. Used factsheet/API date as `startDate`.
