@@ -40,6 +40,7 @@ describe("crawler cron", () => {
     expect(worker).toContain("ingestDividends");
     expect(worker).toContain("0004_dividends.sql");
     expect(worker).toContain("0005_dividend_audit.sql");
+    expect(worker).toContain("0007_csi_300_500_1000.sql");
     expect(worker).not.toContain("0006_auth.sql");
     expect(worker).not.toContain("0008_auth_holdings.sql");
     expect(worker).toContain('ingestDividends(connectTiDb(databaseUrl), "incremental")');

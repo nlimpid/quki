@@ -106,7 +106,71 @@ export const SEEDED_INSTRUMENTS: readonly InstrumentInfo[] = [
     baseDate: "2004-12-31",
     isTotalReturn: true,
   },
+  {
+    symbol: "000300",
+    name: "沪深300指数",
+    shortName: "沪深300",
+    nameEn: "CSI 300 Index",
+    twinSymbol: "H00300",
+    baseDate: "2004-12-31",
+    isTotalReturn: false,
+  },
+  {
+    symbol: "H00300",
+    name: "300收益",
+    shortName: "300收益",
+    nameEn: "CSI 300 Total Return Index",
+    twinSymbol: "000300",
+    baseDate: "2004-12-31",
+    isTotalReturn: true,
+  },
+  {
+    symbol: "000905",
+    name: "中证小盘500指数",
+    shortName: "中证500",
+    nameEn: "CSI Smallcap 500 Index",
+    twinSymbol: "H00905",
+    baseDate: "2004-12-31",
+    isTotalReturn: false,
+  },
+  {
+    symbol: "H00905",
+    name: "500收益",
+    shortName: "500收益",
+    nameEn: "CSI Smallcap 500 Total Return Index",
+    twinSymbol: "000905",
+    baseDate: "2004-12-31",
+    isTotalReturn: true,
+  },
+  {
+    symbol: "000852",
+    name: "中证1000指数",
+    shortName: "中证1000",
+    nameEn: "CSI 1000 Index",
+    twinSymbol: "H00852",
+    baseDate: "2004-12-31",
+    isTotalReturn: false,
+  },
+  {
+    symbol: "H00852",
+    name: "中证1000全收益",
+    shortName: "中证1000全收益",
+    nameEn: "CSI 1000 Total Return Index",
+    twinSymbol: "000852",
+    baseDate: "2004-12-31",
+    isTotalReturn: true,
+  },
 ];
+
+/**
+ * Price indices on the chart switch. Phase 1 stays the two dividend indices.
+ * CSI 300 / 500 / 1000 are chartable; their total-return twins stay off the switch.
+ */
+const CHART_SYMBOLS = ["H30269", "000922", "000300", "000905", "000852"] as const;
+
+export const CHART_INSTRUMENTS: readonly InstrumentInfo[] = CHART_SYMBOLS.map((symbol) =>
+  SEEDED_INSTRUMENTS.find((item) => item.symbol === symbol)!,
+);
 
 /**
  * Explicit pairs. Defaults are total return vs total return.

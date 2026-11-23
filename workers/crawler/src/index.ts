@@ -17,6 +17,7 @@ import { ALERT_WEBHOOK_ENV, postStaleAlert } from "./alert.js";
 import alterSql from "../../../db/migrations/0002_bars_nullable_ohlc.sql";
 import auditSql from "../../../db/migrations/0005_dividend_audit.sql";
 import benchmarkSql from "../../../db/migrations/0003_rotation_benchmarks.sql";
+import broadSql from "../../../db/migrations/0007_csi_300_500_1000.sql";
 import dividendSql from "../../../db/migrations/0004_dividends.sql";
 import initSql from "../../../db/migrations/0001_init.sql";
 import { isCatchUpCron, scheduledIngest, shouldAlertAfterCron } from "./schedule.js";
@@ -62,6 +63,7 @@ crawler.post("/admin/migrate", async (c) => {
     { filename: "0003_rotation_benchmarks.sql", sql: benchmarkSql },
     { filename: "0004_dividends.sql", sql: dividendSql },
     { filename: "0005_dividend_audit.sql", sql: auditSql },
+    { filename: "0007_csi_300_500_1000.sql", sql: broadSql },
   ]);
   return c.json({ applied: ran });
 });

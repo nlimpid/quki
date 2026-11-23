@@ -1,8 +1,38 @@
+import { readFileSync } from "node:fs";
+
+import { SEEDED_INSTRUMENTS } from "@quki/types";
 import { describe, expect, it } from "vitest";
 
 import { fetchCsindexDaily, mapCsindexRows } from "./csindex.js";
 import { parseSeedCsv } from "./csv.js";
 import { dedupeBars, dropClonedBaseRows, dropPhantomStartRow } from "./dedupe.js";
+
+describe("CSI 300 / 500 / 1000 seed files", () => {
+  const pairs = [
+    ["000300", "H00300", "3954.57", "5955.83"],
+    ["000905", "H00905", "6006.08", "7543.64"],
+    ["000852", "H00852", "5648.63", "6554.33"],
+  ] as const;
+
+  it("stores the official 2026-11-20 closes and wires each twin", () => {
+    for (const [price, totalReturn, priceClose, totalReturnClose] of pairs) {
+      const priceRows = parseSeedCsv(readFileSync(`data/seed/${price}.csv`, "utf8"));
+      const totalReturnRows = parseSeedCsv(readFileSync(`data/seed/${totalReturn}.csv`, "utf8"));
+      expect(priceRows.at(-1)).toMatchObject({ date: "2026-11-20", close: priceClose });
+      expect(totalReturnRows.at(-1)).toMatchObject({
+        date: "2026-11-20",
+        close: totalReturnClose,
+        open: null,
+      });
+      const priceInstrument = SEEDED_INSTRUMENTS.find((item) => item.symbol === price);
+      const totalReturnInstrument = SEEDED_INSTRUMENTS.find((item) => item.symbol === totalReturn);
+      expect(priceInstrument?.twinSymbol).toBe(totalReturn);
+      expect(priceInstrument?.isTotalReturn).toBe(false);
+      expect(totalReturnInstrument?.twinSymbol).toBe(price);
+      expect(totalReturnInstrument?.isTotalReturn).toBe(true);
+    }
+  });
+});
 
 describe("seed csv and dedupe", () => {
   it("keeps null OHLC and parses the H30269 reference close", () => {
