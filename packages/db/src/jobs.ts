@@ -9,7 +9,13 @@ import {
   productionStudyParams,
   temperaturePoints,
 } from "@quki/analytics";
-import { fetchCsindexDaily } from "@quki/ingest";
+import {
+  fetchCsindexDaily,
+  fetchIncrementalCsindex,
+  incrementalCsindexWindows,
+  type FetchLike,
+  type SeedBar,
+} from "@quki/ingest";
 import { findInstrument, type TemperatureFamilyId } from "@quki/types";
 
 import type { SqlConn } from "./client.js";
@@ -71,31 +77,72 @@ export async function recordCrawl(
   }
 }
 
+export async function loadIncrementalBars(input: {
+  symbol: string;
+  mode: "incremental" | "backfill";
+  storedThrough: string | null;
+  now: Date;
+  baseDate: string;
+  fetchImpl?: FetchLike;
+}): Promise<{ bars: SeedBar[]; targetSession: string }> {
+  const end = shanghaiToday(input.now);
+  const targetSession = crawlSessionStatus({
+    mode: input.mode,
+    through: input.storedThrough,
+    now: input.now,
+  }).targetSession;
+  if (input.mode === "backfill") {
+    return {
+      bars: (await fetchBackfill(input.symbol, input.baseDate, end, input.fetchImpl)).bars,
+      targetSession,
+    };
+  }
+  const fetched = await fetchIncrementalCsindex({
+    symbol: input.symbol,
+    windows: incrementalCsindexWindows({
+      storedThrough: input.storedThrough,
+      shanghaiToday: end,
+      targetSession,
+      baseDate: input.baseDate,
+    }),
+    targetSession,
+    startAlreadyStored: input.storedThrough != null,
+    fetchImpl: input.fetchImpl,
+  });
+  return { bars: fetched.bars, targetSession };
+}
+
 export async function ingestSymbol(
   conn: SqlConn,
   symbol: string,
   mode: "incremental" | "backfill",
   now = new Date(),
-): Promise<{ rows: number; through: string | null; sessionMissing: boolean }> {
+  fetchImpl?: FetchLike,
+): Promise<{
+  rows: number;
+  through: string | null;
+  sessionMissing: boolean;
+  targetSession: string;
+}> {
   const id = await instrumentId(conn, symbol);
   if (!id) throw new Error(`Instrument ${symbol} is not seeded. Run pnpm migrate first.`);
   const meta = findInstrument(symbol);
   const stored = await latestDailyDate(conn, id);
-  const start = mode === "backfill" || !stored ? (meta?.baseDate ?? "2004-12-31") : stored;
-  const end = shanghaiToday(now);
-  const bars = await fetchCsindexDaily({
+  const fetched = await loadIncrementalBars({
     symbol,
-    startDate: start,
-    endDate: end,
-    startAlreadyStored: stored != null && start === stored,
+    mode,
+    storedThrough: stored,
+    now,
+    baseDate: meta?.baseDate ?? "2004-12-31",
+    fetchImpl,
   });
-  const rows = await upsertBars(conn, id, bars, "D");
+  const rows = await upsertBars(conn, id, fetched.bars, "D");
   const daily = await loadDailyBars(conn, id);
   await recomputeAnalytics(conn, id, daily);
   const through = daily[daily.length - 1]?.date ?? null;
-  // A 200 from CSIndex that only repeats the previous session is not a completed crawl.
-  // Keep the bars, but do not write crawl_bars_daily success — that job is what freshness
-  // reads as lastSuccess, and a late publish must not look all-clear.
+  // HTTP 200 that omits the fetch target is not a completed crawl. Keep the
+  // bars, but do not write crawl_bars_daily success — freshness reads that job
+  // as lastSuccess, and a late or empty window must not look all-clear.
   const session = crawlSessionStatus({ mode, through, now });
   await recordCrawl(conn, {
     jobName: mode === "backfill" ? "crawl_bars_backfill" : "crawl_bars_daily",
@@ -104,16 +151,37 @@ export async function ingestSymbol(
     status: session.status,
     rows,
     watermark: through,
-    error: session.sessionMissing ? `missing session ${session.expectedSession}` : undefined,
+    error: session.sessionMissing ? `missing session ${session.targetSession}` : undefined,
   });
-  return { rows, through, sessionMissing: session.sessionMissing };
+  return {
+    rows,
+    through,
+    sessionMissing: session.sessionMissing,
+    targetSession: session.targetSession,
+  };
+}
+
+async function fetchBackfill(
+  symbol: string,
+  baseDate: string,
+  end: string,
+  fetchImpl?: FetchLike,
+): Promise<{ bars: Awaited<ReturnType<typeof fetchIncrementalCsindex>>["bars"] }> {
+  const bars = await fetchCsindexDaily({
+    symbol,
+    startDate: baseDate,
+    endDate: end,
+    startAlreadyStored: false,
+    fetchImpl,
+  });
+  return { bars };
 }
 
 export async function ingestAll(
   conn: SqlConn,
   mode: "incremental" | "backfill",
   symbols?: string[],
-  options?: { rotation?: "full" | "incremental" | "skip"; now?: Date },
+  options?: { rotation?: "full" | "incremental" | "skip"; now?: Date; fetchImpl?: FetchLike },
 ): Promise<{ failedSymbols: string[]; failedSteps: string[]; sessionMissing: string[] }> {
   const failedSymbols: string[] = [];
   const failedSteps: string[] = [];
@@ -122,11 +190,11 @@ export async function ingestAll(
   const known = symbols ?? (await listInstrumentIds(conn)).map((row) => row.symbol);
   for (const symbol of known) {
     try {
-      const result = await ingestSymbol(conn, symbol, mode, now);
+      const result = await ingestSymbol(conn, symbol, mode, now, options?.fetchImpl);
       if (result.sessionMissing) {
         sessionMissing.push(symbol);
         console.error(
-          `ingest ${symbol} ${mode}: ${result.rows} rows through ${result.through}; missing expected session`,
+          `ingest ${symbol} ${mode}: ${result.rows} rows through ${result.through}; missing target session ${result.targetSession}`,
         );
       } else {
         console.log(`ingest ${symbol} ${mode}: ${result.rows} rows through ${result.through}`);

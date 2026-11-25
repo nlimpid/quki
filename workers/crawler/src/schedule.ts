@@ -21,6 +21,22 @@ export function scheduledIngest(cron: string, stale: boolean | null): boolean {
 }
 
 /**
+ * One missing fetch target fails the cron even when every other symbol stored
+ * that day. A thrown fetch stays `bars:`, distinct from `session:`.
+ */
+export function incrementalFailures(result: {
+  failedSymbols: readonly string[];
+  failedSteps: readonly string[];
+  sessionMissing: readonly string[];
+}): string[] {
+  return [
+    ...result.failedSymbols.map((symbol) => `bars: ${symbol}`),
+    ...result.failedSteps,
+    ...result.sessionMissing.map((symbol) => `session: ${symbol}`),
+  ];
+}
+
+/**
  * Page only from the 20:30 catch-up, and only when the session is still missing
  * after that retry. 16:30 and 18:00 hit CSI before it publishes; they must not alert.
  * A null report (freshness read failed) is not a page: there is nothing to send.
