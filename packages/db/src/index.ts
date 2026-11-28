@@ -61,7 +61,13 @@ export {
 export type { DividendQualitySummary } from "./dividendStore.js";
 export { readMarketFreshness, recordCronRun } from "./freshness.js";
 export type { MarketFreshness } from "./freshness.js";
-export { ingestAll, ingestSymbol, recordCrawl, recomputeTemperature } from "./jobs.js";
+export {
+  ingestAll,
+  ingestSymbol,
+  loadIncrementalBars,
+  recordCrawl,
+  recomputeTemperature,
+} from "./jobs.js";
 export { applyMigrations, defaultMigrationsDir, readMigrationFiles } from "./migrate.js";
 export type { MigrationFile } from "./migrate.js";
 export {

@@ -121,6 +121,7 @@ export {
 } from "./holdings.js";
 export type { HoldingRecord, HoldingsState } from "./holdings.js";
 export { crawlSessionStatus } from "./crawlSession.js";
+export { fetchTargetSession } from "./fetchTarget.js";
 export {
   CRAWL_READY_MINUTES,
   CRAWL_RETRY_MINUTES,

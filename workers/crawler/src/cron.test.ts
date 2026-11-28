@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { WEEKDAY_CRONS, isCatchUpCron, scheduledIngest, shouldAlertAfterCron } from "./schedule.js";
+import {
+  WEEKDAY_CRONS,
+  incrementalFailures,
+  isCatchUpCron,
+  scheduledIngest,
+  shouldAlertAfterCron,
+} from "./schedule.js";
 
 describe("crawler cron", () => {
   it("runs Monday–Friday at 16:30 and 18:00 Beijing, and checks again at 20:30", () => {
@@ -51,7 +57,8 @@ describe("crawler cron", () => {
     expect(bars).toBeGreaterThan(dividends);
     expect(worker).toContain("recordCronRun");
     expect(worker).toContain("readMarketFreshness");
-    expect(worker).toContain("sessionMissing");
+    expect(worker).toContain("incrementalFailures");
+    expect(readFileSync("workers/crawler/src/schedule.ts", "utf8")).toContain("sessionMissing");
     expect(worker).toContain("alertIfStillStale");
     expect(worker).toContain("ALERT_WEBHOOK_URL");
     const scheduled = worker.slice(worker.indexOf("async function runScheduled"));
@@ -60,5 +67,18 @@ describe("crawler cron", () => {
     expect(incremental).toBeGreaterThan(-1);
     expect(alert).toBeGreaterThan(incremental);
     expect(scheduled).toContain("if (isCatchUpCron(cron)) await alertIfStillStale");
+  });
+
+  it("fails the cron when one symbol omits the target and another threw", () => {
+    expect(
+      incrementalFailures({
+        failedSymbols: ["H20903"],
+        failedSteps: [],
+        sessionMissing: ["000905"],
+      }),
+    ).toEqual(["bars: H20903", "session: 000905"]);
+    expect(incrementalFailures({ failedSymbols: [], failedSteps: [], sessionMissing: [] })).toEqual(
+      [],
+    );
   });
 });

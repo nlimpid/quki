@@ -36,13 +36,26 @@ describe("crawl session status", () => {
     expect(result.status).toBe("success");
   });
 
-  it("is not missing before 18:30, when today is not the expected session yet", () => {
+  it("is missing before 18:30 when today is the fetch target but not the health session", () => {
     const result = crawlSessionStatus({
       mode: "incremental",
       through: "2026-11-18",
       now: new Date("2026-11-19T08:30:00.000Z"),
     });
     expect(result.expectedSession).toBe("2026-11-18");
+    expect(result.targetSession).toBe("2026-11-19");
+    expect(result.sessionMissing).toBe(true);
+    expect(result.status).toBe("partial");
+  });
+
+  it("is a success before 18:30 once the fetch target is stored", () => {
+    const result = crawlSessionStatus({
+      mode: "incremental",
+      through: "2026-11-19",
+      now: new Date("2026-11-19T08:30:00.000Z"),
+    });
+    expect(result.expectedSession).toBe("2026-11-18");
+    expect(result.targetSession).toBe("2026-11-19");
     expect(result.sessionMissing).toBe(false);
     expect(result.status).toBe("success");
   });

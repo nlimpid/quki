@@ -20,7 +20,12 @@ import benchmarkSql from "../../../db/migrations/0003_rotation_benchmarks.sql";
 import broadSql from "../../../db/migrations/0007_csi_300_500_1000.sql";
 import dividendSql from "../../../db/migrations/0004_dividends.sql";
 import initSql from "../../../db/migrations/0001_init.sql";
-import { isCatchUpCron, scheduledIngest, shouldAlertAfterCron } from "./schedule.js";
+import {
+  incrementalFailures,
+  isCatchUpCron,
+  scheduledIngest,
+  shouldAlertAfterCron,
+} from "./schedule.js";
 
 export interface Env {
   TIDB_QUKI_DATABASE_URL?: string;
@@ -129,8 +134,10 @@ async function safeRecord(
 }
 
 /**
- * Quotes and dividends run first. CSIndex fetches time out, so a stuck index
- * response cannot use the whole cron budget before the company refresh.
+ * Dividends run first. CSIndex fetches time out, so a stuck index response
+ * cannot use the whole cron budget before the company refresh. An incremental
+ * run that omits the fetch target is a cron failure even when health's 18:30
+ * grace has not yet called that day the expected session.
  */
 async function runIncremental(databaseUrl: string, cron: string): Promise<void> {
   const failures: string[] = [];
@@ -145,9 +152,7 @@ async function runIncremental(databaseUrl: string, cron: string): Promise<void> 
     const bars = await ingestAll(connectTiDb(databaseUrl), "incremental", undefined, {
       rotation: "incremental",
     });
-    for (const symbol of bars.failedSymbols) failures.push(`bars: ${symbol}`);
-    failures.push(...bars.failedSteps);
-    for (const symbol of bars.sessionMissing) failures.push(`session: ${symbol}`);
+    failures.push(...incrementalFailures(bars));
   } catch (error) {
     const message = errorText(error);
     failures.push(`bars: ${message}`);
